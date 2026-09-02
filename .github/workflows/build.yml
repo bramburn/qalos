@@ -1,0 +1,171 @@
+name: qalos build
+
+# Triggers:
+#   - push to main                 (auto-build on every merge)
+#   - workflow_dispatch            (manual build with size + variant knobs)
+#   - schedule                     (weekly Sunday 03:00 UTC smoke build)
+#
+# The GH Actions runner is just an orchestrator. The actual AOSP build runs
+# on a throwaway DigitalOcean droplet created from the qalos-build-warm
+# snapshot. The droplet is destroyed in the cleanup step regardless of
+# whether the build succeeded.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'default.xml'
+      - 'device/**'
+      - 'packages/**'
+      - 'tools/**'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+    inputs:
+      droplet_size:
+        description: 'DO droplet size'
+        required: true
+        type: choice
+        default: 'c-8'
+        options:
+          - c-8
+          - c-16
+          - c-4
+      build_variant:
+        description: 'AOSP build variant'
+        required: true
+        type: choice
+        default: 'userdebug'
+        options:
+          - userdebug
+          - eng
+          - user
+      max_runtime_minutes:
+        description: 'Hard cap on the build (also enforced on the droplet)'
+        required: true
+        type: number
+        default: 240
+  schedule:
+    - cron: '0 3 * * 0'  # weekly Sunday 03:00 UTC smoke build
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qalos-build
+  cancel-in-progress: true   # cancel a queued build if a new one starts
+
+jobs:
+  build:
+    name: qalos build (${{ inputs.droplet_size || 'c-8' }})
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    env:
+      DO_API_TOKEN:        ${{ secrets.DO_API_TOKEN }}
+      SPACES_BUCKET:       ${{ secrets.QALOS_SPACES_BUCKET }}
+      SPACES_REGION:       ${{ secrets.QALOS_SPACES_REGION }}
+      SPACES_KEY:          ${{ secrets.QALOS_SPACES_KEY }}
+      SPACES_SECRET:       ${{ secrets.QALOS_SPACES_SECRET }}
+      DROPLET_SIZE:        ${{ inputs.droplet_size  || 'c-8' }}
+      BUILD_VARIANT:       ${{ inputs.build_variant || 'userdebug' }}
+      MAX_RUNTIME_MINUTES: ${{ inputs.max_runtime_minutes || 240 }}
+
+    steps:
+      - name: Checkout qalos manifest
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install doctl
+        run: |
+          curl -fsSL https://github.com/digitalocean/doctl/releases/download/v1.104.0/doctl-1.104.0-linux-amd64.tar.gz \
+            | tar -xz -C /usr/local/bin doctl
+          doctl version
+
+      - name: Authenticate doctl
+        run: doctl auth init --access-token "$DO_API_TOKEN"
+
+      - name: Resolve qalos-build-warm snapshot
+        id: snapshot
+        run: |
+          SNAP_ID=$(doctl compute snapshot list --region "$SPACES_REGION" --format ID,Name --no-header \
+            | awk -v name="qalos-build-warm" '$2 == name { print $1; exit }')
+          if [ -z "$SNAP_ID" ]; then
+            echo "::error::snapshot 'qalos-build-warm' not found in region $SPACES_REGION. Run tools/doctl-setup-base.ps1 from D:\\qalos to create it."
+            exit 1
+          fi
+          echo "snapshot_id=$SNAP_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Create build droplet
+        id: droplet
+        run: |
+          KEY_ID=$(doctl compute ssh-key list --format ID --no-header | head -1)
+          NAME="qalos-build-${{ github.run_id }}-${RANDOM}"
+          echo "droplet_name=$NAME" >> "$GITHUB_OUTPUT"
+          doctl compute droplet create "$NAME" \
+            --image    "${{ steps.snapshot.outputs.snapshot_id }}" \
+            --size     "$DROPLET_SIZE" \
+            --region   "$SPACES_REGION" \
+            --ssh-keys "$KEY_ID" \
+            --tag-names 'qalos,build,ci' \
+            --wait \
+            --format 'ID,PublicIPv4' --no-header > droplet.txt
+          cat droplet.txt
+          DROPLET_ID=$(awk '{print $1}' droplet.txt)
+          DROPLET_IP=$(awk '{print $2}' droplet.txt)
+          echo "droplet_id=$DROPLET_ID" >> "$GITHUB_OUTPUT"
+          echo "droplet_ip=$DROPLET_IP" >> "$GITHUB_OUTPUT"
+          echo "$DROPLET_ID" > droplet_id.txt
+
+      - name: Wait for SSH
+        run: |
+          for i in $(seq 1 30); do
+            if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no \
+                "root@${{ steps.droplet.outputs.droplet_ip }}" "echo ready"; then
+              exit 0
+            fi
+            echo "waiting for SSH (attempt $i)..."
+            sleep 5
+          done
+          echo "::error::droplet did not become SSH-ready"
+          exit 1
+
+      - name: Run qalos build
+        run: |
+          # Write the build env into a file on the droplet, then run do-build.sh.
+          ssh -o StrictHostKeyChecking=no "root@${{ steps.droplet.outputs.droplet_ip }}" \
+            "cat > /tmp/qalos-env.sh" <<'ENV'
+          SPACES_BUCKET='${{ secrets.QALOS_SPACES_BUCKET }}'
+          SPACES_REGION='${{ secrets.QALOS_SPACES_REGION }}'
+          SPACES_KEY='${{ secrets.QALOS_SPACES_KEY }}'
+          SPACES_SECRET='${{ secrets.QALOS_SPACES_SECRET }}'
+          QALOS_REPO_URL='https://github.com/bramburn/qalos.git'
+          AOSP_TAG='android-15.0.0_r1'
+          BUILD_TARGET='qalos_emulator'
+          BUILD_VARIANT='${{ env.BUILD_VARIANT }}'
+          MAX_RUNTIME_MINUTES='${{ env.MAX_RUNTIME_MINUTES }}'
+          ENV
+
+          scp -o StrictHostKeyChecking=no \
+            tools/do-build.sh "root@${{ steps.droplet.outputs.droplet_ip }}:/tmp/do-build.sh"
+
+          ssh -o StrictHostKeyChecking=no "root@${{ steps.droplet.outputs.droplet_ip }}" \
+            "source /tmp/qalos-env.sh && bash /tmp/do-build.sh"
+          if [ $? -ne 0 ]; then exit 1; fi
+
+      - name: List uploaded artifacts in Spaces
+        if: success()
+        run: |
+          # Surface the most recent build in the workflow run summary.
+          aws --endpoint-url "https://$SPACES_REGION.digitaloceanspaces.com" \
+              s3 ls "s3://$SPACES_BUCKET/" --recursive | sort | tail -20 \
+            || echo "s3cmd/aws listing failed; check the workflow log for the upload step output."
+
+      - name: Always destroy the droplet
+        if: always()
+        run: |
+          if [ -f droplet_id.txt ]; then
+            DROPLET_ID=$(cat droplet_id.txt)
+            echo "destroying droplet $DROPLET_ID..."
+            doctl compute droplet delete "$DROPLET_ID" --force || true
+          fi
