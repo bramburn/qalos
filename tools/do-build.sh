@@ -102,30 +102,15 @@ log "syncing AOSP source at tag $AOSP_TAG (this can take a while on first run)"
 repo sync -c -j"$BUILD_JOBS" --no-tags --no-clone-bundle 2>&1 | tee "$LOG_DIR/repo-sync.log"
 
 # ----------------------------------------------------------------------------
-# Step 3 — apply qalos customizations
+# Step 3 — apply qalos customizations.
 #
-# The qalos repo (this one) is cloned into .repo/manifests/qalos. The qalos
-# customizations (device tree, apps) live in subdirectories of the qalos
-# repo. We copy them into the AOSP source tree at the paths the AOSP build
-# system expects.
+# tools/apply-qalos.sh copies the qalos device tree, apps, and vendor blobs
+# from .repo/manifests/qalos into the AOSP working tree. It is idempotent
+# and pulls the latest qalos sources first.
 # ----------------------------------------------------------------------------
-QALOS_REPO=".repo/manifests/qalos"
-
-if [ -d "$QALOS_REPO/device/qalos/qalos_emulator" ]; then
-    log "applying qalos device tree"
-    mkdir -p device/qalos
-    cp -r "$QALOS_REPO/device/qalos/qalos_emulator" device/qalos/
-else
-    log "WARN: qalos device tree not found at $QALOS_REPO/device/qalos/qalos_emulator"
-fi
-
-if [ -d "$QALOS_REPO/packages/apps/QaLab" ]; then
-    log "applying qalos apps"
-    mkdir -p packages/apps
-    cp -r "$QALOS_REPO/packages/apps/QaLab" packages/apps/
-else
-    log "WARN: qalos apps not found at $QALOS_REPO/packages/apps/QaLab"
-fi
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+log "applying qalos customizations"
+WORK_TREE="$BUILD_DIR" bash "$SCRIPT_DIR/apply-qalos.sh"
 
 # ----------------------------------------------------------------------------
 # Step 4 — build
