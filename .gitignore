@@ -22,3 +22,11 @@ desktop.ini
 *.elf
 *.img
 *.zip
+
+# Local-only artifacts that should never be committed:
+#  - .repo-sync.log / .build.log are produced by `tee` in the brief's step 6/9
+#    (kept in this directory so the user can tail them during a build)
+#  - .pi/ is the pi coding agent's session/goal state, user-specific
+.repo-sync.log
+.build.log
+.pi/
