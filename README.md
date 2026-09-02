@@ -1,8 +1,12 @@
 # qalos — QA Lab Operating System
 
-qalos is an Android-based operating system (a fork of AOSP) for QA Lab use, with **Samsung Galaxy A16 5G** as the long-term target device and the **Android emulator (AVD)** as the day-to-day build/test target.
+qalos is an Android-based operating system (a fork of [AOSP](https://source.android.com/)) for QA Lab use, with **Samsung Galaxy A16 5G** as the long-term target device and the **Android emulator (AVD)** as the day-to-day build/test target.
 
 The fork is bare-bones: same kernel, same HALs as upstream AOSP, with a custom product makefile that overrides the OS branding (`QA Lab Operating System`, build id `QAL.YYYYMMDD.001`) and ships one first-party app (`QaLab`).
+
+**Upstream**: this is a derivative of the Android Open Source Project at `android-15.0.0_r1`. The manifest in this repo includes the upstream AOSP manifest verbatim; qalos only adds product metadata, one first-party app, and the build / CI scripts.
+
+**License**: Apache 2.0 — see [`LICENSE`](LICENSE).
 
 ## Two ways to build
 
