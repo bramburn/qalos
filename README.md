@@ -4,9 +4,9 @@ qalos is an Android-based operating system (a fork of [AOSP](https://source.andr
 
 The fork is bare-bones: same kernel, same HALs as upstream AOSP, with a custom product makefile that overrides the OS branding (`QA Lab Operating System`, build id `QAL.YYYYMMDD.001`) and ships one first-party app (`QaLab`).
 
-**Upstream**: this is a derivative of the Android Open Source Project at `android-15.0.0_r1`. The manifest in this repo includes the upstream AOSP manifest verbatim; qalos only adds product metadata, one first-party app, and the build / CI scripts.
+**Upstream**: this is a derivative of the Android Open Source Project at `android-15.0.0_r1`. The manifest in this repo includes the upstream AOSP manifest verbatim; qalos only adds product metadata, one first-party app, and the build / CI scripts. Upstream AOSP is licensed under Apache 2.0; see the attribution note at the bottom of [`LICENSE`](LICENSE).
 
-**License**: Apache 2.0 — see [`LICENSE`](LICENSE).
+**License**: MIT for the original qalos contributions (QaLab, product makefile, build scripts, documentation). The bundled AOSP components remain under their upstream Apache 2.0 license.
 
 ## Two ways to build
 
