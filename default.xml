@@ -21,10 +21,16 @@
   <default remote="aosp" revision="refs/tags/android-15.0.0_r1" sync-j="4" />
 
   <!--
-    Pull every AOSP project at the pinned tag via the upstream manifest include.
-    This is equivalent to `repo init -u android.googlesource.com/platform/manifest`
-    but with the qalos project layered on top.
+    Pull every AOSP project at the pinned tag via the inlined upstream manifest
+    in upstream.xml (a verbatim copy of
+    https://android.googlesource.com/platform/manifest/+/refs/tags/android-15.0.0_r1/default.xml
+    captured at this repo's commit that bumped the tag).
+
+    We inline the upstream manifest instead of using `<include name="<url>"/>` because
+    `repo`'s include resolver does not understand gitiles `+/refs/tags/...` URLs — the
+    include has to point at a file in this manifest repo. Update both files together
+    when bumping the AOSP tag.
   -->
-  <include name="https://android.googlesource.com/platform/manifest/+/refs/tags/android-15.0.0_r1/default.xml" />
+  <include name="upstream.xml" />
 
 </manifest>
