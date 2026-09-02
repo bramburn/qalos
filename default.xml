@@ -15,7 +15,16 @@
       m -j$(nproc)
   -->
 
-  <remote name="aosp" fetch="https://android.googlesource.com/" />
+  <!--
+    `aosp` remote is defined by the included upstream.xml, so we don't redefine
+    it here. Defining it twice with even slightly different attributes (e.g.
+    qalos omitting the `review` URL) makes repo's manifest parser reject the
+    include with "remote aosp already exists with different attributes".
+
+    The `qalos` remote is kept here for future use — when we start adding
+    qalos-specific projects via <project remote="qalos"> entries, they'll
+    fetch from this fetch URL.
+  -->
   <remote name="qalos" fetch="https://github.com/bramburn" />
 
   <default remote="aosp" revision="refs/tags/android-15.0.0_r1" sync-j="4" />
