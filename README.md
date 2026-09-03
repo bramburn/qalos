@@ -84,6 +84,30 @@ Full walkthroughs in the [docs site](https://bramburn.github.io/qalos/docs/getti
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). All PRs require an approval before they can merge (see [BRANCH_PROTECTION.md](BRANCH_PROTECTION.md)). The CI pipeline runs static checks only — AOSP builds are not run on GitHub Actions.
 
+By submitting a pull request, you accept the [CLA](legal/CLA.md).
+
 ## License
 
 MIT for qalos contributions; Apache 2.0 for bundled AOSP components. See [LICENSE](LICENSE) for full text.
+
+## Legal and use restrictions
+
+The MIT Licence ([LICENSE](LICENSE)) covers your right to **copy, modify,
+and distribute** the source. It does **not** grant a right to use the
+project for **any purpose**.
+
+The project ships capability (input injection, screenshot capture,
+application-lifecycle control) that is dual-use. Used for QA testing,
+it is benign. Used for fake-account creation, ad fraud, credential
+stuffing, or bulk scraping, it is harmful and may be illegal.
+
+To set out the rules, this repository also publishes a
+[legal framework](legal/README.md) that governs your use of the project:
+
+- [Disclaimer](legal/DISCLAIMER.md) — the umbrella: no warranty, no liability for misuse.
+- [Terms of Service](legal/TERMS_OF_SERVICE.md) — the binding contract you accept by using the project.
+- [Acceptable Use Policy](legal/ACCEPTABLE_USE_POLICY.md) — what the project must NOT be used for.
+- [KYC](legal/KYC.md) — Know-Your-Customer for anyone receiving prebuilt images, hosted services, or commercial support.
+- [Audit Logging](legal/AUDIT_LOGGING.md) — the audit-log specification for any commercial fleet.
+- [CLA](legal/CLA.md) — Contributor License Agreement.
+- [Security](legal/SECURITY.md) — how to report a vulnerability in qalos itself.
