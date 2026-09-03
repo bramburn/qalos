@@ -30,7 +30,10 @@ desktop.ini
 #  - .tmp/ is the scratch directory used by the AOSP dry-run workflow
 #    (website/docs/qa-lab-os/dry-run-workflow.md); holds downloaded
 #    upstream files and the fake working tree
+#  - .worktrees/ holds `git worktree add` working copies (per-branch
+#    development environments). Git's own metadata, never to be committed.
 .repo-sync.log
 .build.log
 .pi/
 .tmp/
+.worktrees/
