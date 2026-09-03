@@ -38,6 +38,33 @@ The agent drafted the four patches by reasoning about what
   regex and the inserted block both need to use the `t.` prefix
   to match.
 
+A subsequent pass (the user explicitly asked for more research)
+combined the download-and-dry-run with a web-research step and
+caught two more design gaps that the dry-run alone could not find
+(because the dry-run is text-based and these were missing-pieces
+gaps, not text-mismatch gaps):
+
+- **AIDL wiring.** The AIDL file was at
+  `services/core/java/com/qalos/remotectl/IRemoteControl.aidl`
+  but the `services.core-sources` filegroup globs `*.java` only;
+  the AIDL was never compiled, and the build would have failed
+  with `cannot find symbol: class IRemoteControl`. Fix: replaced
+  the AIDL with a plain Java interface, removed
+  `publishBinderService`, removed `enforceCallingPermission`. A
+  v1+ that wants Binder can re-introduce the AIDL by moving it
+  to `core/java/android/os/` and patching
+  `frameworks/base/Android.bp`.
+
+- **SELinux policy.** AOSP requires `service_contexts`,
+  `service.te`, and `system_server.te` entries for any new system
+  service that binds a TCP socket; the v0 had none. Fix: added a
+  sepolicy overlay in `device/qalos/qalos_emulator/sepolicy/`
+  and wired it via `BOARD_SEPOLICY_DIRS` in `device.mk`.
+
+The lesson: the dry-run catches text-level mismatches. The
+web-research step catches architectural-level gaps ("you're not
+editing file X at all"). Both are needed.
+
 The fix: download the four target files from
 `https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-15.0.0_r1/<path>?format=TEXT`,
 decode the base64, drop them into a fake AOSP working tree at

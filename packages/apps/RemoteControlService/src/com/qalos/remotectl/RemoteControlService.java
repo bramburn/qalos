@@ -2,15 +2,17 @@
 /*
  * qalos — Remote Control Service.
  *
- * System service that runs inside system_server and exposes a small
- * native API (input injection, screenshot, app lifecycle) to the
- * embedded HttpApiServer. The HTTP/JSON surface is the only thing
- * external callers should use; IRemoteControl is internal.
+ * System service that runs inside system_server. The HttpApiServer
+ * (same process) drives the service through a plain Java interface,
+ * IRemoteControl. There is no AIDL Binder publication in v0; the
+ * only external surface is the HTTP/JSON API on 127.0.0.1:9000,
+ * tunneled out via `adb forward` for the auth boundary.
  *
  * Threading: the service is instantiated on the system_server main
  * thread. LocalServices lookups are deferred to onBootPhase so the
- * dependencies are guaranteed to be published. The Binder stub is
- * thread-safe; each call is short and runs on a binder thread.
+ * dependencies are guaranteed to be published. The HTTP server
+ * holds a direct reference to this instance, so each endpoint
+ * call is a plain Java method invocation.
  */
 
 package com.qalos.remotectl;
@@ -23,7 +25,6 @@ import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.hardware.display.DisplayManager;
 import android.hardware.input.InputManager;
-import android.os.IRemoteControl;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
@@ -44,15 +45,15 @@ import java.io.ByteArrayOutputStream;
 import java.util.List;
 
 /**
- * System service that hosts {@link IRemoteControl} and the embedded
- * {@link HttpApiServer}.
+ * System service that implements {@link IRemoteControl} and hosts
+ * the embedded {@link HttpApiServer}.
  *
- * <p>The service is registered by {@code SystemServer} after
+ * <p>Registered by {@code SystemServer} after
  * {@code InputManagerService} and {@code ActivityManagerService} have
  * started. The HTTP server binds to {@code 127.0.0.1:9000} by default
  * (see {@link #DEFAULT_BIND_LOCAL_ONLY}).
  */
-public final class RemoteControlService extends SystemService {
+public final class RemoteControlService extends SystemService implements IRemoteControl {
     private static final String TAG = "QaRemoteCtl";
 
     /** Default port. */
@@ -70,82 +71,6 @@ public final class RemoteControlService extends SystemService {
 
     private HttpApiServer mHttpServer;
 
-    private final IRemoteControl.Stub mBinder = new IRemoteControl.Stub() {
-        @Override
-        public void tap(int x, int y, int displayId) {
-            // Binder-level guard: only callers holding
-            // android.permission.REMOTE_CONTROL may invoke us. The
-            // system_server process self-binds; this check documents
-            // the trust model and defends against future regressions
-            // where some other system process tries to call us.
-            enforceCallingPermission();
-            enforceCoordinatesOnDisplay(x, y, displayId);
-            injectTap(x, y, displayId);
-        }
-
-        @Override
-        public void typeText(String text) {
-            enforceCallingPermission();
-            if (text == null) {
-                throw new IllegalArgumentException("text must not be null");
-            }
-            // Hard cap to keep one keystroke burst from wedging the worker.
-            if (text.length() > 1024) {
-                throw new IllegalArgumentException("text too long (>1024 chars)");
-            }
-            injectText(text);
-        }
-
-        @Override
-        public void keyEvent(int keyCode, boolean down) {
-            enforceCallingPermission();
-            injectKey(keyCode, down);
-        }
-
-        @Override
-        public void launchApp(String packageName) {
-            enforceCallingPermission();
-            enforcePackageName(packageName);
-            launchAppInternal(packageName);
-        }
-
-        @Override
-        public void forceStop(String packageName) {
-            enforceCallingPermission();
-            enforcePackageName(packageName);
-            forceStopInternal(packageName);
-        }
-
-        @Override
-        public String getForegroundPackage() {
-            enforceCallingPermission();
-            return getForegroundPackageInternal();
-        }
-
-        @Override
-        public int getDisplayWidth(int displayId) {
-            enforceCallingPermission();
-            return getDisplaySizeInternal(displayId).getWidth();
-        }
-
-        @Override
-        public int getDisplayHeight(int displayId) {
-            enforceCallingPermission();
-            return getDisplaySizeInternal(displayId).getHeight();
-        }
-
-        @Override
-        public String screenshotBase64(int width, int height, int displayId, int quality) {
-            enforceCallingPermission();
-            return screenshotBase64Internal(width, height, displayId, quality);
-        }
-
-        private void enforceCallingPermission() {
-            enforceCallingPermission(android.Manifest.permission.REMOTE_CONTROL,
-                    "qalos RemoteControl");
-        }
-    };
-
     public RemoteControlService(Context context) {
         super(context);
         mContext = context;
@@ -153,13 +78,12 @@ public final class RemoteControlService extends SystemService {
 
     @Override
     public void onStart() {
-        // Do NOT look up LocalServices here — they are not registered
-        // yet at the time onStart runs. The actual lookups happen in
-        // onBootPhase below.
-        publishBinderService("qalos_remote_control", mBinder);
+        // The HTTP server is the only v0 client; it holds a direct
+        // reference to this instance. We do not publish the service
+        // over Binder (no AIDL in v0).
         mHttpServer = new HttpApiServer(
                 DEFAULT_PORT,
-                mBinder,
+                this,
                 DEFAULT_BIND_LOCAL_ONLY);
         mHttpServer.start();
         Log.i(TAG, "remote control service ready on port " + DEFAULT_PORT);
@@ -184,6 +108,73 @@ public final class RemoteControlService extends SystemService {
         if (mHttpServer != null) {
             mHttpServer.shutdown();
         }
+    }
+
+    // ------------------------------------------------------------------
+    // IRemoteControl — input
+    // ------------------------------------------------------------------
+
+    @Override
+    public void tap(int x, int y, int displayId) {
+        enforceCoordinatesOnDisplay(x, y, displayId);
+        injectTap(x, y, displayId);
+    }
+
+    @Override
+    public void typeText(String text) {
+        if (text == null) {
+            throw new IllegalArgumentException("text must not be null");
+        }
+        // Hard cap to keep one keystroke burst from wedging the worker.
+        if (text.length() > 1024) {
+            throw new IllegalArgumentException("text too long (>1024 chars)");
+        }
+        injectText(text);
+    }
+
+    @Override
+    public void keyEvent(int keyCode, boolean down) {
+        injectKey(keyCode, down);
+    }
+
+    // ------------------------------------------------------------------
+    // IRemoteControl — app lifecycle
+    // ------------------------------------------------------------------
+
+    @Override
+    public void launchApp(String packageName) {
+        enforcePackageName(packageName);
+        launchAppInternal(packageName);
+    }
+
+    @Override
+    public void forceStop(String packageName) {
+        enforcePackageName(packageName);
+        forceStopInternal(packageName);
+    }
+
+    // ------------------------------------------------------------------
+    // IRemoteControl — queries
+    // ------------------------------------------------------------------
+
+    @Override
+    public String getForegroundPackage() {
+        return getForegroundPackageInternal();
+    }
+
+    @Override
+    public int getDisplayWidth(int displayId) {
+        return getDisplaySizeInternal(displayId).getWidth();
+    }
+
+    @Override
+    public int getDisplayHeight(int displayId) {
+        return getDisplaySizeInternal(displayId).getHeight();
+    }
+
+    @Override
+    public String screenshotBase64(int width, int height, int displayId, int quality) {
+        return screenshotBase64Internal(width, height, displayId, quality);
     }
 
     // ------------------------------------------------------------------
@@ -277,10 +268,6 @@ public final class RemoteControlService extends SystemService {
         if (mActivityManagerClient == null) {
             throw new IllegalStateException("ActivityManager not available");
         }
-        // startActivityAsUser on the IActivityManager Binder requires
-        // a non-null Intent. Construct ACTION_MAIN + CATEGORY_LAUNCHER
-        // scoped to the requested package; the system will pick the
-        // default activity.
         final Intent launch = mActivityManagerClient.getLaunchIntentForPackage(packageName);
         if (launch == null) {
             throw new IllegalArgumentException("package not installed: " + packageName);
@@ -293,11 +280,6 @@ public final class RemoteControlService extends SystemService {
     }
 
     private void forceStopInternal(String packageName) {
-        // IActivityManager.forceStopPackage is the right primitive for
-        // a "force stop" semantic that works on both foreground and
-        // background processes. The public ActivityManager wrapper
-        // exposes only killBackgroundProcesses, which silently fails
-        // for the foreground case.
         if (mActivityManager == null) {
             throw new IllegalStateException("IActivityManager not available");
         }
@@ -316,12 +298,6 @@ public final class RemoteControlService extends SystemService {
         if (mActivityManagerClient == null) {
             throw new IllegalStateException("ActivityManager not available");
         }
-        // getRunningTasks was deprecated in AOSP 14 and may be removed
-        // in later releases. The supported path is via the
-        // ActivityTaskManager system service. For v0 we accept the
-        // deprecation; the result is the package name of the top
-        // focused task, or an empty string if the home screen is
-        // focused.
         @SuppressWarnings("deprecation")
         final List<ActivityManager.RunningTaskInfo> tasks =
                 mActivityManagerClient.getRunningTasks(1);
@@ -361,9 +337,6 @@ public final class RemoteControlService extends SystemService {
         if (bitmap == null) {
             throw new IllegalStateException("screenshot failed (SurfaceControl returned null)");
         }
-        // The Bitmap is not recycled explicitly; Bitmap.recycle() is
-        // deprecated in API 28+ and can crash if a soft reference to
-        // the bitmap still exists. The GC will reclaim it.
         final ByteArrayOutputStream out = new ByteArrayOutputStream();
         bitmap.compress(Bitmap.CompressFormat.PNG, quality, out);
         return android.util.Base64.encodeToString(
@@ -392,10 +365,6 @@ public final class RemoteControlService extends SystemService {
         if (packageName == null) {
             throw new IllegalArgumentException("packageName must not be null");
         }
-        // Java package grammar: lowercase letters, digits, underscores,
-        // dots; must not be empty; must not start with a digit; must
-        // not contain two consecutive dots; must not start or end
-        // with a dot.
         if (packageName.isEmpty()
                 || !Character.isJavaIdentifierStart(packageName.charAt(0))
                 || packageName.contains("..")

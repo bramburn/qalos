@@ -1,7 +1,9 @@
 # REBASE — RemoteControlService
 
 This document explains how to bring the three patches in `patches/`
-up to date when a new AOSP release shifts the file layout.
+up to date when a new AOSP release shifts the file layout, and how
+to update the SELinux policy overlay in
+`device/qalos/qalos_emulator/sepolicy/`.
 
 > **v0 history note.** The original v0 had four patches
 > (0001-Android.bp srcs, 0002-permission, 0003-strings,
@@ -12,6 +14,13 @@ up to date when a new AOSP release shifts the file layout.
 > entry. The dry-run procedure in
 > [`website/docs/qa-lab-os/lessons-learned.md`](../../../website/docs/qa-lab-os/lessons-learned.md)
 > caught this.
+
+> **v0 fix-ups-3 note.** The AIDL was replaced with a plain
+> Java interface (`com.qalos.remotectl.IRemoteControl`) so the
+> service no longer depends on AIDL compilation wiring that
+> changed between AOSP releases. The SELinux policy overlay
+> is in the qalos device tree and ships with the overlay, so it
+> does not need to be re-applied on AOSP rebases.
 
 ## When to rebase
 

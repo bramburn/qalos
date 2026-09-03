@@ -106,16 +106,24 @@ rebase is mechanical.
 
 Verify the changes are in place:
 
+Verify the changes are in place:
+
 ```bash
 ls frameworks/base/services/core/java/com/qalos/remotectl/
-# expected: HttpApiServer.java  IRemoteControl.aidl  RemoteControlService.java
+# expected: HttpApiServer.java  IRemoteControl.java  RemoteControlService.java
 
 grep -n "REMOTE_CONTROL" frameworks/base/core/res/AndroidManifest.xml
 # expected: a <permission ... /> entry for REMOTE_CONTROL
 
 grep -n "StartRemoteControlService" frameworks/base/services/java/com/android/server/SystemServer.java
-# expected: a traceBeginAndSlog("StartRemoteControlService") line
+# expected: a t.traceBegin("StartRemoteControlService") line
 ```
+
+The SELinux policy overlay is at
+`device/qalos/qalos_emulator/sepolicy/` and is included by
+`device.mk`'s `BOARD_SEPOLICY_DIRS`. `apply-qalos.sh` copies the
+entire `device/qalos/qalos_emulator/` directory, so the policy
+lands in the AOSP tree automatically — no patch script needed.
 
 ## Step 5 — build
 

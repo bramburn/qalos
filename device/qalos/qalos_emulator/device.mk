@@ -14,3 +14,10 @@ PRODUCT_PACKAGES += \
 PRODUCT_PROPERTY_OVERRIDES += \
     ro.qalos.build_id=$(BUILD_ID) \
     ro.qalos.display_build_id=$(DISPLAY_BUILD_ID)
+
+# qalos: include our device-specific SELinux policy overlay.
+# The sepolicy/ directory contains the type definition, service
+# context mapping, and allow rules for the Remote Control Service
+# (packages/apps/RemoteControlService/). See that package's REBASE.md
+# for the rebase procedure when AOSP changes its system_server policy.
+BOARD_SEPOLICY_DIRS += $(LOCAL_PATH)/sepolicy

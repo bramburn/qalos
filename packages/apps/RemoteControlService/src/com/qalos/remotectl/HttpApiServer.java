@@ -10,12 +10,14 @@
  * Threading: the listener runs on a dedicated thread. Each accepted
  * connection is handled in its own short-lived thread with a bounded
  * read timeout.
+ *
+ * The server takes an {@link IRemoteControl} (plain Java interface,
+ * same package) and calls it directly. v0 does not publish the
+ * service over Binder.
  */
 
 package com.qalos.remotectl;
 
-import android.os.IRemoteControl;
-import android.os.RemoteException;
 import android.util.Log;
 
 import org.json.JSONException;
@@ -166,13 +168,11 @@ public final class HttpApiServer extends Thread {
             writeError(out, 400, e.getMessage());
         } catch (IllegalStateException e) {
             writeError(out, 503, e.getMessage());
-        } catch (RemoteException e) {
-            writeError(out, 500, "binder error");
         }
     }
 
     private void handle(String method, String path, String body, OutputStream out)
-            throws IOException, RemoteException {
+            throws IOException {
         switch (method + " " + path) {
             case "GET /health":
                 handleHealth(out);
@@ -231,7 +231,7 @@ public final class HttpApiServer extends Thread {
         writeJson(out, 200, json);
     }
 
-    private void handleDisplay(OutputStream out) throws IOException, RemoteException {
+    private void handleDisplay(OutputStream out) throws IOException {
         final int displayId = 0; // query on default display
         final JSONObject json = new JSONObject();
         json.put("width", mService.getDisplayWidth(displayId));
@@ -239,8 +239,7 @@ public final class HttpApiServer extends Thread {
         writeJson(out, 200, json);
     }
 
-    private void handleScreenshot(JSONObject body, OutputStream out)
-            throws IOException, RemoteException {
+    private void handleScreenshot(JSONObject body, OutputStream out) throws IOException {
         final int width = body.optInt("width", 0);
         final int height = body.optInt("height", 0);
         final int quality = body.optInt("quality", 85);
@@ -256,15 +255,14 @@ public final class HttpApiServer extends Thread {
         writeJson(out, 200, json);
     }
 
-    private void handleForeground(OutputStream out) throws IOException, RemoteException {
+    private void handleForeground(OutputStream out) throws IOException {
         final String pkg = mService.getForegroundPackage();
         final JSONObject json = new JSONObject();
         json.put("package", pkg);
         writeJson(out, 200, json);
     }
 
-    private void handleTap(JSONObject body, OutputStream out)
-            throws IOException, RemoteException {
+    private void handleTap(JSONObject body, OutputStream out) throws IOException {
         requireInt(body, "x");
         requireInt(body, "y");
         final int x = body.getInt("x");
@@ -274,15 +272,13 @@ public final class HttpApiServer extends Thread {
         writeOk(out);
     }
 
-    private void handleType(JSONObject body, OutputStream out)
-            throws IOException, RemoteException {
+    private void handleType(JSONObject body, OutputStream out) throws IOException {
         requireString(body, "text");
         mService.typeText(body.getString("text"));
         writeOk(out);
     }
 
-    private void handleKey(JSONObject body, OutputStream out)
-            throws IOException, RemoteException {
+    private void handleKey(JSONObject body, OutputStream out) throws IOException {
         requireInt(body, "key_code");
         final int code = body.getInt("key_code");
         final boolean down = body.optBoolean("down", true);
@@ -290,15 +286,13 @@ public final class HttpApiServer extends Thread {
         writeOk(out);
     }
 
-    private void handleLaunch(JSONObject body, OutputStream out)
-            throws IOException, RemoteException {
+    private void handleLaunch(JSONObject body, OutputStream out) throws IOException {
         requireString(body, "package");
         mService.launchApp(body.getString("package"));
         writeOk(out);
     }
 
-    private void handleForceStop(JSONObject body, OutputStream out)
-            throws IOException, RemoteException {
+    private void handleForceStop(JSONObject body, OutputStream out) throws IOException {
         requireString(body, "package");
         mService.forceStop(body.getString("package"));
         writeOk(out);
