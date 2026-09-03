@@ -70,6 +70,7 @@ const sidebars = {
         'qa-lab-os/agent-developer-guide',
         'qa-lab-os/static-checks',
         'qa-lab-os/review-log',
+        'qa-lab-os/lessons-learned',
       ],
     },
   ],
