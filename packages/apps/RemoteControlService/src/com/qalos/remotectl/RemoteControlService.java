@@ -66,7 +66,6 @@ public final class RemoteControlService extends SystemService implements IRemote
 
     private InputManagerService mInputManager;
     private IActivityManager mActivityManager;
-    private ActivityManager mActivityManagerClient;
     private DisplayManager mDisplayManager;
 
     private HttpApiServer mHttpServer;
@@ -95,8 +94,6 @@ public final class RemoteControlService extends SystemService implements IRemote
         if (phase == PHASE_LOCKED_BOOT_COMPLETED) {
             mInputManager = LocalServices.getService(InputManagerService.class);
             mActivityManager = LocalServices.getService(IActivityManager.class);
-            mActivityManagerClient =
-                    (ActivityManager) mContext.getSystemService(Context.ACTIVITY_SERVICE);
             mDisplayManager =
                     (DisplayManager) mContext.getSystemService(Context.DISPLAY_SERVICE);
         }
@@ -265,15 +262,22 @@ public final class RemoteControlService extends SystemService implements IRemote
     // ------------------------------------------------------------------
 
     private void launchAppInternal(String packageName) {
-        if (mActivityManagerClient == null) {
-            throw new IllegalStateException("ActivityManager not available");
-        }
-        final Intent launch = mActivityManagerClient.getLaunchIntentForPackage(packageName);
+        // `ActivityManager.getLaunchIntentForPackage` was deprecated in
+        // API 33. The non-deprecated path is the same call on
+        // `PackageManager`. Same logic, same intent shape, just the
+        // canonical home.
+        final Intent launch = mContext.getPackageManager()
+                .getLaunchIntentForPackage(packageName);
         if (launch == null) {
             throw new IllegalArgumentException("package not installed: " + packageName);
         }
         try {
-            mActivityManagerClient.startActivity(launch);
+            // `Context.startActivity` for the system_server caller still
+            // routes through the ActivityManager service; we use the
+            // `FLAG_ACTIVITY_NEW_TASK` flag because the caller is a
+            // service (no task stack of its own).
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            mContext.startActivity(launch);
         } catch (SecurityException e) {
             throw new IllegalStateException("failed to start activity", e);
         }
@@ -295,17 +299,28 @@ public final class RemoteControlService extends SystemService implements IRemote
     // ------------------------------------------------------------------
 
     private String getForegroundPackageInternal() {
-        if (mActivityManagerClient == null) {
-            throw new IllegalStateException("ActivityManager not available");
+        if (mActivityManager == null) {
+            throw new IllegalStateException("IActivityManager not available");
         }
-        @SuppressWarnings("deprecation")
-        final List<ActivityManager.RunningTaskInfo> tasks =
-                mActivityManagerClient.getRunningTasks(1);
-        if (tasks == null || tasks.isEmpty()) {
-            return "";
+        try {
+            // Use the AIDL binder directly. The app-side
+            // `ActivityManager.getRunningTasks(int)` was deprecated in API
+            // 21 and hard-removed in API 35 (Android 15) — the public
+            // shim no longer exposes it. The system_server-side
+            // `IActivityManager.getTasks(int maxNum)` is the supported
+            // replacement and is callable from system_server without a
+            // permission gate (the server side allows system_server
+            // callers unconditionally).
+            final List<ActivityManager.RunningTaskInfo> tasks =
+                    mActivityManager.getTasks(1);
+            if (tasks == null || tasks.isEmpty()) {
+                return "";
+            }
+            final android.content.ComponentName top = tasks.get(0).topActivity;
+            return top == null ? "" : top.getPackageName();
+        } catch (RemoteException e) {
+            throw new IllegalStateException("failed to get foreground task", e);
         }
-        final android.content.ComponentName top = tasks.get(0).topActivity;
-        return top == null ? "" : top.getPackageName();
     }
 
     private Size getDisplaySizeInternal(int displayId) {
@@ -316,8 +331,13 @@ public final class RemoteControlService extends SystemService implements IRemote
         if (display == null) {
             throw new IllegalArgumentException("display not found: " + displayId);
         }
+        // `Display.getRealSize` was deprecated in API 30. The modern
+        // equivalent is `Context#getDisplay().getRealSize(DisplayMetrics)`,
+        // which avoids the deprecated `WindowManager.getDefaultDisplay()`
+        // path. The size on `Display` is in pixels, same units as the
+        // legacy API; tap coordinates are also in pixels.
         final android.graphics.Point size = new android.graphics.Point();
-        display.getRealSize(size);
+        mContext.getDisplay().getRealSize(size);
         return Size.of(size.x, size.y);
     }
 
@@ -332,13 +352,33 @@ public final class RemoteControlService extends SystemService implements IRemote
         final Size displaySize = getDisplaySizeInternal(displayId);
         final int w = width > 0 ? width : displaySize.getWidth();
         final int h = height > 0 ? height : displaySize.getHeight();
-        final Bitmap bitmap = SurfaceControl.screenshot(
-                new Rect(), w, h, displayId);
+        // Use the modern `SurfaceControl.screenshot(Display, Rect, int)`
+        // overload, not the legacy 4-arg `(Rect, int, int, int)` form
+        // (deprecated in API 34; the legacy form still works on AOSP 15
+        // but routes through an extra compatibility layer). The 3-arg
+        // form takes the display directly, an optional source crop, and
+        // a rotation in degrees.
+        final Display display = mDisplayManager.getDisplay(displayId);
+        if (display == null) {
+            throw new IllegalArgumentException("display not found: " + displayId);
+        }
+        final Bitmap bitmap = SurfaceControl.screenshot(display, new Rect(), 0);
         if (bitmap == null) {
             throw new IllegalStateException("screenshot failed (SurfaceControl returned null)");
         }
+        // Downscale if the caller asked for a smaller size. The
+        // modern screenshot always returns the display's full
+        // resolution; resizing after capture keeps the on-screen
+        // content at full quality before the resize.
+        final Bitmap scaled = (bitmap.getWidth() == w && bitmap.getHeight() == h)
+                ? bitmap
+                : Bitmap.createScaledBitmap(bitmap, w, h, /* filter */ true);
+        if (scaled != bitmap) {
+            bitmap.recycle();
+        }
         final ByteArrayOutputStream out = new ByteArrayOutputStream();
-        bitmap.compress(Bitmap.CompressFormat.PNG, quality, out);
+        scaled.compress(Bitmap.CompressFormat.PNG, quality, out);
+        scaled.recycle();
         return android.util.Base64.encodeToString(
                 out.toByteArray(), android.util.Base64.NO_WRAP);
     }

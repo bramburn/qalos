@@ -16,10 +16,15 @@ AOSP 15 pattern (verified against android-15.0.0_r1):
 Note the `t.` prefix on both `traceBegin` and `traceEnd`. The static
 `traceBeginAndSlog` method that AOSP 14 used was removed in AOSP 15;
 the modern pattern is a local `Trace t` instance.
+
+Honors `QALOS_PATCH_CHECK=1`: in check mode, only verify that the
+anchor regex would match (or the patch already applied). Do not
+write to the target file.
 """
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -44,19 +49,34 @@ NEW_BLOCK = (
 
 
 def main(work_tree: Path) -> int:
+    check_only = os.environ.get("QALOS_PATCH_CHECK") == "1"
     target = work_tree / TARGET_REL
     if not target.exists():
         print(f"[0004] target not found: {target}", file=sys.stderr)
         return 1
     text = target.read_text(encoding="utf-8")
     if "StartRemoteControlService" in text:
-        print("[0004] already applied (idempotent skip)")
+        if check_only:
+            print("[0004] OK (already applied; check mode)")
+        else:
+            print("[0004] already applied (idempotent skip)")
         return 0
-    new_text, n = PATTERN.subn(lambda m: m.group(1) + NEW_BLOCK, text, count=1)
-    if n == 0:
+    if not PATTERN.search(text):
         print(
             f"[0004] anchor (InputManagerService start + t.traceEnd) not found in {target}. "
             f"AOSP may have refactored SystemServer. See REBASE.md.",
+            file=sys.stderr,
+        )
+        return 1
+    if check_only:
+        print("[0004] OK (anchor regex matches; check mode)")
+        return 0
+    new_text, n = PATTERN.subn(lambda m: m.group(1) + NEW_BLOCK, text, count=1)
+    if n == 0:
+        # Should not happen given the PATTERN.search above, but be
+        # defensive.
+        print(
+            f"[0004] anchor matched on search but not on subn — file changed between read and write?",
             file=sys.stderr,
         )
         return 1

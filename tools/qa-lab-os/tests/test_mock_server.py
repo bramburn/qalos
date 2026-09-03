@@ -178,6 +178,57 @@ def test_unknown_path_404(api):
 
 
 # ----------------------------------------------------------------------
+# 413 body-too-large (F-5.1 regression)
+# ----------------------------------------------------------------------
+
+def test_oversized_post_body_returns_413():
+    """A POST body larger than MAX_BODY_BYTES must be rejected with 413
+    before any handler runs, matching the on-device service contract."""
+    import requests
+    from mock_server import MAX_BODY_BYTES, MockRemoteControlServer
+
+    with MockRemoteControlServer() as srv:
+        # Send a body one byte over the cap.
+        oversized = b"x" * (MAX_BODY_BYTES + 1)
+        resp = requests.post(
+            f"http://127.0.0.1:{srv.port}/tap",
+            data=oversized,
+            headers={"Content-Type": "application/json"},
+            timeout=5,
+        )
+    assert resp.status_code == 413
+    payload = resp.json()
+    assert payload["status"] == "error"
+    assert "too large" in payload["message"].lower()
+
+
+def test_boundary_body_at_max_is_accepted():
+    """A POST body of exactly MAX_BODY_BYTES should NOT be rejected as
+    too large (the cap is inclusive).
+    """
+    import json
+    import requests
+    from mock_server import MAX_BODY_BYTES, MockRemoteControlServer
+
+    with MockRemoteControlServer() as srv:
+        # Build a body of exactly the cap size, shaped as valid JSON
+        # so the handler is reached and returns 200.
+        prefix = b'{"x":1,"y":2,"display":0,"filler":"'
+        suffix = b'"}'
+        target = MAX_BODY_BYTES - len(prefix) - len(suffix)
+        body = prefix + (b"a" * target) + suffix
+        assert len(body) == MAX_BODY_BYTES
+        resp = requests.post(
+            f"http://127.0.0.1:{srv.port}/tap",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            timeout=5,
+        )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
+
+
+# ----------------------------------------------------------------------
 # Server lifecycle
 # ----------------------------------------------------------------------
 

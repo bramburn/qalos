@@ -59,7 +59,11 @@ public final class HttpApiServer extends Thread {
     private final boolean mBindLocalOnly;
 
     private volatile boolean mRunning = true;
-    private ServerSocket mServer;
+    // `mServer` is written in `run()` and read by `shutdown()` from
+    // a different thread. `volatile` is the cheapest happens-before
+    // fence; `final` after the assignment is not an option because
+    // the field is assigned in `run()`, not the constructor.
+    private volatile ServerSocket mServer;
 
     public HttpApiServer(int port, IRemoteControl service, boolean bindLocalOnly) {
         super("qalos-remote-ctl-http");
@@ -133,14 +137,24 @@ public final class HttpApiServer extends Thread {
             return;
         }
         final String[] parts = requestLine.split(" ");
-        if (parts.length < 2) {
+        if (parts.length < 3) {
             writeError(out, 400, "malformed request line");
             return;
         }
+        if (!parts[2].startsWith("HTTP/")) {
+            // RFC 9112 §3 — request-line = method SP request-target SP HTTP-version
+            writeError(out, 400, "malformed HTTP version");
+            return;
+        }
         final String method = parts[0];
-        // Strip the query string so `GET /screenshot?width=0` matches
-        // the `GET /screenshot` case in the switch below.
-        final String path = _stripQuery(parts[1]);
+        // Split the request-target into path and query string so the
+        // GET /screenshot?width=… contract is honoured. The query
+        // string is then parsed into a JSONObject and passed to the
+        // handler just like a POST body would be.
+        final String[] pathAndQuery = _splitPathQuery(parts[1]);
+        final String path = pathAndQuery[0];
+        final String query = pathAndQuery[1];
+        final JSONObject queryParams = _parseQuery(query);
 
         int contentLength = 0;
         String header;
@@ -163,16 +177,27 @@ public final class HttpApiServer extends Thread {
         final String body = contentLength > 0 ? readBody(in, contentLength) : "";
 
         try {
-            handle(method, path, body, out);
+            handle(method, path, queryParams, body, out);
         } catch (IllegalArgumentException e) {
             writeError(out, 400, e.getMessage());
         } catch (IllegalStateException e) {
             writeError(out, 503, e.getMessage());
+        } catch (RuntimeException e) {
+            // F-2.2: never let a non-IAE/ISE exception kill the
+            // per-connection thread silently. The on-device service
+            // is a privileged system_server process; visibility is
+            // more important than a clean stack trace.
+            Log.e(TAG, "handler threw", e);
+            try {
+                writeError(out, 500, "internal error: " + e.getClass().getSimpleName());
+            } catch (IOException ignored) {
+                // The client may have hung up; nothing to do.
+            }
         }
     }
 
-    private void handle(String method, String path, String body, OutputStream out)
-            throws IOException {
+    private void handle(String method, String path, JSONObject query,
+            String body, OutputStream out) throws IOException {
         switch (method + " " + path) {
             case "GET /health":
                 handleHealth(out);
@@ -181,7 +206,8 @@ public final class HttpApiServer extends Thread {
                 handleDisplay(out);
                 return;
             case "GET /screenshot":
-                handleScreenshot(new JSONObject(), out);
+                // F-2.1: query parameters carry width/height/quality/display
+                handleScreenshot(query, out);
                 return;
             case "GET /foreground":
                 handleForeground(out);
@@ -305,6 +331,64 @@ public final class HttpApiServer extends Thread {
     private static String _stripQuery(String path) {
         final int q = path.indexOf('?');
         return q < 0 ? path : path.substring(0, q);
+    }
+
+    /**
+     * Split a request-target like {@code /screenshot?width=300&height=200}
+     * into {@code ["/screenshot", "width=300&height=200"]}.
+     */
+    private static String[] _splitPathQuery(String requestTarget) {
+        final int q = requestTarget.indexOf('?');
+        if (q < 0) {
+            return new String[] { requestTarget, "" };
+        }
+        return new String[] {
+                requestTarget.substring(0, q),
+                requestTarget.substring(q + 1)
+        };
+    }
+
+    /**
+     * Parse a URL-encoded query string into a JSONObject. Values that
+     * are not valid JSON numbers/booleans are kept as strings (the
+     * endpoint handlers know whether each field is int/bool/string).
+     */
+    private static JSONObject _parseQuery(String query) {
+        final JSONObject out = new JSONObject();
+        if (query == null || query.isEmpty()) {
+            return out;
+        }
+        for (final String pair : query.split("&")) {
+            if (pair.isEmpty()) {
+                continue;
+            }
+            final int eq = pair.indexOf('=');
+            final String rawKey = eq < 0 ? pair : pair.substring(0, eq);
+            final String rawVal = eq < 0 ? "" : pair.substring(eq + 1);
+            final String key = java.net.URLDecoder.decode(
+                    rawKey, java.nio.charset.StandardCharsets.UTF_8);
+            final String val = java.net.URLDecoder.decode(
+                    rawVal, java.nio.charset.StandardCharsets.UTF_8);
+            // Try int, then bool, then string — matches the JSON parser
+            // behaviour for endpoint handlers.
+            try {
+                out.put(key, Integer.parseInt(val));
+            } catch (NumberFormatException notInt) {
+                if (val.equals("true") || val.equals("false")) {
+                    out.put(key, Boolean.parseBoolean(val));
+                } else {
+                    try {
+                        out.put(key, val);
+                    } catch (JSONException impossible) {
+                        // key is a String — JSONObject.put never throws
+                        // for String keys.
+                    }
+                }
+            } catch (JSONException impossible) {
+                // same as above
+            }
+        }
+        return out;
     }
 
     private static JSONObject parseJson(String body) {

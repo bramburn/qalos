@@ -1,7 +1,7 @@
 # Board config for the qalos x86_64 emulator build.
 # Inherits everything from the AOSP generic x86_64 emulator board.
 
--include device/generic/x86_64/BoardConfig.mk
+include device/generic/x86_64/BoardConfig.mk
 
 # qalos: include our device-specific SELinux policy overlay.
 # The sepolicy/ directory contains the type definition, service

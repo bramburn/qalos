@@ -39,6 +39,12 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_DISPLAY_WIDTH = 1080
 DEFAULT_DISPLAY_HEIGHT = 2400
 
+# Maximum POST body size, in bytes. Mirrors the on-device service's
+# cap (see HttpApiServer.java#MAX_BODY_BYTES) and the API doc
+# (`website/docs/qa-lab-os/api.md`). Bodies larger than this are
+# rejected with HTTP 413 before any handler runs.
+MAX_BODY_BYTES = 64 * 1024
+
 
 def _strip_query(path: str) -> str:
     """Return the path portion of a request-target, dropping `?...`."""
@@ -107,6 +113,16 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         length = int(self.headers.get("Content-Length", "0"))
+        # F-5.1: enforce the 64 KiB body cap the API doc promises. The
+        # on-device service returns 413 if the body exceeds this; the
+        # mock should mirror that contract so client-side tests can
+        # verify the rejection path without an actual device.
+        if length > MAX_BODY_BYTES:
+            self._respond(413, {
+                "status": "error",
+                "message": f"body too large ({length} > {MAX_BODY_BYTES} bytes)",
+            })
+            return
         body = self.rfile.read(length) if length > 0 else b""
         path = _strip_query(self.path)
         self.api.handle(self.command, path, body, self._respond,
