@@ -16,7 +16,9 @@ Use the issue templates in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/):
 - **Feature request** — for new build paths, new tools, or new AOSP integrations.
 - **Question** — use [GitHub Discussions](https://github.com/bramburn/qalos/discussions), not issues, for "how do I..." questions.
 
-For security issues, **do not file a public issue** — see [SECURITY.md](SECURITY.md) (to be added when there's something worth reporting).
+For security issues, **do not file a public issue** — see [legal/SECURITY.md](legal/SECURITY.md).
+For general legal questions (clauses in the ToS, the AUP, the CLA), see the
+[legal index](legal/README.md) or open an issue labelled `legal`.
 
 ## Filing PRs
 
@@ -123,3 +125,19 @@ When a new build succeeds, the maintainer pushes the resulting images to a `rele
 ## Code of conduct
 
 By participating, you agree to abide by the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Contributor License Agreement
+
+By submitting a pull request, patch, issue, comment, or any other
+contribution, you accept the [CLA](legal/CLA.md). The CLA is a
+standard Apache-style agreement: you grant the project a licence to
+your contribution, you warrant that the contribution is your
+original work, and you give a limited indemnity (capped at £1,000
+per contribution) for breach of those warranties. It is designed
+to be short, fair, and compatible with both MIT and Apache 2.0 —
+the two licences that the project ships under.
+
+If you want to negotiate a separate agreement (for example,
+because your employer requires a different form), open an issue
+labelled `legal` or email the maintainer at the address in the
+GitHub profile before submitting your contribution.
