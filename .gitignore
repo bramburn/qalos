@@ -27,6 +27,10 @@ desktop.ini
 #  - .repo-sync.log / .build.log are produced by `tee` in the brief's step 6/9
 #    (kept in this directory so the user can tail them during a build)
 #  - .pi/ is the pi coding agent's session/goal state, user-specific
+#  - .tmp/ is the scratch directory used by the AOSP dry-run workflow
+#    (website/docs/qa-lab-os/dry-run-workflow.md); holds downloaded
+#    upstream files and the fake working tree
 .repo-sync.log
 .build.log
 .pi/
+.tmp/
