@@ -1,30 +1,29 @@
 # qalos — QA Lab Operating System
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Upstream: AOSP android-15.0.0_r1](https://img.shields.io/badge/AOSP-android--15.0.0__r1-3DDC84?logo=android)](https://source.android.com/)
+[![Docs: GitHub Pages](https://img.shields.io/badge/docs-github%20pages-blue)](https://bramburn.github.io/qalos/)
+[![CI](https://img.shields.io/github/actions/workflow/status/bramburn/qalos/ci.yml?branch=main&label=CI)](.github/workflows/ci.yml)
+
 qalos is an Android-based operating system (a fork of [AOSP](https://source.android.com/)) for QA Lab use, with **Samsung Galaxy A16 5G** as the long-term target device and the **Android emulator (AVD)** as the day-to-day build/test target.
 
 The fork is bare-bones: same kernel, same HALs as upstream AOSP, with a custom product makefile that overrides the OS branding (`QA Lab Operating System`, build id `QAL.YYYYMMDD.001`) and ships one first-party app (`QaLab`).
 
-**Upstream**: this is a derivative of the Android Open Source Project at `android-15.0.0_r1`. The manifest in this repo includes the upstream AOSP manifest verbatim; qalos only adds product metadata, one first-party app, and the build / CI scripts. Upstream AOSP is licensed under Apache 2.0; see the attribution note at the bottom of [`LICENSE`](LICENSE).
+- **Upstream:** derivative of AOSP at `android-15.0.0_r1`. The manifest in this repo includes the upstream AOSP manifest verbatim; qalos only adds product metadata, one first-party app, and the build / CI scripts. Upstream AOSP is licensed under Apache 2.0; see the attribution note at the bottom of [`LICENSE`](LICENSE).
+- **License:** MIT for the original qalos contributions (QaLab, product makefile, build scripts, documentation). The bundled AOSP components remain under their upstream Apache 2.0 license.
 
-**License**: MIT for the original qalos contributions (QaLab, product makefile, build scripts, documentation). The bundled AOSP components remain under their upstream Apache 2.0 license.
+## What can I do with it?
 
-## Two ways to build
+| I want to... | Then read... |
+| --- | --- |
+| Build on my Linux box in 1-4 hours | [Local build](https://bramburn.github.io/qalos/docs/getting-started/local-build) |
+| Build on DigitalOcean (clean-room CI) | [DO build](https://bramburn.github.io/qalos/docs/getting-started/do-build) |
+| Build on Alibaba Cloud / Aliyun (China region, cheap) | [Aliyun build](https://bramburn.github.io/qalos/docs/getting-started/aliyun-build) |
+| Understand the architecture and design rules | [Architecture overview](https://bramburn.github.io/qalos/docs/architecture/overview) |
+| Add a feature, fix a bug, send a PR | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Browse the API / folder reference | [Reference](https://bramburn.github.io/qalos/docs/reference/folder-structure) |
 
-| | Local Linux box (main) | DO droplet / GH Actions (fallback) |
-| --- | --- | --- |
-| **Use it for** | Day-to-day dev and builds | Clean-room CI, repro builds, sharing a build with a colleague |
-| **Setup cost** | One-time `apt install` on your box | One-time DO account + snapshot |
-| **Standing cost** | $0 (your box, your power) | $0.40/month snapshot + $5/month Spaces |
-| **Per build** | $0 | ~$0.50–$0.80 (c-8) |
-| **First build time** | 2–4 hours | 2–4 hours (same speed) |
-| **Iterating** | Re-run `apply-qalos.sh && m -j$(nproc)` | One full droplet cycle per build |
-| **Docs** | [`docs/local-build.md`](docs/local-build.md) | this README, below |
-
-**Recommended: build locally**, use the DO / GH Actions path for clean-room CI.
-
-## Local build (main workflow)
-
-You need a Linux box with Ubuntu 22.04+, 16 GB+ RAM, and 200+ GB free disk. The full walkthrough is in [`docs/local-build.md`](docs/local-build.md). The short version:
+## Quick start (local Linux box)
 
 ```bash
 # one-time setup
@@ -37,57 +36,29 @@ sudo curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo \
     -o /usr/local/bin/repo && sudo chmod +x /usr/local/bin/repo
 git config --global user.email "you@example.com" && git config --global user.name "Your Name"
 
-# first build
+# first build (1-4 hours, depending on machine)
 mkdir -p ~/aosp && cd ~/aosp
 repo init -u https://github.com/bramburn/qalos -b main
-repo sync -c -j$(nproc) --no-tags --no-clone-bundle        # 1-2 hours, first time only
-../qalos/tools/apply-qalos.sh                              # if you cloned qalos next to aosp
+repo sync -c -j$(nproc) --no-tags --no-clone-bundle
+../qalos/tools/apply-qalos.sh
 . build/envsetup.sh
 lunch qalos_emulator-userdebug
-m -j$(nproc)                                               # 1-2 hours, first time
+m -j$(nproc)
 ```
 
 The three images you want land in `~/aosp/out/target/product/qalos_emulator/`: `system.img`, `boot.img`, `userdata.img`.
 
-## Fallback: build on a DigitalOcean droplet (clean-room CI)
+## Two cloud fallbacks
 
-The `doctl-*.ps1` scripts and `.github/workflows/build.yml` stay in the repo for when you need a build that proves nothing on your local box is influencing the result. A `c-8: 8 vCPU / 16 GB / 200 GB SSD` droplet is created from a pre-warmed `qalos-build-warm` snapshot, the build runs on it, the artifacts upload to DO Spaces, and the droplet is destroyed. Four redundant safety nets guarantee the droplet can never be left running:
+| | DigitalOcean | Aliyun (China) |
+| --- | --- | --- |
+| Use it for | Clean-room CI, sharing a build | Same; pick when you need China region, cheaper spot, or DO is down |
+| Standing cost | ~$5.40/mo (Spaces + warm snapshot) | ~¥1/mo (warm custom image) |
+| Per build | ~$0.50-0.80 (c-8 spot) | ~¥7-14 (u1-c1m8.2xlarge spot) |
+| Setup cost | One-time `doctl-setup-base.ps1` (~10 min) | One-time `aliyun-smoke-test.ps1` + `aliyun-setup-base.ps1` (~20 min total) |
+| Trigger | `./tools/doctl-build.ps1` | `./tools/aliyun-build.ps1` |
 
-1. `try/finally` in the PowerShell scripts (clean exit, Ctrl+C, errors).
-2. Background `Start-Job` watchdog that force-destroys the droplet if the parent PowerShell dies (`kill -9`).
-3. On-droplet bash watchdog in `do-build.sh` that `shutdown -h now`s at `MAX_RUNTIME_MINUTES` (catches orchestrator-unreachable).
-4. GH Actions `if: always()` cleanup step with `timeout-minutes: 360`.
-
-To set this up once: see [`docs/setup.md`](docs/setup.md) for the manual steps. To trigger a build:
-
-```powershell
-# from this Windows box
-.\tools\doctl-build.ps1
-```
-
-Or push to `main` on GitHub, or click **Run workflow** in the Actions tab.
-
-## Repo layout
-
-```
-.
-├── default.xml                            # the AOSP manifest; pins android-15.0.0_r1
-├── device/qalos/qalos_emulator/           # qalos product makefile (branding, build id)
-├── packages/apps/QaLab/                   # the only first-party qalos app
-├── tools/
-│   ├── apply-qalos.sh                     # copy qalos content from manifest repo to AOSP working tree
-│   ├── setup-droplet.sh                   # one-time base-droplet setup (AOSP build deps)
-│   ├── do-build.sh                        # build script (used by the DO on-demand flow)
-│   ├── doctl-install.ps1                  # install doctl on this Windows box
-│   ├── doctl-setup-base.ps1               # one-time: create base droplet + snapshot
-│   ├── doctl-build.ps1                    # on-demand build trigger
-│   └── doctl-avd.ps1                      # on-demand AVD trigger
-├── .github/workflows/build.yml            # GH Actions workflow (fallback CI)
-├── docs/
-│   ├── local-build.md                     # the main build workflow
-│   └── setup.md                           # one-time DO / GH Actions setup
-└── README.md                              # you are here
-```
+Full walkthroughs in the [docs site](https://bramburn.github.io/qalos/docs/getting-started/).
 
 ## Device support
 
@@ -101,8 +72,18 @@ Or push to `main` on GitHub, or click **Run workflow** in the Actions tab.
 | Resource | Standing | Per build |
 | --- | --- | --- |
 | Local Linux box | $0 (your hardware, your power) | $0 |
-| `qalos-build-warm` snapshot (fallback only) | $0.40/month | — |
+| DO `qalos-build-warm` snapshot (fallback only) | $0.40/month | — |
 | DO Spaces (fallback only) | $5/month | — |
-| Fallback build droplet (c-8) | $0 | $0.50–$0.80 |
+| DO build droplet (c-8) | $0 | $0.50-0.80 |
+| Aliyun `qalos-build-warm` custom image (fallback only) | ~¥1/month | — |
+| Aliyun build ECS (u1-c1m8.2xlarge spot, 6h) | $0 | ~¥7 |
 
-Idle project cost if you use the fallback flow: **~$5.40/month**. Idle cost if you use only the local box: **$0**.
+**Idle project cost: $0** (if you only use the local box). **~$5.40/month** (if you maintain the DO fallback). **~$5.40 + ¥6/month** (if you maintain both fallbacks).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). All PRs require an approval before they can merge (see [BRANCH_PROTECTION.md](BRANCH_PROTECTION.md)). The CI pipeline runs static checks only — AOSP builds are not run on GitHub Actions.
+
+## License
+
+MIT for qalos contributions; Apache 2.0 for bundled AOSP components. See [LICENSE](LICENSE) for full text.

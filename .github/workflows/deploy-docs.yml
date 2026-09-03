@@ -1,0 +1,85 @@
+name: Deploy docs to GitHub Pages
+
+# Builds the Docusaurus site in website/ and deploys the static HTML to the
+# `gh-pages` branch. GitHub Pages serves gh-pages at:
+#   https://<org>.github.io/<repo>/
+#
+# This workflow uses the official Docusaurus deploy action. It does NOT need
+# any extra secrets beyond the default GITHUB_TOKEN.
+#
+# Triggers: push to main (changes under website/** or docusaurus.config.js)
+#           OR manual dispatch.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - '.github/workflows/deploy-docs.yml'
+      - 'package.json'   # root package.json if added later
+  workflow_dispatch:
+
+# One deploy at a time per branch. The GHA concurrency group ensures the
+# latest push to main wins.
+concurrency:
+  group: deploy-docs-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write    # required for the OIDC-based deployment below
+
+# Don't leave a deploy orphan: even on cancellation, try to mark it as failed.
+# (Docusaurus deploys are quick, so this is rare in practice.)
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history for the deploy action's git operations
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install dependencies
+        working-directory: website
+        run: npm ci || npm install
+
+      - name: Build the static site
+        working-directory: website
+        env:
+          # Tell Docusaurus this is a production build (enables sitemap, minifies, etc.)
+          NODE_ENV: production
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/build
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-22.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+# One-time setup:
+#   1. Go to repo Settings > Pages.
+#   2. Under "Source", select "GitHub Actions".
+#   3. Save. The next push to main will trigger this workflow and the site
+#      will go live at https://bramburn.github.io/qalos/.

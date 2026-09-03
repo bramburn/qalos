@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DavidAnson/markdownlint/main/schema/markdownlint-config-schema.json",
+  "default": true,
+  "MD003": { "style": "atx" },                      // # ATX headings
+  "MD004": { "style": "asterisk" },                 // - bullet lists
+  "MD007": { "indent": 2 },                         // nested list indent
+  "MD013": { "line_length": 100, "code_blocks": false, "tables": false, "headings": false },
+  "MD024": { "siblings_only": true },               // duplicate headings only count as siblings
+  "MD025": { "front_matter_title": "^\\s*title\\s*[:=]" },
+  "MD033": false,                                   // allow inline HTML
+  "MD034": false,                                   // allow bare URLs (we use them in shield badges)
+  "MD041": true,                                    // first line of file should be top-level heading
+  "MD046": { "style": "fenced" }                    // fenced code blocks only
+}

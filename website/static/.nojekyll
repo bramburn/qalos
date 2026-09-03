@@ -1,0 +1,7 @@
+<!--
+The presence of this file tells GitHub Pages NOT to run the site through
+Jekyll. This matters because Jekyll ignores files starting with `_`, which
+would swallow Docusaurus's `_category_.json` and other files.
+
+Keep this file even if it looks empty.
+-->

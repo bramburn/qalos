@@ -1,0 +1,37 @@
+# Code Owners
+#
+# Each line is a file pattern followed by one or more owners. The last
+# matching pattern wins. Owners receive a review request automatically when
+# a PR touches their files. Require a Code Owner review is enabled on main
+# (see BRANCH_PROTECTION.md), so a PR that touches these files cannot merge
+# without an owner approving it.
+#
+# Syntax reference: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything: the maintainer
+*                               @bramburn
+
+# Architecture and design rules - tight review
+/AGENTS.md                      @bramburn
+/BRANCH_PROTECTION.md           @bramburn
+/CODE_OF_CONDUCT.md             @bramburn
+/CONTRIBUTING.md                @bramburn
+
+# Cloud build paths - safety-critical, must keep the four-safety-net rule
+/tools/doctl-*.ps1              @bramburn
+/tools/aliyun-*.ps1             @bramburn
+/scripts/aliyun-*.sh            @bramburn
+/tools/do-build.sh              @bramburn
+/tools/setup-droplet.sh         @bramburn
+/tools/apply-qalos.sh           @bramburn
+
+# CI / GitHub config
+/.github/workflows/             @bramburn
+/.github/CODEOWNERS             @bramburn
+/BRANCH_PROTECTION.md           @bramburn
+
+# Docusaurus site - the user-facing docs
+/website/                       @bramburn
+/website/docs/                  @bramburn
+/website/docusaurus.config.js   @bramburn
+/website/sidebars.js            @bramburn

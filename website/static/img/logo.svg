@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  qalos logo. Simple, monochrome SVG, designed to be legible at 32x32.
+  Replace with a real logo when the brand is finalized.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect x="4" y="4" width="56" height="56" rx="8" fill="#1a73e8"/>
+  <text x="32" y="40" font-family="system-ui, sans-serif" font-size="24" font-weight="700" fill="white" text-anchor="middle">q</text>
+  <circle cx="46" cy="46" r="6" fill="#34a853"/>
+</svg>

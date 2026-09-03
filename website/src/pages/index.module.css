@@ -1,0 +1,41 @@
+/**
+ * CSS modules for the home page. Loaded by src/pages/index.js.
+ * Anything project-wide belongs in src/css/custom.css.
+ */
+
+.heroBanner {
+  padding: 4rem 0;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+@media screen and (max-width: 966px) {
+  .heroBanner {
+    padding: 2rem;
+  }
+}
+
+.buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.githubButton {
+  /* Subtle distinction between primary and secondary CTAs. */
+  border: 2px solid currentColor;
+}
+
+.features {
+  display: flex;
+  align-items: center;
+  padding: 2rem 0;
+  width: 100%;
+}
+
+.feature {
+  text-align: left;
+}
