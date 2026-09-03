@@ -2,16 +2,27 @@
 # qalos — apply qalos customizations to the AOSP working tree.
 #
 # The qalos repo (this one) is cloned into .repo/manifests/qalos by `repo
-# init`. The qalos customizations (device tree, apps, vendor) live in
-# subdirectories of that clone. The AOSP build system expects them at specific
-# paths inside the working tree — `device/qalos/qalos_emulator/`,
-# `packages/apps/QaLab/`, etc. This script copies them into place and
-# applies the four Python-based "patches" that gate the qalos
-# RemoteControlService.
+# init`. The qalos customizations (device tree, apps, vendor, plus the
+# RemoteControlService Java source) live in subdirectories of that clone.
+# The AOSP build system expects them at specific paths inside the working
+# tree — `device/qalos/qalos_emulator/`, `packages/apps/QaLab/`,
+# `frameworks/base/services/core/java/com/qalos/remotectl/`, etc. This
+# script:
+#
+#   1. Runs `patches/check-patches.py` as a pre-flight so any broken
+#      patch anchor is reported BEFORE the copy/apply step (a partial
+#      apply is hard to roll back).
+#   2. Copies the qalos overlay directories into the working tree
+#      (`device/qalos/qalos_emulator/`, `packages/apps/QaLab/`,
+#      `vendor/qalos/`, plus the framework services source).
+#   3. Runs each of the three Python patch scripts (0002, 0003, 0004)
+#      that gate the RemoteControlService in the AOSP framework. Each
+#      edits one upstream AOSP file in place.
 #
 # Run this AFTER `repo init` and `repo sync`. It is idempotent: re-running
 # it after you `git pull` in the qalos manifest repo will refresh the
-# working tree to match the latest qalos sources.
+# working tree to match the latest qalos sources. Both the copy step
+# and each patch script are idempotent on their own.
 #
 # Usage:
 #     ./tools/apply-qalos.sh
