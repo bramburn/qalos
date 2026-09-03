@@ -121,7 +121,9 @@ grep -n "StartRemoteControlService" frameworks/base/services/java/com/android/se
 
 The SELinux policy overlay is at
 `device/qalos/qalos_emulator/sepolicy/` and is included by
-`device.mk`'s `BOARD_SEPOLICY_DIRS`. `apply-qalos.sh` copies the
+`BoardConfig.mk`'s `BOARD_SEPOLICY_DIRS` (NOT `device.mk` — the
+AOSP sepolicy build reads it from `BoardConfig.mk`; setting it in
+`device.mk` is silently ignored). `apply-qalos.sh` copies the
 entire `device/qalos/qalos_emulator/` directory, so the policy
 lands in the AOSP tree automatically — no patch script needed.
 

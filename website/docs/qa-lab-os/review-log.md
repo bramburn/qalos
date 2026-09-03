@@ -66,3 +66,25 @@ Each finding uses this template:
 A pass is "clean" when its file contains no `must-fix` and no
 `should-fix` lines that are not marked `FIXED` / `WONTFIX` /
 `DEFERRED`.
+
+## Post-review follow-up: perplexity research pass
+
+A 5th pass was run after the 4-pass review cycle closed, to check
+that web research had not missed anything the static review could
+not catch. One real bug was found:
+
+- **`BOARD_SEPOLICY_DIRS` was in `device.mk`, not `BoardConfig.mk`.**
+  AOSP's `system/sepolicy/README` and `source.android.com` both
+  state that this variable is read from `BoardConfig.mk`. Setting
+  it in `device.mk` is silently ignored on AOSP 14+/15+. The fix
+  was to move the line into `BoardConfig.mk` and update three
+  documentation files (`build-guide.md`, `followup-work.md`,
+  `lessons-learned.md`) and one comment (`sepolicy/system_server.te`)
+  that referenced the wrong location. Folded into the `fix-ups-4`
+  commit.
+
+The lesson: the 4-pass static review catches code-level issues.
+The web-research pass catches architectural-level gaps ("you're
+not editing file X at all" / "the variable name is Y not Z").
+Both are needed; the latter catches things that don't show up in
+code review.

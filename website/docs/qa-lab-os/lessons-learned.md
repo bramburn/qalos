@@ -59,7 +59,9 @@ gaps, not text-mismatch gaps):
   `service.te`, and `system_server.te` entries for any new system
   service that binds a TCP socket; the v0 had none. Fix: added a
   sepolicy overlay in `device/qalos/qalos_emulator/sepolicy/`
-  and wired it via `BOARD_SEPOLICY_DIRS` in `device.mk`.
+  and wired it via `BOARD_SEPOLICY_DIRS` in `BoardConfig.mk` (NOT
+  `device.mk` — the AOSP sepolicy build reads the var from
+  `BoardConfig.mk`; `device.mk` is silently ignored).
 
 The lesson: the dry-run catches text-level mismatches. The
 web-research step catches architectural-level gaps ("you're not

@@ -1,7 +1,7 @@
 # qalos — system_server allow rules for the Remote Control Service.
 #
 # This file is a device-specific overlay loaded via BOARD_SEPOLICY_DIRS
-# in device.mk. The rules here are appended to (not replacing) the
+# in BoardConfig.mk. The rules here are appended to (not replacing) the
 # upstream AOSP system_server.te.
 
 # Allow system_server to bind the HTTP socket on 127.0.0.1:9000.
