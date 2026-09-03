@@ -254,6 +254,82 @@ Always `StopInstance` first, wait for `Stopped`, then `DeleteInstance`. The scri
 - **`docs/` legacy folder is not yet removed.** Old links may still point to `docs/local-build.md`, `docs/setup.md`, `docs/agent-brief.md`. They redirect to the new docs site (see `docs/README.md`). Will be removed in a follow-up commit.
 - **Docusaurus site preview requires Node 18+ locally.** The `deploy-docs.yml` workflow handles this on the GH Actions runner. For local preview (`cd website && npm install && npm run start`), you need Node 18+ on your own machine.
 
+## 8.1. QA Lab OS v0 followup work
+
+The v0 of the QA Lab OS shipped on `feat/qa-lab-os-v0` (4 commits:
+`4ddd890`, `59ad3e6`, `22f3cd1`, `bccbfb8`). The followup work for
+v1 / Phase 2 is recorded in detail at
+[`website/docs/qa-lab-os/followup-work.md`](website/docs/qa-lab-os/followup-work.md)
+(human-facing mirror). The short version:
+
+- **Bugs caught by the AOSP-15 download-and-dry-run** (all fixed in
+  `fix-ups-2`, but the same review pattern caught them — see
+  `website/docs/qa-lab-os/lessons-learned.md`):
+  - M-A — `len(sys.argv > 1)` typo in patch 0004 → `len(sys.argv) > 1`.
+  - M-B — URL-decode missing in mock `_parse_query` → added
+    `urllib.parse.unquote_plus`.
+  - M-C — `mActivityManager` field was dead → now used by `forceStop`
+    for real `IActivityManager.forceStopPackage` (replaces the
+    silently-broken `ActivityManager.killBackgroundProcesses`).
+  - Patch 0001 was unnecessary because the `services.core-sources`
+    filegroup's `srcs: ["java/**/*.java"]` glob already covers our
+    copied `com/qalos/remotectl/*.java` → deleted.
+  - Patch 0004's anchor was wrong for AOSP 15 (referenced the
+    removed `traceBeginAndSlog` static method and bare `traceEnd()`)
+    → rewritten to match the actual AOSP 15 pattern
+    (`t.traceBegin` / `t.traceEnd` on a local `Trace t` instance).
+
+- **Should-fix items from the v0 second-pass review**, deferred
+  until v1:
+  - S-A — `ActivityManager.getLaunchIntentForPackage` is deprecated
+    in API 33+; migrate to `PackageManager.getLaunchIntentForPackage`.
+  - S-B — `Display.getRealSize(Point)` is deprecated in API 30+;
+    migrate to `WindowManager.getCurrentWindowMetrics().getBounds()`.
+  - S-D — `getDisplayWidth` + `getDisplayHeight` make two Binder
+    round-trips; combine into one `getDisplaySize` AIDL call.
+  - S-E — `Bitmap.compress` runs on the binder thread for 100-200 ms;
+    move to a worker `ExecutorService`.
+  - S-F — `MotionEvent.recycle()` is also deprecated in API 28+;
+    drop the call.
+  - S-H — `apply-qalos.sh` silently ignores unknown flags; add a
+    default arm to the case statement.
+  - S-I — patch 0004's regex still requires a literal
+    `InputManagerService` class name; broaden the anchor so a
+    future rename does not break the patch.
+
+- **Deferred review items** (F-1.16, F-2.3, F-2.4, F-3.3, F-3.6):
+  `display_size` cache invalidation on rotation, per-client rate
+  limit on `/screenshot`, structured error codes, dispatch table
+  for `HttpApiServer`, `QaLabError.code` / `http_status` fields.
+
+- **Nit items**: mixed `m`-prefix vs `_`-prefix conventions, lost
+  `/* paramName */` style markers, `command -v python` fallback
+  for AOSP build images that only ship `python`, etc.
+
+- **v1 features** (per the original PRD Phase 1.5+, scoped by
+  `decisions.md#d-005a`):
+  - `long_press`, `swipe`, `pinch` gesture endpoints.
+  - LLM agent loop template (Python skeleton) that consumes the
+    agent-developer-guide pattern.
+  - Multi-device orchestration helpers (the Python client is
+    thread-safe; just need a barrier-sync helper).
+
+- **Phase 2** (explicitly deferred per D-006, D-007, and the PRD's
+  "What's NOT in v0" list):
+  - KernelSU-Next + SuSFS kernel hiding on physical Pixel 7.
+  - GPS spoofing (Smali patch on `services.jar` or custom
+    `LocationProvider` HAL).
+  - Play Integrity bypass (TrickyStore + keybox injection; the
+    ethical-grey-zone path).
+  - iOS support (XCUITest + WebDriverAgent on a Mac).
+  - Sensor injection (accel / gyro / barometer) for a navigation
+    test rig.
+
+The next branch (`feat/qa-lab-os-v1`) should pull the should-fix
+items and the gesture endpoints into one cohesive change. Do NOT
+mix the v0 followup with new features; the diff is already non-trivial
+on this side.
+
 ## 9. Tactical next steps (for whoever picks this up)
 
 1. **If not yet done, run the Aliyun smoke test:**
