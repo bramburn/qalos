@@ -330,6 +330,39 @@ items and the gesture endpoints into one cohesive change. Do NOT
 mix the v0 followup with new features; the diff is already non-trivial
 on this side.
 
+## 8.2. AOSP dry-run verification workflow
+
+**Any patch that modifies an upstream AOSP file MUST be validated
+against the actual upstream source before the patch is considered
+ready.** Self-review of the patch as text misses real mismatches
+because the author sees what they expect to see.
+
+The full recipe is in
+[`website/docs/qa-lab-os/dry-run-workflow.md`](website/docs/qa-lab-os/dry-run-workflow.md)
+(human-facing, copy-pasteable PowerShell + bash). The short
+version:
+
+1. **Fetch** the real upstream file from
+   `https://android.googlesource.com/platform/frameworks/base/+/refs/tags/<AOSP-tag>/<path>?format=TEXT`
+   (base64, no newlines).
+2. **Decode** with `[Convert]::FromBase64String` (PowerShell) or
+   `base64 -d` (bash).
+3. **Drop** it into a fake AOSP working tree at the right relative
+   path.
+4. **Run** the patch script against the tree. If `check-patches.py`
+   exits non-zero, the anchor is wrong; fix it.
+5. **Diff** the result against the pristine copy. The diff IS
+   the patch; if it surprises you, the patch is wrong.
+
+The v0 had three real bugs that two 4-pass reviews missed; the
+dry-run caught all three. The full history is in
+[`website/docs/qa-lab-os/lessons-learned.md`](website/docs/qa-lab-os/lessons-learned.md).
+
+**Skip this workflow only if the patch is editing a qalos-owned
+file** (under `device/qalos/`, `packages/apps/QaLab/`,
+`vendor/qalos/`, etc.). The workflow is for patches that modify
+files in upstream AOSP repos.
+
 ## 9. Tactical next steps (for whoever picks this up)
 
 1. **If not yet done, run the Aliyun smoke test:**
