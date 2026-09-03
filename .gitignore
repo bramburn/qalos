@@ -30,3 +30,19 @@ desktop.ini
 .repo-sync.log
 .build.log
 .pi/
+
+# Python build/test artifacts
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Node/Docusaurus
+website/node_modules/
+website/.docusaurus/
+website/build/
+website/.cache-loader/
