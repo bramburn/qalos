@@ -169,6 +169,30 @@ def test_screenshot_rejects_invalid_quality_client_side(device, server):
     assert server.api.calls == []
 
 
+def test_screenshot_url_decodes_query_params(device, server):
+    """Query params are URL-decoded before the int-parse.
+
+    Regression test for M-B: the mock used to receive the raw
+    `%20300` string instead of `300` (as an int) when a client
+    sent a percent-encoded value.
+    """
+    # Direct POST with a percent-encoded value, bypassing the
+    # Python client so the URL encoding actually reaches the server.
+    import requests
+    resp = requests.get(
+        f"{device.base_url}/screenshot?width=%20300&quality=85",
+        timeout=5,
+    )
+    assert resp.status_code == 200
+    # The recorded call should have width=300 (decoded then int-parsed),
+    # not the string " 300" or "%20300".
+    last = server.api.calls[-1]
+    assert last[0] == "GET"
+    assert last[1] == "/screenshot"
+    assert last[2]["width"] == 300
+    assert last[2]["quality"] == 85
+
+
 # ----------------------------------------------------------------------
 # Error handling — exercised via direct HTTP so we can see the raw
 # response shape, not the client-side wrappers.

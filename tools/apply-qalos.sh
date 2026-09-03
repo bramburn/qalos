@@ -97,11 +97,15 @@ copy_path \
     "$QALOS_REPO/packages/apps/RemoteControlService/src/com/qalos/remotectl" \
     frameworks/base/services/core/java/com/qalos/remotectl
 
-# Apply the four Python "patches" that gate the service. Each script
+# Apply the three Python "patches" that gate the service. Each script
 # edits one upstream AOSP file in place; the script exits 1 if the
 # anchor is not found. We surface that as a machine-readable line.
+# (Patch 0001 used to edit services.core/Android.bp srcs but is no
+# longer needed: AOSP 15's services.core-sources filegroup already
+# has srcs: ["java/**/*.java"] which globs in our copied
+# com/qalos/remotectl/*.java. See REBASE.md for the history.)
 PATCH_DIR="$QALOS_REPO/packages/apps/RemoteControlService/patches"
-for n in 0001 0002 0003 0004; do
+for n in 0002 0003 0004; do
     patch_script="$(ls "$PATCH_DIR/${n}-"*.py 2>/dev/null || true)"
     if [ -z "$patch_script" ]; then
         echo "[apply-qalos] status=warn patch=${n} reason=missing-script"

@@ -24,7 +24,9 @@ import android.graphics.Rect;
 import android.hardware.display.DisplayManager;
 import android.hardware.input.InputManager;
 import android.os.IRemoteControl;
+import android.os.RemoteException;
 import android.os.SystemClock;
+import android.os.UserHandle;
 import android.util.Log;
 import android.util.Size;
 import android.view.Display;
@@ -291,10 +293,19 @@ public final class RemoteControlService extends SystemService {
     }
 
     private void forceStopInternal(String packageName) {
-        if (mActivityManagerClient == null) {
-            throw new IllegalStateException("ActivityManager not available");
+        // IActivityManager.forceStopPackage is the right primitive for
+        // a "force stop" semantic that works on both foreground and
+        // background processes. The public ActivityManager wrapper
+        // exposes only killBackgroundProcesses, which silently fails
+        // for the foreground case.
+        if (mActivityManager == null) {
+            throw new IllegalStateException("IActivityManager not available");
         }
-        mActivityManagerClient.killBackgroundProcesses(packageName);
+        try {
+            mActivityManager.forceStopPackage(packageName, UserHandle.getCallingUserId());
+        } catch (RemoteException e) {
+            throw new IllegalStateException("failed to force stop", e);
+        }
     }
 
     // ------------------------------------------------------------------

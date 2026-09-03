@@ -71,6 +71,7 @@ const sidebars = {
         'qa-lab-os/static-checks',
         'qa-lab-os/review-log',
         'qa-lab-os/lessons-learned',
+        'qa-lab-os/followup-work',
       ],
     },
   ],

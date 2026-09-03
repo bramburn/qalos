@@ -22,7 +22,6 @@ from pathlib import Path
 PATCH_DIR = Path(__file__).resolve().parent
 
 PATCHES = [
-    "0001-services-core-Android-bp-srcs.py",
     "0002-AndroidManifest-REMOTE_CONTROL-permission.py",
     "0003-strings-REMOTE_CONTROL.py",
     "0004-SystemServer-StartRemoteControlService.py",

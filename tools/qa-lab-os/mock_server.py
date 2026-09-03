@@ -32,6 +32,7 @@ import threading
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Iterator, List, Tuple
+from urllib.parse import unquote_plus
 
 LOGGER = logging.getLogger(__name__)
 
@@ -48,8 +49,8 @@ def _strip_query(path: str) -> str:
 def _parse_query(path: str) -> dict:
     """Parse a `key=value&...` query string into a dict.
 
-    Each value is an int if it parses cleanly, else the raw string.
-    Always returns a dict; empty query returns an empty dict.
+    Values are URL-decoded (form-encoded) first, then parsed as
+    int if they look numeric. Empty query returns an empty dict.
     """
     q = path.find("?")
     if q < 0 or q == len(path) - 1:
@@ -64,8 +65,13 @@ def _parse_query(path: str) -> dict:
             key, value = pair, ""
         else:
             key, value = pair[:eq], pair[eq + 1:]
-        # Try integer parse — matches the on-device server's
-        # `body.optInt` behaviour for the screenshot parameters.
+        # URL-decode each value so `?width=%20480` arrives as
+        # `width = 480`, matching the on-device server's
+        # optInt-on-string behaviour.
+        try:
+            value = unquote_plus(value)
+        except (TypeError, ValueError):
+            pass
         try:
             out[key] = int(value)
         except (TypeError, ValueError):
