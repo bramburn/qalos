@@ -41,7 +41,9 @@ param(
     [switch]$KeepOnFailure     = $false,
     [string]$ArtifactDownloadDir,
     [string]$NetworkTier        = 'STANDARD',
-    [switch]$SerialPortOutput   = $true
+    [switch]$SerialPortOutput   = $true,
+    [int]   $RepoSyncJobs      = 8,
+    [int]   $RepoSyncRetries   = 3
 )
 
 $ErrorActionPreference = 'Stop'
@@ -202,6 +204,13 @@ SPACES_BUCKET=''
 SPACES_REGION=''
 SPACES_KEY=''
 SPACES_SECRET=''
+# Per-run overrides for repo sync. do-build.sh defaults: REPO_SYNC_JOBS=8,
+# REPO_SYNC_RETRIES=3. Pass -RepoSyncJobs 4 -RepoSyncRetries 5 (etc.) on the
+# gcp-build.ps1 command line to override for this run; useful when a
+# previous run hit the android.googlesource.com RESOURCE_EXHAUSTED / HTTP 429
+# rate limit.
+REPO_SYNC_JOBS='$RepoSyncJobs'
+REPO_SYNC_RETRIES='$RepoSyncRetries'
 "@ | Out-File -FilePath $envFile -Encoding ascii -NoNewline
 
 # ---------------------------------------------------------------------------
