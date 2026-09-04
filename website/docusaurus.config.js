@@ -103,6 +103,12 @@ const config = {
             label: 'Contributing',
           },
           {
+            type: 'docSidebar',
+            sidebarId: 'qaLabOsSidebar',
+            position: 'left',
+            label: 'QA Lab OS',
+          },
+          {
             href: 'https://github.com/bramburn/qalos',
             label: 'GitHub',
             position: 'right',

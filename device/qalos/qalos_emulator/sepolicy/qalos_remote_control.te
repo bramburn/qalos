@@ -1,0 +1,12 @@
+# qalos — Remote Control Service type definition.
+#
+# In v0, the service is internal to system_server (no AIDL, no Binder
+# publication); the only client is the embedded HttpApiServer. The
+# TCP socket allow rule lives in system_server.te because system_server
+# is the domain that binds the socket.
+#
+# v1+ that re-introduces the AIDL + Binder publication can also wire
+# `add_service(system_server, qalos_remote_control_service)` in
+# system_server.te and `allow platform_app qalos_remote_control:...` for
+# any privileged system app that wants to bind to the service.
+type qalos_remote_control, system_api_service, system_server_service, service_manager_type;

@@ -1,0 +1,17 @@
+# qalos — system_server allow rules for the Remote Control Service.
+#
+# This file is a device-specific overlay loaded via BOARD_SEPOLICY_DIRS
+# in BoardConfig.mk. The rules here are appended to (not replacing) the
+# upstream AOSP system_server.te.
+
+# Allow system_server to bind the HTTP socket on 127.0.0.1:9000.
+# AOSP does not give system_server a general self:tcp_socket rule;
+# services that bind TCP sockets (audioserver, mediaserver) have
+# their own domains. We do the same for our service by giving
+# system_server the bind permission on its own TCP socket.
+allow system_server self:tcp_socket { create bind listen accept read write name_bind };
+
+# Allow system_server to register the service with the ServiceManager
+# (v1+ when the AIDL is re-introduced and the service is published
+# over Binder). No-op in v0 because the AIDL is gone.
+allow system_server qalos_remote_control:service_manager { add find };
