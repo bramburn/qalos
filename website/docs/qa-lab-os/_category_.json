@@ -1,0 +1,8 @@
+{
+  "label": "QA Lab OS",
+  "position": 5,
+  "link": {
+    "type": "generated-index",
+    "description": "Custom AOSP-based system image with a native HTTP API for remote control from a workstation."
+  }
+}

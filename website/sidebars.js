@@ -55,6 +55,27 @@ const sidebars = {
       ],
     },
   ],
+  qaLabOsSidebar: [
+    {
+      type: 'category',
+      label: 'QA Lab OS',
+      collapsed: false,
+      items: [
+        'qa-lab-os/index',
+        'qa-lab-os/plan',
+        'qa-lab-os/decisions',
+        'qa-lab-os/architecture',
+        'qa-lab-os/api',
+        'qa-lab-os/build-guide',
+        'qa-lab-os/agent-developer-guide',
+        'qa-lab-os/static-checks',
+        'qa-lab-os/review-log',
+        'qa-lab-os/lessons-learned',
+        'qa-lab-os/followup-work',
+        'qa-lab-os/dry-run-workflow',
+      ],
+    },
+  ],
 };
 
 export default sidebars;

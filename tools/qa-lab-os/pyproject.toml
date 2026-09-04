@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qa-lab-os"
+version = "0.1.0"
+description = "Python client SDK and mock server for the qalos RemoteControlService."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "qalos maintainers", email = "maintainers@example.invalid"},
+]
+dependencies = [
+    "Pillow>=10.0",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+]
+
+[project.scripts]
+qa-lab-os-mock = "qa_lab_os.mock_server:main"
+
+[tool.setuptools]
+py-modules = ["client", "mock_server"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
