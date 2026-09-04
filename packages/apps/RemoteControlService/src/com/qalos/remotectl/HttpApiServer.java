@@ -388,13 +388,12 @@ public final class HttpApiServer extends Thread {
             final String val = java.net.URLDecoder.decode(
                     rawVal, java.nio.charset.StandardCharsets.UTF_8);
             // Try int, then bool, then string — matches the JSON parser
-            // behaviour for endpoint handlers.
+            // behaviour for endpoint handlers. JSONObject.put(String, Object)
+            // declares JSONException but never throws for String keys; the
+            // three catches below exist to satisfy the compiler.
             try {
                 out.put(key, Integer.parseInt(val));
             } catch (NumberFormatException notInt) {
-                // JSONObject.put(String, Object) declares JSONException
-                // but never throws for String keys. The catch blocks below
-                // exist to satisfy the compiler.
                 if (val.equals("true") || val.equals("false")) {
                     try {
                         out.put(key, Boolean.parseBoolean(val));
@@ -410,6 +409,9 @@ public final class HttpApiServer extends Thread {
                         // for String keys.
                     }
                 }
+            } catch (JSONException impossible) {
+                // key is a String — JSONObject.put never throws for
+                // String keys.
             }
         }
         return out;
