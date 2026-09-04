@@ -11,11 +11,15 @@ PRODUCT_NAME := qalos_emulator
 PRODUCT_DEVICE := qalos_emulator
 
 # Branding — these end up in ro.product.* and ro.build.*
-# NOTE: PRODUCT_MANUFACTURER cannot contain spaces -- it is the first
-# component of BUILD_FINGERPRINT, and AOSP 15's build/make/core/sysprop.mk:195
-# rejects spaces with: "BUILD_FINGERPRINT cannot contain spaces". Use "QALab"
-# (no space) for the manufacturer; brand and model can keep spaces.
-PRODUCT_BRAND := QA Lab
+# NOTE: PRODUCT_BRAND is the FIRST field of BUILD_FINGERPRINT (see
+# build/make/core/sysprop.mk BUILD_FINGERPRINT rule), and AOSP 15's
+# build/make/core/sysprop.mk:195 rejects spaces with:
+#   error: BUILD_FINGERPRINT cannot contain spaces
+# So PRODUCT_BRAND must be no-space. PRODUCT_MODEL goes in ro.product.model
+# (no fingerprint) and can keep spaces. PRODUCT_MANUFACTURER goes in
+# ro.product.manufacturer (also no fingerprint) and is left as the
+# human-readable form for the boot screen.
+PRODUCT_BRAND := QALab
 PRODUCT_MODEL := QA Lab Operating System
 PRODUCT_MANUFACTURER := QALab
 
