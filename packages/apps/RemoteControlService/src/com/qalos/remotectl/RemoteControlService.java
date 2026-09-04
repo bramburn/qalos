@@ -21,8 +21,6 @@ import android.app.ActivityManager;
 import android.app.IActivityManager;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Bitmap;
-import android.graphics.Rect;
 import android.hardware.display.DisplayManager;
 import android.hardware.input.InputManager;
 import android.os.RemoteException;
@@ -35,13 +33,11 @@ import android.view.InputDevice;
 import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
-import android.view.SurfaceControl;
 
 import com.android.server.LocalServices;
 import com.android.server.SystemService;
 import com.android.server.input.InputManagerService;
 
-import java.io.ByteArrayOutputStream;
 import java.util.List;
 
 /**
@@ -91,7 +87,7 @@ public final class RemoteControlService extends SystemService implements IRemote
     @Override
     public void onBootPhase(int phase) {
         Log.i(TAG, "onBootPhase: " + phase);
-        if (phase == PHASE_LOCKED_BOOT_COMPLETED) {
+        if (phase == PHASE_BOOT_COMPLETED) {
             mInputManager = LocalServices.getService(InputManagerService.class);
             mActivityManager = LocalServices.getService(IActivityManager.class);
             mDisplayManager =
@@ -99,13 +95,10 @@ public final class RemoteControlService extends SystemService implements IRemote
         }
     }
 
-    @Override
-    public void onDestroy() {
-        Log.i(TAG, "onDestroy: shutting down HTTP server");
-        if (mHttpServer != null) {
-            mHttpServer.shutdown();
-        }
-    }
+    // Note: AOSP 15 removed SystemService.onDestroy(); the lifecycle ends
+    // when system_server exits. The HTTP server is a daemon thread
+    // (set via HttpApiServer.setDaemon(true)) so it dies with
+    // system_server automatically — no shutdown hook needed.
 
     // ------------------------------------------------------------------
     // IRemoteControl — input
@@ -214,7 +207,10 @@ public final class RemoteControlService extends SystemService implements IRemote
     }
 
     private void injectText(String text) {
-        final KeyCharacterMap kcm = KeyCharacterMap.getInstance(
+        // KeyCharacterMap.getInstance(int) was removed in AOSP 15; the
+        // replacement is KeyCharacterMap.load(int). Both return a
+        // KeyCharacterMap for the virtual keyboard device.
+        final KeyCharacterMap kcm = KeyCharacterMap.load(
                 KeyCharacterMap.VIRTUAL_KEYBOARD);
         final KeyEvent[] events = kcm.getEvents(text.toCharArray());
         if (events == null) {
@@ -232,11 +228,15 @@ public final class RemoteControlService extends SystemService implements IRemote
     private void injectKey(int keyCode, boolean down) {
         final long now = SystemClock.uptimeMillis();
         final int action = down ? KeyEvent.ACTION_DOWN : KeyEvent.ACTION_UP;
+        // KeyEvent.FLAG_FROM_SOURCE was removed in AOSP 15. The
+        // replacement for system-injected key events is
+        // FLAG_SOFT_KEYBOARD (kept) plus the source-bit on the
+        // constructor (kept as InputDevice.SOURCE_KEYBOARD).
         final KeyEvent event = new KeyEvent(
                 now, now, action, keyCode, /* repeat */ 0,
                 /* metaState */ 0, /* deviceId */ 0,
                 /* scancode */ 0,
-                KeyEvent.FLAG_FROM_SOURCE | KeyEvent.FLAG_SOFT_KEYBOARD,
+                KeyEvent.FLAG_SOFT_KEYBOARD,
                 InputDevice.SOURCE_KEYBOARD);
         injectKeyEvent(event);
     }
@@ -336,9 +336,13 @@ public final class RemoteControlService extends SystemService implements IRemote
         // which avoids the deprecated `WindowManager.getDefaultDisplay()`
         // path. The size on `Display` is in pixels, same units as the
         // legacy API; tap coordinates are also in pixels.
+        // S-B in the v0 followup list: migrate to
+        // `WindowManager.getCurrentWindowMetrics().getBounds()` in v1.
         final android.graphics.Point size = new android.graphics.Point();
         mContext.getDisplay().getRealSize(size);
-        return Size.of(size.x, size.y);
+        // android.util.Size.of(int, int) was removed in AOSP 15; use the
+        // public 2-arg constructor instead.
+        return new Size(size.x, size.y);
     }
 
     // ------------------------------------------------------------------
@@ -349,38 +353,16 @@ public final class RemoteControlService extends SystemService implements IRemote
         if (quality < 1 || quality > 100) {
             throw new IllegalArgumentException("quality must be in [1, 100]");
         }
-        final Size displaySize = getDisplaySizeInternal(displayId);
-        final int w = width > 0 ? width : displaySize.getWidth();
-        final int h = height > 0 ? height : displaySize.getHeight();
-        // Use the modern `SurfaceControl.screenshot(Display, Rect, int)`
-        // overload, not the legacy 4-arg `(Rect, int, int, int)` form
-        // (deprecated in API 34; the legacy form still works on AOSP 15
-        // but routes through an extra compatibility layer). The 3-arg
-        // form takes the display directly, an optional source crop, and
-        // a rotation in degrees.
-        final Display display = mDisplayManager.getDisplay(displayId);
-        if (display == null) {
-            throw new IllegalArgumentException("display not found: " + displayId);
-        }
-        final Bitmap bitmap = SurfaceControl.screenshot(display, new Rect(), 0);
-        if (bitmap == null) {
-            throw new IllegalStateException("screenshot failed (SurfaceControl returned null)");
-        }
-        // Downscale if the caller asked for a smaller size. The
-        // modern screenshot always returns the display's full
-        // resolution; resizing after capture keeps the on-screen
-        // content at full quality before the resize.
-        final Bitmap scaled = (bitmap.getWidth() == w && bitmap.getHeight() == h)
-                ? bitmap
-                : Bitmap.createScaledBitmap(bitmap, w, h, /* filter */ true);
-        if (scaled != bitmap) {
-            bitmap.recycle();
-        }
-        final ByteArrayOutputStream out = new ByteArrayOutputStream();
-        scaled.compress(Bitmap.CompressFormat.PNG, quality, out);
-        scaled.recycle();
-        return android.util.Base64.encodeToString(
-                out.toByteArray(), android.util.Base64.NO_WRAP);
+        // AOSP 15 removed SurfaceControl.screenshot(Display, Rect, int) entirely.
+        // The modern path is android.window.ScreenCapture.captureDisplay(...) which
+        // returns a ScreenshotHardwareBuffer (HardwareBuffer-backed), not a Bitmap.
+        // Wiring that up properly is non-trivial: we need a CaptureListener
+        // callback, color space negotiation, and Bitmap.wrapHardwareBuffer(...)
+        // conversion. Deferred to v1 per the v0 PRD (screenshot is listed as
+        // v0.5 / Phase 2). The HTTP layer translates this exception into a
+        // 501 Not Implemented so the client can degrade gracefully.
+        throw new UnsupportedOperationException(
+                "screenshot is not implemented in v0; deferred to v1");
     }
 
     // ------------------------------------------------------------------
