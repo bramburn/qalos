@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <manifest>
 
-  <remote  name="aosp"
-           fetch=".."
-           review="https://android-review.googlesource.com/" />
+  <!--
+    The `aosp` remote is defined in the parent manifest (default.xml in the
+    qalos repo) so that it can use an absolute fetch URL. If we left the
+    `fetch=".."` here, it would resolve relative to the qalos manifest URL
+    (i.e. `https://github.com/bramburn/`) and every `repo sync` would try
+    to fetch AOSP source from this fork, which obviously does not have it.
+    See default.xml for the canonical definition.
+  -->
   <default revision="refs/tags/android-15.0.0_r1"
            remote="aosp"
            sync-j="4" />
