@@ -7,15 +7,14 @@
  * AIDL Binder publication in v0; the only external surface is the
  * HTTP/JSON API on 127.0.0.1:9000.
  *
- * Why not AIDL? AIDL files in services/core/ are not auto-picked-up
- * by the services.core-sources filegroup (srcs: ["java/**/*.java"]
- * does not match *.aidl). The standard AOSP pattern is to put AIDL
- * in core/java/android/<pkg>/ and declare it in
- * frameworks/base/Android.bp's aidl_interface block. For v0, with
- * no privileged client binding to the service over Binder, the
- * plain Java interface is the right shape. A v1+ that wants Binder
- * can re-introduce the AIDL by moving it to core/java/android/os/
- * and patching frameworks/base/Android.bp.
+ * Why not AIDL? The services.core-sources filegroup globs every
+ * .java file under java/ but does not match .aidl files. The
+ * standard AOSP pattern is to put AIDL in core/java/android/<pkg>/
+ * and declare it in frameworks/base/Android.bp's aidl_interface
+ * block. For v0, with no privileged client binding to the service
+ * over Binder, the plain Java interface is the right shape. A v1+
+ * that wants Binder can re-introduce the AIDL by moving it to
+ * core/java/android/os/ and patching frameworks/base/Android.bp.
  *
  * The interface is in the com.qalos.remotectl package on purpose:
  * the service and the HTTP server are both in this package, and
