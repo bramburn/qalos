@@ -240,6 +240,21 @@ aliyun configure
 .\tools\gcp-build.ps1 -NetworkTier PREMIUM          # default is STANDARD; PREMIUM = Google's tier-1 backbone
 ```
 
+> **⚠️ `gcp-build.ps1` SSH-shutdown bug (DO NOT USE for builds > 10 min)**
+>
+> The `gcp-build.ps1` script's SSH call into the instance has a known shutdown-detection bug: when the remote `do-build.sh` process tree exits, the parent SSH session does not always close promptly. The script then sits "waiting" for **up to 4 hours**, until the SSH connection eventually drops for some other reason. At that point the script's `try/finally` block runs and **unconditionally stops and deletes the instance** — even if the build itself is healthy and was running via a separate `systemd-run` unit on the same instance.
+>
+> **Concrete 2026-09-04 incident:** `qalos-build-20260904-180634` was at 45% (`BUILD_RUNNING`, compiling libLLVM AArch64) for 4 hours, then the gcp-build.ps1 background task finally exited and deleted the instance. All 4 hours of compile progress were lost.
+>
+> **The correct pattern** for any AOSP build on GCP (1-6 hours):
+>
+> 1. `gcp-build.ps1` may create the instance and upload files, but should NOT own the cleanup.
+> 2. The build itself must be launched via `systemd-run --unit=qalos-resumeN` (or equivalent detached unit) on the instance, so it survives gcp-build.ps1's eventual exit.
+> 3. The **LLM monitor cron is the single owner of `gcloud compute instances delete`** — not the script (see "Build monitor (cron) — LLM-driven, not script-driven" below). The cron's step 6 is: "After downloads: `gcloud compute instances delete qalos-build-NAME --zone=Z --quiet` if present."
+> 4. The proper long-term fix is patching `gcp-build.ps1` to remove the unconditional `try/finally` delete, or to add a `-NoAutoDelete` switch that the LLM can use when it wants the cron to own cleanup.
+>
+> **TL;DR:** for any build longer than ~10 min, treat `gcp-build.ps1` as a "create + upload" tool only, not a "wait for build" tool. Launch the actual build via `systemd-run` on the instance, and have the LLM monitor cron own the instance teardown.
+
 **Cheapest viable machine:** `c3d-highcpu-16` Spot (16 vCPU, 32 GB, ~$0.13/hr) in `us-central1`. If the Java compile OOMs, upgrade to `c3d-standard-16` Spot (16 vCPU, 64 GB, ~$0.15/hr). Spot can be reclaimed with 30-second notice — `repo sync` is resumable and `ccache` survives a reclaim, so a mid-build preemption adds one retry round at worst.
 
 **Network tier:** `-NetworkTier STANDARD` (default) routes egress through the public internet at ~$0.02/GB. `-NetworkTier PREMIUM` uses Google's tier-1 backbone at ~$0.08/GB but is faster and more reliable. For AOSP builds, the bulk of network traffic is `repo sync` from `android.googlesource.com` which is **inside Google's network and free regardless of tier** — so the tier mostly affects the final `scp` of artifacts back to the orchestrator (1-5 GB). Default to STANDARD; switch to PREMIUM if you see flaky network or you need the lower latency to Google's services.
