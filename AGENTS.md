@@ -181,7 +181,14 @@ git config --global user.email "you@example.com" && git config --global user.nam
 
 mkdir -p ~/aosp && cd ~/aosp
 repo init -u https://github.com/bramburn/qalos -b main
-repo sync -c -j$(nproc) --no-tags --no-clone-bundle
+# Use lower concurrency for `repo sync` than for the AOSP build: the git
+# fetches hit `android.googlesource.com` which has per-IP rate limits, and
+# running 16 parallel git fetch processes gets RESOURCE_EXHAUSTED / HTTP 429
+# errors on a few of the ~1500 repos. -j8 finishes in roughly the same wall
+# time (downloads are bandwidth-bound, not CPU-bound). On the cloud paths
+# this is handled by `do-build.sh` (REPO_SYNC_JOBS=8 default with 3 retries
+# and exponential backoff, falls back to -j1 --fail-fast on persistent failure).
+repo sync -c -j8 --no-tags --no-clone-bundle
 ../qalos/tools/apply-qalos.sh
 . build/envsetup.sh
 lunch qalos_emulator-userdebug
