@@ -122,8 +122,15 @@ log "syncing AOSP source at tag $AOSP_TAG (this can take a while on first run)"
 REPO_SYNC_JOBS="${REPO_SYNC_JOBS:-8}"
 REPO_SYNC_RETRIES="${REPO_SYNC_RETRIES:-3}"
 SYNC_OK=0
+# Note: do NOT use `... | tee "$LOG"` here. With `set -o pipefail`, a SIGPIPE
+# to tee (which happens when repo sync exits quickly on an already-synced tree,
+# as is the case with the warm snapshot) makes the pipe exit non-zero and
+# `if ...; then` evaluate to false -- even though repo sync itself returned 0.
+# That causes the script to think the sync failed and exit 1 ("FATAL: repo
+# sync failed after all retries") even when the sync actually succeeded. Use a
+# direct file redirect instead.
 for attempt in $(seq 1 $REPO_SYNC_RETRIES); do
-    if repo sync -c -j"$REPO_SYNC_JOBS" --no-tags --no-clone-bundle 2>&1 | tee "$LOG_DIR/repo-sync.log"; then
+    if repo sync -c -j"$REPO_SYNC_JOBS" --no-tags --no-clone-bundle > "$LOG_DIR/repo-sync.log" 2>&1; then
         SYNC_OK=1
         break
     fi
@@ -134,7 +141,7 @@ for attempt in $(seq 1 $REPO_SYNC_RETRIES); do
 done
 if [ $SYNC_OK -eq 0 ] && [ "${REPO_SYNC_FALLBACK_J1:-1}" = "1" ]; then
     log "fallback: retrying repo sync with -j1 --fail-fast (one fetch at a time)"
-    if repo sync -c -j1 --fail-fast --no-tags --no-clone-bundle 2>&1 | tee "$LOG_DIR/repo-sync.log"; then
+    if repo sync -c -j1 --fail-fast --no-tags --no-clone-bundle > "$LOG_DIR/repo-sync.log" 2>&1; then
         SYNC_OK=1
     fi
 fi
