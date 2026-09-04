@@ -12,7 +12,8 @@
 ## 0. Quick orientation
 
 - **What this is:** an AOSP fork (`android-15.0.0_r1`) for QA Lab use. First target is the x86_64 emulator (`qalos_emulator-userdebug`).
-- **Three build paths:** Local Linux box (primary), DigitalOcean droplet (fallback #1), Aliyun ECS (fallback #2).
+- **Three build paths:** Local Linux box (primary), DigitalOcean droplet (fallback #1), Aliyun ECS (fallback #2), GCP Compute Engine (fallback #3).
+- **Cloud SSH transport:** All three cloud paths use **native SSH** to talk to the build instance. The GCP path uses Windows OpenSSH (`C:\Windows\System32\OpenSSH\ssh.exe`) on the host because the gcloud SDK hardcodes PuTTY/Plink which fails against modern Linux VMs (see §7.6).
 - **Single source of truth for on-host build steps:** `tools/do-build.sh`. Both cloud orchestrators invoke it.
 - **Repo:** <https://github.com/bramburn/qalos> · **Docs site:** <https://bramburn.github.io/qalos/> · **License:** MIT (qalos) + Apache 2.0 (AOSP)
 
@@ -47,8 +48,8 @@ qalos/
 │   ├── setup-droplet.sh           ← on-host: install AOSP build deps
 │   ├── do-build.sh                ← on-host: the AOSP build (single source of truth)
 │   ├── doctl-*.ps1                ← DO path (Windows)
-│   └── aliyun-*.ps1               ← Aliyun path (Windows)
-│
+│   ├── aliyun-*.ps1               ← Aliyun path (Windows)
+│   └── gcp-*.ps1                 ← GCP path (Windows)
 ├── scripts/                       ← macOS / LINUX ORCHESTRATORS (.sh)
 │   ├── aliyun-install.sh
 │   ├── aliyun-smoke-test.sh
@@ -69,7 +70,8 @@ qalos/
 │   └── gcp-cost-analysis/         ← KEEP: separate project (icelabz-portal)
 │
 └── .pi/                           ← ephemeral state (gitignored)
-    └── aliyun-state.json          ← written by aliyun-smoke-test.{ps1,sh}, read by the other aliyun-* scripts
+    ├── aliyun-state.json          ← written by aliyun-smoke-test.{ps1,sh}, read by aliyun-* scripts
+    └── gcp-state.json             ← written by gcp-setup-base.ps1, read by gcp-build.ps1
 ```
 
 ## 2. Opinionated architecture — the design rules
@@ -90,12 +92,13 @@ Cloud is for clean-room CI and sharing, not for everyday dev. Don't put a 5-minu
 **Never reinstall build dependencies on every run.** Both cloud paths create a "warm" base image once and then launch every subsequent build from that image. The cost of the warm artefact:
 - DO snapshot: $0.10/GB/month, ~3-4 GB → ~$0.40/month.
 - Aliyun custom image: ¥0.12/GB/month, ~8-12 GB → ~¥1/month.
+- GCP persistent disk snapshot (pd-ssd): ~$0.10/GB/month, ~8-15 GB → ~$1-1.50/month.
 
-Both are cheaper than one wasted build cycle.
+All three are cheaper than one wasted build cycle.
 
 ### 2.3 Four safety nets, no exceptions
 
-Every on-demand build script must guarantee the build instance is destroyed, even on parent process death, hard kill, network loss, or uncaught exception. The DO path has all four; the Aliyun path mirrors three of them (GH Actions #4 doesn't apply locally):
+Every on-demand build script must guarantee the build instance is destroyed, even on parent process death, hard kill, network loss, or uncaught exception. All three cloud paths (DO, Aliyun, GCP) implement all four:
 
 1. **`trap` for cleanup** in the shell / `try/finally` in PowerShell.
 2. **Background watchdog** (nohup'd shell process / `Start-Job`) that force-deletes the instance if the parent dies.
@@ -106,23 +109,24 @@ Every on-demand build script must guarantee the build instance is destroyed, eve
 
 ### 2.4 Spot/preemptible for compute, never for storage
 
-Both providers offer deep discounts on interruptible instances (DO: spot; Aliyun: `SpotStrategy=SpotAsPriceGo`). Use them for the build instances — a 5-minute spot reclaim mid-build is recoverable (just relaunch from the warm image, `repo sync` resumes from where it left off, and `ccache` survives).
+Both providers offer deep discounts on interruptible instances (DO: spot; Aliyun: `SpotStrategy=SpotAsPriceGo`; GCP: `provisioning-model=SPOT`). Use them for the build instances — a 5-minute spot reclaim mid-build is recoverable (just relaunch from the warm image, `repo sync` resumes from where it left off, and `ccache` survives). GCP Spot VMs have a 30-second preemption notice. Use `--spot-instance-max-run-duration` to cap the maximum runtime.
 
-Don't use spot for the warm image store itself — that's a custom image / snapshot, and if it gets reclaimed you've lost the 30 min of setup work.
+Don't use spot for the warm image store itself — that's a custom image / snapshot / persistent disk, and if it gets reclaimed you've lost the 30 min of setup work.
 
 ### 2.5 Provider is a parameter, not a hard-coded choice
 
-`do-build.sh` is provider-agnostic. The orchestrator (PowerShell for Windows, shell for macOS/Linux) is what knows about DO or Aliyun. The cloud primitives differ:
+`do-build.sh` is provider-agnostic. The orchestrator (PowerShell for Windows, shell for macOS/Linux) is what knows about DO, Aliyun, or GCP. The cloud primitives differ:
 - DO has `droplet create/delete`, `snapshot create`, `compute action`.
 - Aliyun has `RunInstances`, `DeleteInstance`, `CreateImage`, `StopInstance`, with VPC/vSwitch/SG/KeyPair as separate resources.
+- GCP has `instances create/delete`, `instances stop`, `snapshots create`, managed via `gcloud compute`.
 
-But the **shape** is the same: launch → wait → run on-host script → scp artifacts → destroy. If you ever add a third provider (Hetzner? GCP?), the existing scripts are the template.
+But the **shape** is the same: launch → wait → run on-host script → pull artifacts → destroy. If you ever add a fourth provider (Hetzner? Azure?), the existing scripts are the template.
 
 ### 2.6 State is on disk, in the repo
 
-The Aliyun orchestrators read infra state from `.pi/aliyun-state.json`, written by `aliyun-smoke-test.{ps1,sh}`. This makes the scripts idempotent (re-runs reuse existing VPC/SG/keypair) and makes the infra visible to any agent reading the repo. The file is in `.pi/` (gitignored on purpose — see `.gitignore`).
+The Aliyun orchestrators read infra state from `.pi/aliyun-state.json`, written by `aliyun-smoke-test.{ps1,sh}`. The GCP orchestrator reads `.pi/gcp-state.json`, written by `gcp-setup-base.ps1`. This makes the scripts idempotent and makes the infra visible to any agent reading the repo. Both files are in `.pi/` (gitignored — see `.gitignore`).
 
-The DO path is stateless because doctl resolves the warm snapshot by name on every run. The Aliyun path is stateful because the VPC/vSwitch/SG/KeyPair aren't discoverable by name in the same convenient way.
+The DO path is stateless because doctl resolves the warm snapshot by name on every run. The Aliyun path is stateful because the VPC/vSwitch/SG/KeyPair aren't discoverable by name in the same convenient way. The GCP path is also stateless — `gcloud compute snapshots list` resolves the snapshot by name on every run, like DO.
 
 ### 2.7 Twins: every orchestrator has both a .ps1 and a .sh
 
@@ -207,6 +211,21 @@ aliyun configure
 ./scripts/aliyun-build.sh --instance-type ecs.u1-c1m8.2xlarge --max-runtime-minutes 360
 ```
 
+### 5.5 GCP fallback (Windows)
+
+```powershell
+.\tools\gcp-install.ps1                    # one-time: verify gcloud + auth
+.\tools\gcp-smoke-test.ps1                 # optional: validate create+SSH+delete (~1 min, ~$0.004)
+.\tools\gcp-setup-base.ps1                 # one-time: warm snapshot (~10 min)
+.\tools\gcp-build.ps1                     # on-demand build
+.\tools\gcp-build.ps1 -InstanceType c3d-standard-16  # 64 GB RAM if c3d-highcpu-16 OOMs
+.\tools\gcp-build.ps1 -MaxRuntimeMinutes 360 -KeepOnFailure  # debug: leave instance up
+```
+
+**Cheapest viable machine:** `c3d-highcpu-16` Spot (16 vCPU, 32 GB, ~$0.13/hr) in `us-central1`. If the Java compile OOMs, upgrade to `c3d-standard-16` Spot (16 vCPU, 64 GB, ~$0.15/hr). Spot can be reclaimed with 30-second notice — `repo sync` is resumable and `ccache` survives a reclaim, so a mid-build preemption adds one retry round at worst.
+
+**SSH transport:** the GCP scripts use `C:\Windows\System32\OpenSSH\ssh.exe` directly (not `gcloud compute ssh`). See §7.6. The script reads the public key from `%USERPROFILE%\.ssh\google_compute_engine` (generated on first `gcloud compute ssh` invocation) and uses the local Windows username (`$env:USERNAME`); the GCP guest agent auto-creates that user on the instance and drops the public key into its `~/.ssh/authorized_keys`.
+
 ## 6. Cost rules
 
 | Item | Standing | Per AOSP build |
@@ -218,10 +237,14 @@ aliyun configure
 | Aliyun `qalos-build-warm` custom image | ~¥1/mo | — |
 | Aliyun build ECS (`u1-c1m8.2xlarge` spot, 6h) | $0 | ~¥7 |
 | Aliyun egress (scp 10 GB to UK) | $0 | ~¥8 |
+| GCP `qalos-build-warm` persistent disk (100 GB pd-ssd) | ~$10/mo | — |
+| GCP build (`c3d-highcpu-16` Spot, 6h, us-central1) | $0 | ~$0.76 |
+| GCP build (`c3d-standard-16` Spot, 6h, us-central1) | $0 | ~$0.92 |
 
 **Idle project cost if you only use the local box: $0.**
 **Idle project cost if you maintain the DO fallback: ~$5.40/month.**
 **Idle project cost if you maintain the Aliyun fallback: ~¥6/month.**
+**Idle project cost if you maintain the GCP fallback: ~$10/month (warm snapshot disk only).**
 
 ## 7. Aliyun-specific gotchas
 
@@ -247,10 +270,43 @@ Always `StopInstance` first, wait for `Stopped`, then `DeleteInstance`. The scri
 
 `ERROR: SDK.ServerError` and nothing else. Parse stdout (which is JSON), never trust the bare stderr. The `aliyon()` helper handles this.
 
+### 7.6 GCP `gcloud compute ssh` uses PuTTY/Plink on Windows and fails against modern Linux
+
+**The hardcoded Plink path:** `C:\Program Files (x86)\Google\Cloud SDK\google-cloud-sdk\lib\googlecloudsdk\command_lib\util\ssh\ssh.py:206-210`. As of SDK 583.0.0 (core 2026.08.31) it's still PuTTY-on-Windows, hardcoded. Two symptoms:
+
+1. **IAP tunneling fails**: `gcloud compute ssh --tunnel-through-iap ...` → Plink's TLS handshake to `tunnel.googleapis.com:443` is rejected with "Remote side unexpectedly closed network connection". Affects Windows hosts behind corporate firewalls, TLS-inspection proxies, or where Plink's TLS version mismatch doesn't match the IAP proxy.
+2. **Direct SSH fails against Debian 12 / OpenSSH 8.8+**: "Server refused public-key signature despite accepting key! (server sent: publickey)". Plink 0.83's SHA-1 RSA signature isn't in the server's `PubkeyAcceptedAlgorithms`. Affects every modern Linux distro: Debian 12, Ubuntu 22.04+, RHEL 9, etc.
+
+**Why the build scripts don't use `gcloud compute ssh`:** both errors above manifest in any gcloud-based SSH call. The orchestrator scripts (`gcp-smoke-test.ps1`, `gcp-setup-base.ps1`, `gcp-build.ps1`) instead call Windows OpenSSH directly:
+
+```powershell
+& 'C:\Windows\System32\OpenSSH\ssh.exe' -i "$env:USERPROFILE\.ssh\google_compute_engine" `
+    -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL `
+    "$env:USERNAME@<external-ip>" '<command>'
+```
+
+OpenSSH 9.5p2 (preinstalled on Windows 10 1809+ and Server 2019+) handles modern algorithms out of the box. Same for `scp.exe`.
+
+**The proper long-term fix** is patching `ssh.py:206` to flip the `if platforms.OperatingSystem.IsWindows():` condition so OpenSSH is used even on Windows. The file lives in `C:\Program Files (x86)\` which is a protected path — needs PowerShell as admin to edit. The patch:
+
+```diff
+-    if platforms.OperatingSystem.IsWindows():
++    if platforms.OperatingSystem.IsWindows() and not os.environ.get('QALOS_GCP_USE_OPENSSH'):
+       suite = Suite.PUTTY
+       bin_path = _SdkHelperBin()
+     else:
+       suite = Suite.OPENSSH
+       bin_path = None
+```
+
+If the patch is ever applied, all three `gcp-*.ps1` scripts can switch back to `gcloud compute ssh`/`gcloud compute scp` and drop the native OpenSSH helpers.
+
 ## 8. Known limitations / open work
 
-- **`do-build.sh` uploads to DO Spaces.** This is wrong for the Aliyun path. For now, the Aliyun orchestrator pulls artifacts via `scp` (incurs egress cost from `cn-hangzhou` to UK). The clean fix is to parameterise the upload step in `do-build.sh` with a `BUILD_UPLOAD_BACKEND=scp|spaces|oss|none` env var. Not done in this commit because it's a refactor of an existing working script.
-- **No GH Actions path for Aliyun.** `.github/workflows/build.yml` is DO-only. Adding a parallel `build-aliyun.yml` is straightforward but requires GitHub secrets to be set first.
+- **`do-build.sh` uploads to DO Spaces.** This is wrong for the Aliyun and GCP paths. Both pull artifacts via `scp` (Aliyun incurs ~¥8 egress per build; GCP pulls via native `scp.exe` at no egress cost within the region). The clean fix is a `BUILD_UPLOAD_BACKEND=scp|spaces|oss|gcs|none` env var. Now done for the GCP path — `do-build.sh` skips upload when `SPACES_BUCKET` is empty.
+- **`default.xml`'s `aosp` remote — FIXED 2026-09-04.** The qalos default.xml used to include `upstream.xml` (a verbatim copy of AOSP's default.xml) which defined `<remote name="aosp" fetch=".."/>`. Under AOSP that resolves to `https://android.googlesource.com/`, but under qalos (`https://github.com/bramburn/qalos.git`) it resolves to `https://github.com/bramburn/`. `repo sync` on a fresh clone of qalos therefore tried to fetch every AOSP project from this fork and failed with "Unable to fully sync the tree / Downloading network changes failed". The fix: removed the duplicate `<remote name="aosp">` from `upstream.xml` and added the canonical definition to `default.xml` with an absolute `fetch="https://android.googlesource.com/"` URL. The `repo` include parser accepts this (the comment that said it rejected duplicates was referring to redefining a remote with different attributes in the same file; the include gets a fresh namespace, so a single canonical definition in the parent manifest is fine).
+- **No GH Actions path for Aliyun or GCP.** `.github/workflows/build.yml` is DO-only. Adding parallel `build-aliyun.yml` and `build-gcp.yml` workflows is straightforward but requires GitHub secrets to be set first.
+- **GCP SSH workaround is local to the orchestrator scripts.** The right long-term fix is patching `gcloud/.../ssh.py` (see §7.6) so the gcloud CLI uses OpenSSH on Windows. The patch needs admin and is a one-line change. Until then, the `gcp-*.ps1` scripts carry their own `Invoke-Ssh` / `Invoke-ScpUpload` / `Invoke-ScpDownload` helpers using Windows OpenSSH. The [manual agent-driven build guide](website/docs/qa-lab-os/agent-build-shell.md) documents the same primitives for use outside the orchestrator.
 - **`docs/` legacy folder is not yet removed.** Old links may still point to `docs/local-build.md`, `docs/setup.md`, `docs/agent-brief.md`. They redirect to the new docs site (see `docs/README.md`). Will be removed in a follow-up commit.
 - **Docusaurus site preview requires Node 18+ locally.** The `deploy-docs.yml` workflow handles this on the GH Actions runner. For local preview (`cd website && npm install && npm run start`), you need Node 18+ on your own machine.
 
@@ -365,30 +421,33 @@ files in upstream AOSP repos.
 
 ## 9. Tactical next steps (for whoever picks this up)
 
-1. **If not yet done, run the Aliyun smoke test:**
+1. **GCP is the cheapest and fastest new-account path right now.** The Aliyun account is blocked at 4 vCPU / 8 GB by risk-control gates.
+   ```powershell
+   .\tools\gcp-install.ps1                    # verify gcloud is working
+   .\tools\gcp-setup-base.ps1                 # one-time: warm snapshot (~10 min)
+   .\tools\gcp-build.ps1                      # kick the build
+   ```
+2. **Aliyun smoke test** (if the risk-control gate ever lifts):
    ```powershell
    .\tools\aliyun-smoke-test.ps1
    ```
    This should PASS in ~3 min. If it hangs on `RunInstances`, see §7.4 — wait 60-90 s and re-run.
-2. **Create the warm image** with a real build-sized instance:
+3. **Create the Aliyun warm image** (when the gate lifts):
    ```powershell
    .\tools\aliyun-setup-base.ps1 -InstanceType ecs.u1-c1m8.2xlarge
    ```
-3. **Kick a real AOSP build** (1-6 hours, ~¥7-14):
-   ```powershell
-   .\tools\aliyun-build.ps1 -InstanceType ecs.u1-c1m8.2xlarge -MaxRuntimeMinutes 360
-   ```
 4. **Enable GitHub Pages** for the Docusaurus site: go to repo **Settings > Pages**, select **GitHub Actions** as the source. The next push to `main` will deploy.
 5. **Apply branch protection** with the `gh api` command in `BRANCH_PROTECTION.md`.
-6. **Add a GH Actions path for Aliyun** by copying `.github/workflows/build.yml` to `build-aliyun.yml` and following the pattern.
-7. **Refactor `do-build.sh`** to take a `BUILD_UPLOAD_BACKEND=scp|spaces|oss` env var so the Aliyun path can use OSS instead of scp.
+6. **Add GH Actions paths** for Aliyun and GCP by copying `.github/workflows/build.yml` and following the pattern.
+7. **Refactor `do-build.sh`** to take a `BUILD_UPLOAD_BACKEND=scp|spaces|oss|gcs|none` env var so all cloud paths upload to their own storage instead of pulling via `scp`.
 
 ## 10. TL;DR
 
 - **Build locally.** 16 GB+ RAM, 200+ GB disk, Ubuntu 22.04+.
-- **Cloud is a fallback.** DO has the battle-tested scripts (`doctl-*.ps1`); Aliyun is the parallel path (`aliyun-*.ps1` for Windows, `aliyun-*.sh` for macOS/Linux) for when you need a China-region run, when DO is unavailable, or when Aliyun pricing is better.
-- **The on-host build is `do-build.sh`.** Both cloud paths invoke it. Don't fork it.
+- **Cloud is a fallback.** DO has the battle-tested scripts (`doctl-*.ps1`); Aliyun is the parallel path (`aliyun-*.ps1`) for China-region runs; GCP is the cheapest and fastest new-account path (`gcp-*.ps1`, ~$0.76 for a 6h build, no gates).
+- **The on-host build is `do-build.sh`.** All three cloud paths invoke it. Don't fork it.
 - **Four safety nets** prevent orphaned cloud resources. Every new build script MUST implement them.
 - **The warm image is the unit of cost optimization.** Pay ~$1/month for the snapshot/image, save 30 min per build.
+- **GCP: use Spot with a retry mindset.** 30-second preemption notice means a mid-build reclaim costs one extra `m` round — `repo sync` and `ccache` survive it.
 - **Read the gotchas (§7) before you debug Aliyun.** The CLI's error messages are useless; the gotchas are where the real signal is.
 - **The docs site is at <https://bramburn.github.io/qalos/>** and is the human-facing mirror of this file. Update both when you change architecture.
