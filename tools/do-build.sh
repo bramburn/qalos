@@ -24,7 +24,13 @@
 #     BUILD_JOBS         default: $(nproc)
 #     BUILD_DIR          default: $HOME/aosp
 
-set -euo pipefail
+# Do NOT use `set -u` here. AOSP 15's build/envsetup.sh (line 21) reads
+# the unbound variable `TOP` as part of the build-top detection path.
+# With `set -u`, that reference aborts envsetup before the lunch combo
+# can resolve, killing the whole build. `set -e` + `-o pipefail` are
+# enough to catch real errors without this false positive.
+# See qalos AOSP-15 memory entry: "build/envsetup.sh line 21 TOP: unbound variable".
+set -eo pipefail
 
 # ----------------------------------------------------------------------------
 # Configuration
