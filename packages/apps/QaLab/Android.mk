@@ -9,5 +9,11 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_SRC_FILES := $(call all-java-files-under, src)
 LOCAL_PACKAGE_NAME := QaLab
 LOCAL_CERTIFICATE := platform
+# AOSP 15 requires every package to declare either LOCAL_SDK_VERSION (which
+# SDK level the package targets) or LOCAL_PRIVATE_PLATFORM_APIS (true for
+# platform-signed apps that use @hide APIs). QaLab is platform-signed and
+# uses @hide system_server APIs (e.g. ActivityManager.getRecentTasks), so
+# declare LOCAL_PRIVATE_PLATFORM_APIS.
+LOCAL_PRIVATE_PLATFORM_APIS := true
 
 include $(BUILD_PACKAGE)
