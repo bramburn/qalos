@@ -85,6 +85,64 @@ DO prefers the droplet to be off when you snapshot. If you skip the `shutdown -h
 
 DO snapshots live in the region they were created in. If you create the snapshot in `lon1` and try to use it in `nyc3`, you'll get a not-found error. The script defaults to `lon1` (the region you set up the snapshot in) and the build script reads the same default.
 
+## GCP
+
+### `gcloud compute ssh` uses PuTTY/Plink on Windows and fails against modern Linux
+
+**The hardcoded Plink path:** `C:\Program Files (x86)\Google\Cloud SDK\google-cloud-sdk\lib\googlecloudsdk\command_lib\util\ssh\ssh.py:206-210`. As of SDK 583.0.0 (core 2026.08.31) it's still PuTTY-on-Windows, hardcoded. Two symptoms, both reproducible:
+
+1. **IAP tunneling fails**: `gcloud compute ssh --tunnel-through-iap ...` → Plink's TLS handshake to `tunnel.googleapis.com:443` is rejected with **"Remote side unexpectedly closed network connection"**. Affects Windows hosts behind corporate firewalls, TLS-inspection proxies, or where Plink's TLS version mismatch doesn't match the IAP proxy.
+2. **Direct SSH fails against Debian 12 / OpenSSH 8.8+**: **"Server refused public-key signature despite accepting key! (server sent: publickey)"**. Plink 0.83's SHA-1 RSA signature isn't in the server's `PubkeyAcceptedAlgorithms`. Affects every modern Linux distro: Debian 12, Ubuntu 22.04+, RHEL 9, etc.
+
+**Why the `gcp-*.ps1` scripts don't use `gcloud compute ssh`:** both errors above manifest in any gcloud-based SSH call. The orchestrator scripts (`gcp-smoke-test.ps1`, `gcp-setup-base.ps1`, `gcp-build.ps1`) instead call Windows OpenSSH directly:
+
+```powershell
+& 'C:\Windows\System32\OpenSSH\ssh.exe' -i "$env:USERPROFILE\.ssh\google_compute_engine" `
+    -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL `
+    "$env:USERNAME@<external-ip>" '<command>'
+```
+
+OpenSSH 9.5p2 (preinstalled on Windows 10 1809+ and Server 2019+) handles modern algorithms out of the box. Same for `scp.exe`.
+
+**The proper long-term fix** is patching `ssh.py:206` to flip the `if platforms.OperatingSystem.IsWindows():` condition so OpenSSH is used even on Windows:
+
+```diff
+-    if platforms.OperatingSystem.IsWindows():
++    if platforms.OperatingSystem.IsWindows() and not os.environ.get('QALOS_GCP_USE_OPENSSH'):
+       suite = Suite.PUTTY
+       bin_path = _SdkHelperBin()
+     else:
+       suite = Suite.OPENSSH
+       bin_path = None
+```
+
+The file lives in `C:\Program Files (x86)\` which is a protected path — needs PowerShell as admin to edit. If the patch is ever applied, all three `gcp-*.ps1` scripts can switch back to `gcloud compute ssh`/`gcloud compute scp` and drop the native OpenSSH helpers.
+
+### PowerShell 5.1 wraps child-process stderr as `RemoteException`, corrupting `$LASTEXITCODE`
+
+`gcloud.cmd` (the batch-file entry point) writes some informational messages to stderr. PowerShell 5.1's error stream treats any stderr output as a `RemoteException`, and the *first* stderr line sets `$LASTEXITCODE = 1` regardless of the actual child exit code. This affects `gcloud.cmd`, `gcloud.ps1`, and `python.exe` (when directly invoking `gcloud.py`).
+
+**Reproduction:** `& gcloud.cmd compute instances list --format=json 2>&1` returns the right JSON on stdout but `$LASTEXITCODE = 1` because the warning "API [compute] is not enabled" goes to stderr.
+
+**The workaround the qalos scripts use:** write a temporary batch file containing the full Python/gcloud.py invocation command, then invoke it via `Start-Process -NoNewWindow -Wait -PassThru`. The exit code is captured via `$proc.ExitCode` which is never corrupted. Stdout is redirected to a temp file. This is why the scripts have an `Invoke-Gcloud` helper wrapping every `gcloud.py` call instead of `& gcloud.cmd ...`.
+
+### `gcloud compute instances list --format='value(name)'` does not work
+
+The `value(...)` format requires a single field and only works on `describe`, not on `list`. Use `--format=json` and parse the JSON, or use `describe` and check for `NOT_FOUND` in the error message:
+
+```powershell
+$out = & gcloud compute instances describe $name --zone=$Zone --format=json
+if ($out -match 'NOT_FOUND' -or $out -match 'was not found') { ... }
+```
+
+### `--format='value(status)'` in PowerShell double-quoted strings is a subexpression hazard
+
+`--format=value(status)` inside a double-quoted PowerShell string is interpreted as `$(status)`, which runs `status` as a command. The build scripts use single quotes around the entire `--format='value(...)'` argument to avoid this.
+
+### Spot preemption is real — use with a retry mindset
+
+GCP Spot VMs can be reclaimed with **30-second preemption notice** (logged to the serial console). `repo sync` is resumable and `ccache` survives a reclaim. A mid-build preemption adds at most one extra `m` round. The on-host watchdog in `do-build.sh` will see the shutdown signal and clean up; the orchestrator's `try/finally` will delete the instance. Don't pay full price when Spot is 80%+ cheaper.
+
 ## General
 
 ### `Remove-Item -Recurse -Force` is blocked by the shell

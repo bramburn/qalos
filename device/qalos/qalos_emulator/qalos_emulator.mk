@@ -15,7 +15,11 @@ PRODUCT_BRAND := QA Lab
 PRODUCT_MODEL := QA Lab Operating System
 PRODUCT_MANUFACTURER := QA Lab
 
-# Distinguish qalos builds from upstream AOSP.
-BUILD_ID := QAL.$(shell date -u +%Y%m%d).001
-DISPLAY_BUILD_ID := qalos-$(shell date -u +%Y%m%d)
-BUILD_VERSION_TAGS := qalos
+# Do NOT set BUILD_ID / DISPLAY_BUILD_ID / BUILD_VERSION_TAGS here. In AOSP 15
+# all three are declared readonly in build/make/core/envsetup.mk (around
+# line 351 inside the product_config include chain). Trying to assign to
+# them at the product-config layer (after envsetup has loaded) fails with
+# `error: cannot assign to readonly variable: BUILD_ID`. The default
+# BUILD_ID from the AOSP tag (android-15.0.0_r1) is fine; if we want a
+# qalos-specific build id visible in `getprop ro.build.id`, override it
+# via PRODUCT_PROPERTY_OVERRIDES in device.mk (see ro.qalos.build_id below).
