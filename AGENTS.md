@@ -217,14 +217,30 @@ aliyun configure
 .\tools\gcp-install.ps1                    # one-time: verify gcloud + auth
 .\tools\gcp-smoke-test.ps1                 # optional: validate create+SSH+delete (~1 min, ~$0.004)
 .\tools\gcp-setup-base.ps1                 # one-time: warm snapshot (~10 min)
-.\tools\gcp-build.ps1                     # on-demand build
+.\tools\gcp-build.ps1                     # on-demand build (auto-schedules monitor cron)
 .\tools\gcp-build.ps1 -InstanceType c3d-standard-16  # 64 GB RAM if c3d-highcpu-16 OOMs
 .\tools\gcp-build.ps1 -MaxRuntimeMinutes 360 -KeepOnFailure  # debug: leave instance up
+.\tools\gcp-build.ps1 -NetworkTier PREMIUM          # default is STANDARD; PREMIUM = Google's tier-1 backbone
+.\tools\gcp-build.ps1 -ScheduleMonitor:$false        # don't schedule the monitor cron
 ```
 
 **Cheapest viable machine:** `c3d-highcpu-16` Spot (16 vCPU, 32 GB, ~$0.13/hr) in `us-central1`. If the Java compile OOMs, upgrade to `c3d-standard-16` Spot (16 vCPU, 64 GB, ~$0.15/hr). Spot can be reclaimed with 30-second notice — `repo sync` is resumable and `ccache` survives a reclaim, so a mid-build preemption adds one retry round at worst.
 
+**Network tier:** `-NetworkTier STANDARD` (default) routes egress through the public internet at ~$0.02/GB. `-NetworkTier PREMIUM` uses Google's tier-1 backbone at ~$0.08/GB but is faster and more reliable. For AOSP builds, the bulk of network traffic is `repo sync` from `android.googlesource.com` which is **inside Google's network and free regardless of tier** — so the tier mostly affects the final `scp` of artifacts back to the orchestrator (1-5 GB). Default to STANDARD; switch to PREMIUM if you see flaky network or you need the lower latency to Google's services.
+
 **SSH transport:** the GCP scripts use `C:\Windows\System32\OpenSSH\ssh.exe` directly (not `gcloud compute ssh`). See §7.6. The script reads the public key from `%USERPROFILE%\.ssh\google_compute_engine` (generated on first `gcloud compute ssh` invocation) and uses the local Windows username (`$env:USERNAME`); the GCP guest agent auto-creates that user on the instance and drops the public key into its `~/.ssh/authorized_keys`.
+
+**Build monitor (cron):** `gcp-build.ps1` defaults to `-ScheduleMonitor $true`, which calls `mavis cron create` after the Spot instance is up. The cron (`qalos-build-<instanceName>`) ticks every 10 minutes, SSHes in to check progress (one-liner), and when the build finishes downloads the build log, all 5 image files, and the serial console output to `.pi/out/gcp-build/<instanceName>/`. It also `mavis cron delete`s itself once the artifacts are downloaded or the 6-hour watchdog fires. Override with `-ScheduleMonitor:$false` if you don't want the cron (e.g. running the build from a long-lived agent session that's already watching).
+
+**Logging via gcloud CLI** — when investigating a failed build:
+
+| What | Command | When useful |
+|---|---|---|
+| Serial console (boot, kernel, watchdog) | `gcloud compute instances get-serial-port-output <name> --zone=us-central1-a --port=1 --start=-1048576` | Boot failures, kernel panics, watchdog shutdown, why an instance won't come up. The script captures this automatically on every build to `<ArtifactDownloadDir>\serial-console.log` (the last 1 MB of the serial buffer). |
+| Build log | `<ArtifactDownloadDir>\build.log` (downloaded by the monitor cron) or `tail -f` via SSH | AOSP build errors, Java heap OOMs, missing tools |
+| Repo sync log | `~/aosp/.qalos-logs/repo-sync.log` on the instance | Network errors during `repo sync` |
+| Cloud Logging | `gcloud logging read 'resource.type=gce_instance AND resource.labels.instance_id=<id>' --limit=50` | syslog + agent logs forwarded to Cloud Logging. Requires the Ops Agent to be installed on the instance (not done by `setup-droplet.sh`; install with `gcloud compute instances ops-agents policy create ...` if you want this). |
+| Spot preemption notice | `gcloud compute operations list --filter="operationType=compute.instances.preempted"` | Was the instance killed by Spot reclaim? |
 
 ## 6. Cost rules
 
@@ -237,14 +253,14 @@ aliyun configure
 | Aliyun `qalos-build-warm` custom image | ~¥1/mo | — |
 | Aliyun build ECS (`u1-c1m8.2xlarge` spot, 6h) | $0 | ~¥7 |
 | Aliyun egress (scp 10 GB to UK) | $0 | ~¥8 |
-| GCP `qalos-build-warm` persistent disk (100 GB pd-ssd) | ~$10/mo | — |
+| GCP `qalos-build-warm` snapshot (incremental, ~1 GB actual data on 200 GB disk) | ~$0.03/mo | — |
 | GCP build (`c3d-highcpu-16` Spot, 6h, us-central1) | $0 | ~$0.76 |
 | GCP build (`c3d-standard-16` Spot, 6h, us-central1) | $0 | ~$0.92 |
 
 **Idle project cost if you only use the local box: $0.**
 **Idle project cost if you maintain the DO fallback: ~$5.40/month.**
 **Idle project cost if you maintain the Aliyun fallback: ~¥6/month.**
-**Idle project cost if you maintain the GCP fallback: ~$10/month (warm snapshot disk only).**
+**Idle project cost if you maintain the GCP fallback: ~$0.03/month (warm snapshot is incremental — only ~1 GB of actual data, not the full 200 GB disk).**
 
 ## 7. Aliyun-specific gotchas
 
