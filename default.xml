@@ -16,15 +16,20 @@
   -->
 
   <!--
-    `aosp` remote is defined by the included upstream.xml, so we don't redefine
-    it here. Defining it twice with even slightly different attributes (e.g.
-    qalos omitting the `review` URL) makes repo's manifest parser reject the
-    include with "remote aosp already exists with different attributes".
+    `aosp` remote: defined here with an absolute fetch URL so it resolves
+    to the actual AOSP git server regardless of where this manifest is
+    hosted. The `upstream.xml` include USED to define this remote with
+    `fetch=".."` (verbatim from AOSP's own default.xml), but `..` resolves
+    relative to the manifest URL, so under qalos (`https://github.com/bramburn/qalos.git`)
+    it pointed to `https://github.com/bramburn/` and every `repo sync` tried
+    to fetch AOSP source from this fork. We removed the duplicate from
+    upstream.xml; this is now the only definition.
 
-    The `qalos` remote is kept here for future use — when we start adding
-    qalos-specific projects via <project remote="qalos"> entries, they'll
-    fetch from this fetch URL.
+    `qalos` remote: kept for future use — when we start adding qalos-
+    specific projects via <project remote="qalos"> entries, they'll fetch
+    from this fetch URL.
   -->
+  <remote name="aosp" fetch="https://android.googlesource.com/" review="https://android-review.googlesource.com/" />
   <remote name="qalos" fetch="https://github.com/bramburn" />
 
   <default remote="aosp" revision="refs/tags/android-15.0.0_r1" sync-j="4" />
