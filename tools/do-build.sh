@@ -36,10 +36,15 @@ BUILD_VARIANT="${BUILD_VARIANT:-userdebug}"
 MAX_RUNTIME_MINUTES="${MAX_RUNTIME_MINUTES:-240}"
 BUILD_DIR="${BUILD_DIR:-$HOME/aosp}"
 
-: "${SPACES_BUCKET:?SPACES_BUCKET is required}"
-: "${SPACES_REGION:?SPACES_REGION is required}"
-: "${SPACES_KEY:?SPACES_KEY is required}"
-: "${SPACES_SECRET:?SPACES_SECRET is required}"
+# SPACES_BUCKET is optional. When empty, the script skips the upload step and
+# the orchestrator pulls artifacts back via SCP. This is the path used by the
+# Aliyun and GCP orchestrators, which don't have DO Spaces credentials.
+# When set (DO path), all four SPACES_* vars are required.
+if [ -n "${SPACES_BUCKET:-}" ]; then
+    : "${SPACES_REGION:?SPACES_REGION is required when SPACES_BUCKET is set}"
+    : "${SPACES_KEY:?SPACES_KEY is required when SPACES_BUCKET is set}"
+    : "${SPACES_SECRET:?SPACES_SECRET is required when SPACES_BUCKET is set}"
+fi
 
 if [ -z "${BUILD_JOBS:-}" ]; then
     BUILD_JOBS="$(nproc)"
@@ -97,9 +102,41 @@ fi
 
 # ----------------------------------------------------------------------------
 # Step 2 — repo sync
+#
+# Use a lower concurrency here than for the AOSP build (j8) because the git
+# fetches hit `android.googlesource.com` which has per-IP rate limits. Running
+# 16 parallel git fetch processes gets us `RESOURCE_EXHAUSTED: Resource has been
+# exhausted` and `HTTP 429` errors on a few of the ~1500 repos. j8 finishes
+# in roughly the same wall time (AOSP source download is mostly bandwidth-bound
+# to one server, not CPU-bound on the client) without the rate limit.
+#
+# Retry up to 3 times with exponential backoff. If `repo sync` still fails
+# with the same RESOURCE_EXHAUSTED / HTTP 429 errors, fall back to j1.
 # ----------------------------------------------------------------------------
 log "syncing AOSP source at tag $AOSP_TAG (this can take a while on first run)"
-repo sync -c -j"$BUILD_JOBS" --no-tags --no-clone-bundle 2>&1 | tee "$LOG_DIR/repo-sync.log"
+REPO_SYNC_JOBS="${REPO_SYNC_JOBS:-8}"
+REPO_SYNC_RETRIES="${REPO_SYNC_RETRIES:-3}"
+SYNC_OK=0
+for attempt in $(seq 1 $REPO_SYNC_RETRIES); do
+    if repo sync -c -j"$REPO_SYNC_JOBS" --no-tags --no-clone-bundle 2>&1 | tee "$LOG_DIR/repo-sync.log"; then
+        SYNC_OK=1
+        break
+    fi
+    if [ $attempt -lt $REPO_SYNC_RETRIES ]; then
+        log "repo sync attempt $attempt failed (likely RESOURCE_EXHAUSTED / HTTP 429 from android.googlesource.com); sleeping $((30 * attempt))s and retrying"
+        sleep $((30 * attempt))
+    fi
+done
+if [ $SYNC_OK -eq 0 ] && [ "${REPO_SYNC_FALLBACK_J1:-1}" = "1" ]; then
+    log "fallback: retrying repo sync with -j1 --fail-fast (one fetch at a time)"
+    if repo sync -c -j1 --fail-fast --no-tags --no-clone-bundle 2>&1 | tee "$LOG_DIR/repo-sync.log"; then
+        SYNC_OK=1
+    fi
+fi
+if [ $SYNC_OK -eq 0 ]; then
+    log "FATAL: repo sync failed after all retries. See $LOG_DIR/repo-sync.log"
+    exit 1
+fi
 
 # ----------------------------------------------------------------------------
 # Step 3 — apply qalos customizations.
@@ -123,38 +160,46 @@ log "m -j$BUILD_JOBS (this takes 1-4 hours on a c-8 droplet)"
 m -j"$BUILD_JOBS" 2>&1 | tee "$LOG_DIR/build.log"
 
 # ----------------------------------------------------------------------------
-# Step 5 — upload artifacts to DO Spaces
+# Step 5 — upload artifacts to DO Spaces (skipped if SPACES_BUCKET is empty)
 # ----------------------------------------------------------------------------
-upload_artifact() {
-    local file="$1"
-    if [ ! -f "$file" ]; then
-        log "WARN: $file not built, skipping upload"
-        return
-    fi
-    log "uploading $(basename "$file") -> s3://$SPACES_BUCKET/$TIMESTAMP/"
-    s3cmd put "$file" "s3://$SPACES_BUCKET/$TIMESTAMP/" \
+if [ -n "${SPACES_BUCKET:-}" ]; then
+    upload_artifact() {
+        local file="$1"
+        if [ ! -f "$file" ]; then
+            log "WARN: $file not built, skipping upload"
+            return
+        fi
+        log "uploading $(basename "$file") -> s3://$SPACES_BUCKET/$TIMESTAMP/"
+        s3cmd put "$file" "s3://$SPACES_BUCKET/$TIMESTAMP/" \
+            --host="$SPACES_REGION.digitaloceanspaces.com" \
+            --access_key="$SPACES_KEY" \
+            --secret_key="$SPACES_SECRET" \
+            --no-check-md5 2>&1 | tail -3
+    }
+
+    for img in system.img boot.img userdata.img; do
+        upload_artifact "$ARTIFACT_DIR/$img"
+    done
+
+    # Upload the build log too — saves a debug round-trip.
+    s3cmd put "$LOG_DIR/build.log" "s3://$SPACES_BUCKET/$TIMESTAMP/build.log" \
         --host="$SPACES_REGION.digitaloceanspaces.com" \
         --access_key="$SPACES_KEY" \
         --secret_key="$SPACES_SECRET" \
         --no-check-md5 2>&1 | tail -3
-}
-
-for img in system.img boot.img userdata.img; do
-    upload_artifact "$ARTIFACT_DIR/$img"
-done
-
-# Upload the build log too — saves a debug round-trip.
-s3cmd put "$LOG_DIR/build.log" "s3://$SPACES_BUCKET/$TIMESTAMP/build.log" \
-    --host="$SPACES_REGION.digitaloceanspaces.com" \
-    --access_key="$SPACES_KEY" \
-    --secret_key="$SPACES_SECRET" \
-    --no-check-md5 2>&1 | tail -3
+else
+    log "SPACES_BUCKET is empty -- skipping upload. Orchestrator will pull artifacts via SCP."
+fi
 
 # ----------------------------------------------------------------------------
 # Done
 # ----------------------------------------------------------------------------
 log "build complete at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-log "artifacts: s3://$SPACES_BUCKET/$TIMESTAMP/"
+if [ -n "${SPACES_BUCKET:-}" ]; then
+    log "artifacts: s3://$SPACES_BUCKET/$TIMESTAMP/"
+else
+    log "artifacts on the instance under: $ARTIFACT_DIR/"
+fi
 
 # Disable the watchdog now that we're done — the orchestrator will destroy
 # the droplet. If the orchestrator is dead, the watchdog fires later.
