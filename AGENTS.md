@@ -134,6 +134,16 @@ For every Windows orchestrator in `tools/`, there is a shell twin in `scripts/` 
 
 Logic that should be in only one place lives in the on-host script (`tools/do-build.sh`), which is already a shell script and runs on Linux/macOS by default.
 
+### 2.8 Long-running builds are LLM-monitored, not script-monitored
+
+AOSP builds take 1-6 hours. The orchestrator script (`.ps1` / `.sh`) is **synchronous** and only lives as long as the process that invoked it. A bare script invocation in CI, a scheduled task, or a different agent without `mavis` tools would create a cron it can't manage.
+
+The convention: the **LLM** (mavis) sets up the monitor cron, NOT the script. After the orchestrator reports `instance created: qalos-build-...`, the driving LLM should call `mavis cron create --schedule "*/10 * * * *" --cron_name "qalos-build-<instanceName>" --prompt "<watchdog prompt>" --session '{"mode":"sessionId","sessionId":"<this-session-id>"}'`.
+
+The script stays focused on what it does well (create / run / cleanup). The LLM stays focused on what it does well (cross-session state, cron lifecycle, smart decisions, artifact download via SSH/SCP). Both pieces have explicit fallbacks: the script works without the LLM (just no monitor), and the LLM works without the script (manually re-runs and reads the same prompts).
+
+This rule applies to all three cloud paths: gcp / aliyun / DO.
+
 ## 3. CI: what runs on every PR
 
 The CI workflow at `.github/workflows/ci.yml` runs **static checks only**. AOSP builds are NOT run on GitHub Actions — they take 2-6 hours and would burn the free tier in a single build. AOSP builds happen locally or on the cloud fallbacks (user's own resources, not GH Actions minutes).
@@ -217,11 +227,10 @@ aliyun configure
 .\tools\gcp-install.ps1                    # one-time: verify gcloud + auth
 .\tools\gcp-smoke-test.ps1                 # optional: validate create+SSH+delete (~1 min, ~$0.004)
 .\tools\gcp-setup-base.ps1                 # one-time: warm snapshot (~10 min)
-.\tools\gcp-build.ps1                     # on-demand build (auto-schedules monitor cron)
+.\tools\gcp-build.ps1                     # on-demand build (LLM should set up the monitor cron after)
 .\tools\gcp-build.ps1 -InstanceType c3d-standard-16  # 64 GB RAM if c3d-highcpu-16 OOMs
 .\tools\gcp-build.ps1 -MaxRuntimeMinutes 360 -KeepOnFailure  # debug: leave instance up
 .\tools\gcp-build.ps1 -NetworkTier PREMIUM          # default is STANDARD; PREMIUM = Google's tier-1 backbone
-.\tools\gcp-build.ps1 -ScheduleMonitor:$false        # don't schedule the monitor cron
 ```
 
 **Cheapest viable machine:** `c3d-highcpu-16` Spot (16 vCPU, 32 GB, ~$0.13/hr) in `us-central1`. If the Java compile OOMs, upgrade to `c3d-standard-16` Spot (16 vCPU, 64 GB, ~$0.15/hr). Spot can be reclaimed with 30-second notice — `repo sync` is resumable and `ccache` survives a reclaim, so a mid-build preemption adds one retry round at worst.
@@ -230,7 +239,19 @@ aliyun configure
 
 **SSH transport:** the GCP scripts use `C:\Windows\System32\OpenSSH\ssh.exe` directly (not `gcloud compute ssh`). See §7.6. The script reads the public key from `%USERPROFILE%\.ssh\google_compute_engine` (generated on first `gcloud compute ssh` invocation) and uses the local Windows username (`$env:USERNAME`); the GCP guest agent auto-creates that user on the instance and drops the public key into its `~/.ssh/authorized_keys`.
 
-**Build monitor (cron):** `gcp-build.ps1` defaults to `-ScheduleMonitor $true`, which calls `mavis cron create` after the Spot instance is up. The cron (`qalos-build-<instanceName>`) ticks every 10 minutes, SSHes in to check progress (one-liner), and when the build finishes downloads the build log, all 5 image files, and the serial console output to `.pi/out/gcp-build/<instanceName>/`. It also `mavis cron delete`s itself once the artifacts are downloaded or the 6-hour watchdog fires. Override with `-ScheduleMonitor:$false` if you don't want the cron (e.g. running the build from a long-lived agent session that's already watching).
+**Build monitor (cron) — LLM-driven, not script-driven:** AOSP builds take 1-6 hours; an LLM session rarely sits with the user the whole time. The convention is: the **LLM** (mavis) sets up the monitor cron, NOT the script. A bare `.ps1` invocation (CI, scheduled task, another agent without `mavis` tools) shouldn't create crons it can't manage. After `gcp-build.ps1` reports `instance created: qalos-build-...`, the driving LLM should call:
+
+```
+mavis cron create \
+    --cron_name "qalos-build-<instanceName>" \
+    --schedule "*/10 * * * *" \
+    --prompt "<the prompt template from the end of this section>" \
+    --session '{"mode":"sessionId","sessionId":"<this-session-id>"}'
+```
+
+The cron ticks every 10 min, SSHes in for a one-liner status, and when the build finishes downloads the build log, all 5 image files, and the serial console output to `.pi/out/gcp-build/<instanceName>/`. It also `mavis cron delete`s itself once done or after 6 hours.
+
+This convention applies to all three cloud paths: gcp / aliyun / DO. The script stays focused on what it does well (create / run / cleanup); the LLM stays focused on what it does well (cross-session state, cron lifecycle, smart decisions).
 
 **Logging via gcloud CLI** — when investigating a failed build:
 
