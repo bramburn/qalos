@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # qalos — apply qalos customizations to the AOSP working tree.
 #
-# The qalos repo (this one) is cloned into .repo/manifests/qalos by `repo
-# init`. The qalos customizations (device tree, apps, vendor, plus the
-# RemoteControlService Java source) live in subdirectories of that clone.
-# The AOSP build system expects them at specific paths inside the working
-# tree — `device/qalos/qalos_emulator/`, `packages/apps/QaLab/`,
-# `frameworks/base/services/core/java/com/qalos/remotectl/`, etc. This
-# script:
+# The qalos repo (this one) is the manifest in our AOSP-15 layout:
+# `repo init -u https://github.com/bramburn/qalos.git` checks the qalos repo
+# out at `<aosp>/.repo/manifests/`. The qalos customizations (device tree,
+# apps, vendor, plus the RemoteControlService Java source) live in
+# subdirectories of that clone. The AOSP build system expects them at
+# specific paths inside the working tree — `device/qalos/qalos_emulator/`,
+# `packages/apps/QaLab/`, `frameworks/base/services/core/java/com/qalos/`,
+# etc. This script:
 #
 #   1. Runs `patches/check-patches.py` as a pre-flight so any broken
 #      patch anchor is reported BEFORE the copy/apply step (a partial
@@ -32,28 +33,42 @@
 # this from a different directory (e.g. the qalos-build-warm snapshot boots
 # into $HOME, so the working tree is $HOME/aosp):
 #     WORK_TREE=$HOME/aosp ./tools/apply-qalos.sh
+#
+# Note: a previous version of this script expected the qalos clone at
+# `.repo/manifests/qalos/` (a subdirectory of the manifest). In the AOSP-15
+# layout the qalos repo IS the manifest (no subdir), so we now resolve
+# QALOS_REPO to `.repo/manifests/` directly. We also accept the old path
+# if it exists, so a build host using a non-standard manifest layout
+# keeps working.
 
 set -euo pipefail
 
 WORK_TREE="${WORK_TREE:-$(pwd)}"
-QALOS_REPO="$WORK_TREE/.repo/manifests/qalos"
+# Resolve the qalos repo location. Default (AOSP-15): `.repo/manifests/`
+# (the qalos repo IS the manifest). Fallback: `.repo/manifests/qalos/`
+# (legacy layout where qalos was a sub-project of a different manifest).
+if [ -d "$WORK_TREE/.repo/manifests/qalos" ] && [ -f "$WORK_TREE/.repo/manifests/qalos/AGENTS.md" ]; then
+    QALOS_REPO="$WORK_TREE/.repo/manifests/qalos"
+elif [ -d "$WORK_TREE/.repo/manifests" ] && [ -f "$WORK_TREE/.repo/manifests/AGENTS.md" ]; then
+    QALOS_REPO="$WORK_TREE/.repo/manifests"
+else
+    echo "[apply-qalos] ERROR: could not find qalos repo." >&2
+    echo "[apply-qalos] Tried: $WORK_TREE/.repo/manifests/qalos (legacy)" >&2
+    echo "[apply-qalos]   and: $WORK_TREE/.repo/manifests (AOSP-15 default)." >&2
+    echo "[apply-qalos] Run \`repo init -u <qalos-repo> -b main\` first." >&2
+    exit 1
+fi
 SKIP_PATCH_CHECK=0
 
 for arg in "$@"; do
     case "$arg" in
         --force) SKIP_PATCH_CHECK=1 ;;
         --help|-h)
-            sed -n '2,21p' "$0"
+            sed -n '2,28p' "$0"
             exit 0
             ;;
     esac
 done
-
-if [ ! -d "$QALOS_REPO" ]; then
-    echo "[apply-qalos] ERROR: $QALOS_REPO does not exist." >&2
-    echo "[apply-qalos] Run \`repo init -u <qalos-repo> -b main\` first." >&2
-    exit 1
-fi
 
 cd "$WORK_TREE"
 

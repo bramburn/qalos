@@ -36,6 +36,7 @@ param(
     [string]$QalosRepo         = 'https://github.com/bramburn/qalos.git',
     [string]$AospTag           = 'android-15.0.0_r1',
     [string]$BuildTarget       = 'qalos_emulator',
+    [string]$BuildRelease       = 'trunk_staging',
     [string]$BuildVariant       = 'userdebug',
     [int]   $MaxRuntimeMinutes = 240,
     [switch]$KeepOnFailure     = $false,
@@ -195,6 +196,7 @@ $envFile = Join-Path $env:TEMP "qalos-gcp-env-$(Get-Date -Format 'yyyyMMddHHmmss
 QALOS_REPO_URL='$QalosRepo'
 AOSP_TAG='$AospTag'
 BUILD_TARGET='$BuildTarget'
+BUILD_RELEASE='$BuildRelease'
 BUILD_VARIANT='$BuildVariant'
 MAX_RUNTIME_MINUTES='$MaxRuntimeMinutes'
 # GCP path: do-build.sh runs the same build. Artifacts are pulled back via SCP

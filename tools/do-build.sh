@@ -32,6 +32,11 @@ set -euo pipefail
 QALOS_REPO_URL="${QALOS_REPO_URL:-https://github.com/bramburn/qalos.git}"
 AOSP_TAG="${AOSP_TAG:-android-15.0.0_r1}"
 BUILD_TARGET="${BUILD_TARGET:-qalos_emulator}"
+# AOSP 15's `lunch` requires a 3-part combo <product>-<release>-<variant>. The
+# release is a build-config label (not the AOSP tag); trunk_staging is the AOSP
+# default for trunk and is what AndroidProducts.mk registers. Override with
+# BUILD_RELEASE=foo to use a different label (e.g. a build-number cut).
+BUILD_RELEASE="${BUILD_RELEASE:-trunk_staging}"
 BUILD_VARIANT="${BUILD_VARIANT:-userdebug}"
 MAX_RUNTIME_MINUTES="${MAX_RUNTIME_MINUTES:-240}"
 BUILD_DIR="${BUILD_DIR:-$HOME/aosp}"
@@ -144,17 +149,31 @@ fi
 # tools/apply-qalos.sh copies the qalos device tree, apps, and vendor blobs
 # from .repo/manifests/qalos into the AOSP working tree. It is idempotent
 # and pulls the latest qalos sources first.
+#
+# NOTE: the qalos repo IS the manifest in this AOSP-15 layout (the manifest
+# is `repo init -u https://github.com/bramburn/qalos.git`), so apply-qalos.sh
+# is checked out at `<aosp>/.repo/manifests/tools/apply-qalos.sh` after
+# `repo sync`. It is NOT co-located with this do-build.sh script (which the
+# orchestrator uploads to /tmp/). Derive the path from $BUILD_DIR instead of
+# $0 to avoid the SCRIPT_DIR=$(dirname $0) trap that points at /tmp/.
 # ----------------------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-log "applying qalos customizations"
-WORK_TREE="$BUILD_DIR" bash "$SCRIPT_DIR/apply-qalos.sh"
+APPLY_QALOS="$BUILD_DIR/.repo/manifests/tools/apply-qalos.sh"
+if [ ! -f "$APPLY_QALOS" ]; then
+    log "FATAL: $APPLY_QALOS not found after repo sync"
+    log "The qalos manifest repo should have been checked out at .repo/manifests/"
+    exit 1
+fi
+log "applying qalos customizations from $APPLY_QALOS"
+WORK_TREE="$BUILD_DIR" bash "$APPLY_QALOS"
 
 # ----------------------------------------------------------------------------
 # Step 4 — build
 # ----------------------------------------------------------------------------
-log "lunch $BUILD_TARGET-$BUILD_VARIANT"
+# AOSP 15's `lunch` requires <product>-<release>-<variant> (3 parts, see
+# envsetup.sh:442). The old <product>-<variant> form is rejected.
+log "lunch $BUILD_TARGET-$BUILD_RELEASE-$BUILD_VARIANT"
 source build/envsetup.sh
-lunch "$BUILD_TARGET-$BUILD_VARIANT"
+lunch "$BUILD_TARGET-$BUILD_RELEASE-$BUILD_VARIANT"
 
 log "m -j$BUILD_JOBS (this takes 1-4 hours on a c-8 droplet)"
 m -j"$BUILD_JOBS" 2>&1 | tee "$LOG_DIR/build.log"
