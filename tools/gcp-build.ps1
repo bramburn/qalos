@@ -40,7 +40,6 @@ param(
     [int]   $MaxRuntimeMinutes = 240,
     [switch]$KeepOnFailure     = $false,
     [string]$ArtifactDownloadDir,
-    [switch]$ScheduleMonitor   = $true,
     [string]$NetworkTier        = 'STANDARD',
     [switch]$SerialPortOutput   = $true
 )
@@ -231,55 +230,7 @@ if ($createResult.code -ne 0) { throw "Instance creation failed (exit $($createR
 $instanceData = $createResult.out.Trim() | ConvertFrom-Json
 $selfLink = $instanceData[0].selfLink
 Write-Host "[build] instance created: $instanceName" -ForegroundColor Green
-
-# ---------------------------------------------------------------------------
-# Schedule a mavis cron to monitor this build (download logs + artifacts when done)
-# Disabled by default; pass -ScheduleMonitor to enable.
-# ---------------------------------------------------------------------------
-$monitorCron = $null
-if ($ScheduleMonitor) {
-    $cronName = "qalos-build-$instanceName"
-    $promptText = @"
-You are the watchdog for the qalos GCP AOSP build instance '$instanceName' on GCP. The user ran gcp-build.ps1 at $(Get-Date -Format o) and asked for a cron to monitor it.
-
-## Context
-- Instance: $instanceName in zone $Zone (project $project), Spot c3d-highcpu-16
-- SSH via Windows OpenSSH: `"C:\Windows\System32\OpenSSH\ssh.exe" -i "C:\Users\bramburn\.ssh\google_compute_engine" -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o LogLevel=ERROR bramburn@<extIp> "<cmd>"`
-- SCP: `"C:\Windows\System32\OpenSSH\scp.exe" -i "C:\Users\bramburn\.ssh\google_compute_engine" -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL "bramburn@<extIp>:<remote>" "<local>"`
-- gcloud: `C:\Program Files (x86)\Google\Cloud SDK\google-cloud-sdk\platform\bundledpython\python.exe` + `C:\Program Files (x86)\Google\Cloud SDK\google-cloud-sdk\lib\gcloud.py` via temp .bat + Start-Process
-- Build dir on instance: /root/aosp/. Build log: /root/aosp/.qalos-logs/build.log. Artifacts: /root/aosp/out/target/product/qalos_emulator/{system,boot,userdata,vendor,product}.img
-- Local artifact dir: $ArtifactDownloadDir (already created; images go in $ArtifactDownloadDir/images/)
-- Build started with -MaxRuntimeMinutes $MaxRuntimeMinutes. Build was started at $(Get-Date -Format o).
-- This session: mvs_a29fe1d60bb24e479c4d90dddadef57d
-
-## Each tick (every 10 min)
-1. List the instance: invoke-gcloud 'compute instances describe $instanceName --zone=$Zone --format=value(name,status,networkInterfaces[0].accessConfigs[0].natIP)'. Use temp .bat + Start-Process.
-2. If NOT_FOUND (instance gone): build was cleaned up by script. Try the artifact download path below anyway (if SCP fails too, the build died before producing artifacts). Then `mavis cron delete $cronName` and report final status.
-3. If RUNNING: SSH in with `"sudo bash -c 'ps -ef | grep -E "repo sync|m -j|do-build|java|gcc|cc1" | grep -v grep | wc -l; du -sh /root/aosp/; test -f /root/aosp/.qalos-logs/build.log && wc -l /root/aosp/.qalos-logs/build.log && tail -n 3 /root/aosp/.qalos-logs/build.log; uptime'`. Report one-liner. Do NOT download anything if still running. Just report.
-4. If STOPPED/STOPPING/TERMINATED: build is finishing. SSH one more time to check, then download.
-5. Download phase (when build is done OR on the 6h mark): For each of system.img, boot.img, userdata.img, vendor.img, product.img, attempt scp to `$ArtifactDownloadDir/images/<name>` skipping ones not present on instance (use `sudo test -f /root/aosp/out/target/product/qalos_emulator/<name>` first). Also scp the build.log to `$ArtifactDownloadDir/build.log`. Run `gcloud compute instances get-serial-port-output $instanceName --zone=$Zone --port=1 --start=-1048576` and save to `$ArtifactDownloadDir/serial-console.log`.
-6. After download: `gcloud compute instances delete $instanceName --zone=$Zone --quiet` if still present. Then `mavis cron delete $cronName` and report build PASS/FAIL (based on presence of 'QALOS_BUILD_DONE' in build.log), artifact sizes, last 50 lines of build.log.
-
-## Notes
-- PowerShell 5.1. Use Start-Process for gcloud/scp, not `& gcloud.cmd` directly (corrupts `$LASTEXITCODE`).
-- Be brief. Full report only when build is done.
-- If SSH/SCP fails (instance gone or timed out), that's fine -- proceed to cleanup and report.
-- **Do not** start a new build. **Do not** delete the warm snapshot. Just monitor and download.
-- If the instance has been around >6 hours since first observed, give up: report "build probably timed out" then `mavis cron delete $cronName`.
-"@
-
-    $mavisResult = & mavis cron create `
-        --cron_name $cronName `
-        --schedule '*/10 * * * *' `
-        --prompt $promptText `
-        --session '{"mode":"sessionId","sessionId":"mvs_a29fe1d60bb24e479c4d90dddadef57d"}' 2>&1
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "[build] cron '$cronName' scheduled to monitor this build" -ForegroundColor Green
-        $monitorCron = $cronName
-    } else {
-        Write-Warning "[build] failed to schedule cron: $mavisResult"
-    }
-}
+Write-Host "[build] (hint: the LLM driver should now call mavis cron create to monitor this build; the script intentionally does not set up the cron itself)" -ForegroundColor DarkGray
 
 # ---------------------------------------------------------------------------
 # Background watchdog -- force-delete instance if this process dies
