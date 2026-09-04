@@ -182,6 +182,10 @@ public final class HttpApiServer extends Thread {
             writeError(out, 400, e.getMessage());
         } catch (IllegalStateException e) {
             writeError(out, 503, e.getMessage());
+        } catch (UnsupportedOperationException e) {
+            // 501 Not Implemented — used for endpoints deferred to v1
+            // (currently: screenshot — see RemoteControlService.screenshotBase64Internal).
+            writeError(out, 501, e.getMessage());
         } catch (RuntimeException e) {
             // F-2.2: never let a non-IAE/ISE exception kill the
             // per-connection thread silently. The on-device service
@@ -198,42 +202,48 @@ public final class HttpApiServer extends Thread {
 
     private void handle(String method, String path, JSONObject query,
             String body, OutputStream out) throws IOException {
-        switch (method + " " + path) {
-            case "GET /health":
-                handleHealth(out);
+        try {
+            switch (method + " " + path) {
+                case "GET /health":
+                    handleHealth(out);
+                    return;
+                case "GET /display":
+                    handleDisplay(out);
+                    return;
+                case "GET /screenshot":
+                    // F-2.1: query parameters carry width/height/quality/display
+                    handleScreenshot(query, out);
+                    return;
+                case "GET /foreground":
+                    handleForeground(out);
+                    return;
+            }
+            if ("POST".equals(method) && path.equals("/tap")) {
+                handleTap(parseJson(body), out);
                 return;
-            case "GET /display":
-                handleDisplay(out);
+            }
+            if ("POST".equals(method) && path.equals("/type")) {
+                handleType(parseJson(body), out);
                 return;
-            case "GET /screenshot":
-                // F-2.1: query parameters carry width/height/quality/display
-                handleScreenshot(query, out);
+            }
+            if ("POST".equals(method) && path.equals("/key")) {
+                handleKey(parseJson(body), out);
                 return;
-            case "GET /foreground":
-                handleForeground(out);
+            }
+            if ("POST".equals(method) && path.equals("/launch")) {
+                handleLaunch(parseJson(body), out);
                 return;
+            }
+            if ("POST".equals(method) && path.equals("/force_stop")) {
+                handleForceStop(parseJson(body), out);
+                return;
+            }
+            writeError(out, 404, "no such endpoint");
+        } catch (JSONException e) {
+            // Malformed JSON body or unexpected JSON type — surface as 400
+            // so the client can distinguish a bad request from a server bug.
+            throw new IllegalArgumentException("invalid JSON: " + e.getMessage(), e);
         }
-        if ("POST".equals(method) && path.equals("/tap")) {
-            handleTap(parseJson(body), out);
-            return;
-        }
-        if ("POST".equals(method) && path.equals("/type")) {
-            handleType(parseJson(body), out);
-            return;
-        }
-        if ("POST".equals(method) && path.equals("/key")) {
-            handleKey(parseJson(body), out);
-            return;
-        }
-        if ("POST".equals(method) && path.equals("/launch")) {
-            handleLaunch(parseJson(body), out);
-            return;
-        }
-        if ("POST".equals(method) && path.equals("/force_stop")) {
-            handleForceStop(parseJson(body), out);
-            return;
-        }
-        writeError(out, 404, "no such endpoint");
     }
 
     // ------------------------------------------------------------------
@@ -257,7 +267,8 @@ public final class HttpApiServer extends Thread {
         writeJson(out, 200, json);
     }
 
-    private void handleDisplay(OutputStream out) throws IOException {
+    private void handleDisplay(OutputStream out)
+            throws IOException, JSONException {
         final int displayId = 0; // query on default display
         final JSONObject json = new JSONObject();
         json.put("width", mService.getDisplayWidth(displayId));
@@ -265,7 +276,8 @@ public final class HttpApiServer extends Thread {
         writeJson(out, 200, json);
     }
 
-    private void handleScreenshot(JSONObject body, OutputStream out) throws IOException {
+    private void handleScreenshot(JSONObject body, OutputStream out)
+            throws IOException, JSONException {
         final int width = body.optInt("width", 0);
         final int height = body.optInt("height", 0);
         final int quality = body.optInt("quality", 85);
@@ -281,14 +293,16 @@ public final class HttpApiServer extends Thread {
         writeJson(out, 200, json);
     }
 
-    private void handleForeground(OutputStream out) throws IOException {
+    private void handleForeground(OutputStream out)
+            throws IOException, JSONException {
         final String pkg = mService.getForegroundPackage();
         final JSONObject json = new JSONObject();
         json.put("package", pkg);
         writeJson(out, 200, json);
     }
 
-    private void handleTap(JSONObject body, OutputStream out) throws IOException {
+    private void handleTap(JSONObject body, OutputStream out)
+            throws IOException, JSONException {
         requireInt(body, "x");
         requireInt(body, "y");
         final int x = body.getInt("x");
@@ -298,13 +312,15 @@ public final class HttpApiServer extends Thread {
         writeOk(out);
     }
 
-    private void handleType(JSONObject body, OutputStream out) throws IOException {
+    private void handleType(JSONObject body, OutputStream out)
+            throws IOException, JSONException {
         requireString(body, "text");
         mService.typeText(body.getString("text"));
         writeOk(out);
     }
 
-    private void handleKey(JSONObject body, OutputStream out) throws IOException {
+    private void handleKey(JSONObject body, OutputStream out)
+            throws IOException, JSONException {
         requireInt(body, "key_code");
         final int code = body.getInt("key_code");
         final boolean down = body.optBoolean("down", true);
@@ -312,13 +328,15 @@ public final class HttpApiServer extends Thread {
         writeOk(out);
     }
 
-    private void handleLaunch(JSONObject body, OutputStream out) throws IOException {
+    private void handleLaunch(JSONObject body, OutputStream out)
+            throws IOException, JSONException {
         requireString(body, "package");
         mService.launchApp(body.getString("package"));
         writeOk(out);
     }
 
-    private void handleForceStop(JSONObject body, OutputStream out) throws IOException {
+    private void handleForceStop(JSONObject body, OutputStream out)
+            throws IOException, JSONException {
         requireString(body, "package");
         mService.forceStop(body.getString("package"));
         writeOk(out);
@@ -374,8 +392,16 @@ public final class HttpApiServer extends Thread {
             try {
                 out.put(key, Integer.parseInt(val));
             } catch (NumberFormatException notInt) {
+                // JSONObject.put(String, Object) declares JSONException
+                // but never throws for String keys. The catch blocks below
+                // exist to satisfy the compiler.
                 if (val.equals("true") || val.equals("false")) {
-                    out.put(key, Boolean.parseBoolean(val));
+                    try {
+                        out.put(key, Boolean.parseBoolean(val));
+                    } catch (JSONException impossible) {
+                        // key is a String — JSONObject.put never throws
+                        // for String keys.
+                    }
                 } else {
                     try {
                         out.put(key, val);
@@ -384,8 +410,6 @@ public final class HttpApiServer extends Thread {
                         // for String keys.
                     }
                 }
-            } catch (JSONException impossible) {
-                // same as above
             }
         }
         return out;
@@ -471,6 +495,7 @@ public final class HttpApiServer extends Thread {
             case 404: return "Not Found";
             case 413: return "Payload Too Large";
             case 500: return "Internal Server Error";
+            case 501: return "Not Implemented";
             case 503: return "Service Unavailable";
             default:  return "Status";
         }
