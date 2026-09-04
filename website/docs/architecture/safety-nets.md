@@ -116,6 +116,34 @@ Catches GH Actions runner timeouts, runner crash, network partition between runn
 
 **Every row in this table must be defended against.** A PR that adds a new build script without all four layers will be rejected.
 
+## Build monitor cron — LLM-driven, not script-driven
+
+AOSP builds take 1-6 hours. The orchestrator script (`.ps1` / `.sh`) is **synchronous** and only lives as long as the process that invoked it. A bare script invocation in CI, a scheduled task, or a different agent without `mavis` tools would create a cron it can't manage.
+
+The convention: the **LLM** (mavis) sets up the monitor cron, NOT the script. After the orchestrator reports `instance created: qalos-build-...`, the driving LLM should call:
+
+```
+mavis cron create \
+    --cron_name "qalos-build-<instanceName>" \
+    --schedule "*/10 * * * *" \
+    --prompt "<the watchdog prompt template>" \
+    --session '{"mode":"sessionId","sessionId":"<this-session-id>"}'
+```
+
+The cron ticks every 10 min, SSHes in for a one-liner status, and when the build finishes downloads the build log, all 5 image files, and the serial console output to `.pi/out/gcp-build/<instanceName>/`. It also `mavis cron delete`s itself once done or after 6 hours.
+
+The script stays focused on what it does well (create / run / cleanup). The LLM stays focused on what it does well (cross-session state, cron lifecycle, smart decisions, artifact download via SSH/SCP). Both pieces have explicit fallbacks: the script works without the LLM (just no monitor), and the LLM works without the script (manually re-runs and reads the same prompts).
+
+### Why the LLM must own instance teardown for long builds
+
+Layer 1 (`try/finally` in the orchestrator) is correct as the **primary** cleanup, but it has a known footgun: when the remote `do-build.sh` process tree exits, the parent SSH session does not always close promptly. The orchestrator script then sits "waiting" for up to **4 hours**, until the SSH connection eventually drops for some other reason. At that point the `try/finally` block runs and **unconditionally destroys the instance** — even if the build is healthy and running via a separate `systemd-run` unit on the same instance.
+
+**Real incident (2026-09-04):** `qalos-build-20260904-180634` was at 45% (`BUILD_RUNNING`, compiling libLLVM AArch64) for 4 hours after `gcp-build.ps1`'s `do-build.sh` call exited early (the `set -u` bug, since fixed). The gcp-build.ps1 background task finally exited at the 4h02m mark, its `try/finally` block ran, the instance was stopped and deleted, and all 4 hours of compile progress were lost. The fix for next time:
+
+1. **The script creates + uploads only.** The actual `m -j8` runs under `systemd-run --unit=qalos-build` on the instance, so it survives any SSH-disconnect the script might suffer.
+2. **The LLM monitor cron owns the cleanup.** Its step 6 is: "After downloads: `gcloud compute instances delete qalos-build-NAME --zone=Z --quiet` if present." Only the cron knows when the build is actually done.
+3. **The long-term fix is a `-NoAutoDelete` switch on gcp-build.ps1** (or a similar provider-side patch) so the script can be told to leave the instance up. Until that ships, the LLM + `systemd-run` + cron pattern is the only safe way to run a build > 10 min.
+
 ## Why four layers?
 
 Each layer has a different failure mode it catches:
