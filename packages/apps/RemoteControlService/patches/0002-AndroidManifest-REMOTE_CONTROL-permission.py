@@ -29,7 +29,12 @@ NEW_BLOCK = (
     '    <permission android:name="android.permission.REMOTE_CONTROL"\n'
     '        android:label="@string/permlab_remoteControl"\n'
     '        android:description="@string/permdesc_remoteControl"\n'
-    '        android:protectionLevel="signature" />\n'
+    '        android:protectionLevel="signature"\n'
+    # AOSP-15 metalava requires new framework APIs to carry @FlaggedApi.
+    # We don't define an aconfig flag for this vendor permission; suppress
+    # the UnflaggedApi lint with tools:ignore. (If/when we ship an aconfig
+    # flag for QaLab, drop the ignore and reference the flag here.)
+    '        tools:ignore="UnflaggedApi" />\n'
 )
 
 
