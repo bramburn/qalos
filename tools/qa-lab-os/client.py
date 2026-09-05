@@ -24,8 +24,8 @@ from __future__ import annotations
 import base64
 import io
 import logging
-from dataclasses import dataclass
-from typing import Tuple
+from dataclasses import dataclass, field
+from typing import Any, Tuple
 
 import requests
 from PIL import Image
@@ -34,6 +34,7 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_PORT = 9000
 DEFAULT_TIMEOUT_S = 30.0
+DEFAULT_HEALTH_TIMEOUT_S = 2.0
 
 
 class QaLabError(RuntimeError):
@@ -49,6 +50,32 @@ class DisplaySize:
 
     def as_tuple(self) -> Tuple[int, int]:
         return (self.width, self.height)
+
+
+@dataclass(frozen=True)
+class ServiceInfo:
+    """On-device service metadata (from /capabilities)."""
+
+    service: str
+    service_version: str
+    api_version: int
+    build_id: str
+    started_at: int
+    uptime_ms: int
+    endpoints: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class DeviceInfo:
+    """On-device metadata (from /info)."""
+
+    manufacturer: str
+    model: str
+    android_release: str
+    android_sdk: int
+    display_width: int
+    display_height: int
+    foreground_package: str
 
 
 class QaLabDevice:
@@ -70,6 +97,8 @@ class QaLabDevice:
         self._timeout_s = timeout_s
         self._session = requests.Session()
         self._display_size: DisplaySize | None = None
+        self._service_info: ServiceInfo | None = None
+        self._device_info: DeviceInfo | None = None
 
     # ------------------------------------------------------------------
     # Context manager
@@ -134,6 +163,53 @@ class QaLabDevice:
         payload = self._get("/foreground")
         return str(payload.get("package", ""))
 
+    @property
+    def capabilities(self) -> ServiceInfo:
+        """Cached call to ``/capabilities``."""
+        if self._service_info is None:
+            self._service_info = self._query_capabilities()
+        return self._service_info
+
+    @property
+    def info(self) -> DeviceInfo:
+        """Cached call to ``/info``."""
+        if self._device_info is None:
+            self._device_info = self._query_info()
+        return self._device_info
+
+    def _query_capabilities(self) -> ServiceInfo:
+        payload = self._get("/capabilities")
+        return ServiceInfo(
+            service=str(payload.get("service", "")),
+            service_version=str(payload.get("service_version", "")),
+            api_version=int(payload.get("api_version", 0)),
+            build_id=str(payload.get("build_id", "")),
+            started_at=int(payload.get("started_at", 0)),
+            uptime_ms=int(payload.get("uptime_ms", 0)),
+            endpoints=list(payload.get("endpoints", []) or []),
+        )
+
+    def _query_info(self) -> DeviceInfo:
+        payload = self._get("/info")
+        return DeviceInfo(
+            manufacturer=str(payload.get("manufacturer", "")),
+            model=str(payload.get("model", "")),
+            android_release=str(payload.get("android_release", "")),
+            android_sdk=int(payload.get("android_sdk", 0)),
+            display_width=int(payload.get("display_width", 0)),
+            display_height=int(payload.get("display_height", 0)),
+            foreground_package=str(payload.get("foreground_package", "")),
+        )
+
+    def alive(self, timeout_s: float = DEFAULT_HEALTH_TIMEOUT_S) -> bool:
+        """Return True iff ``/health`` returns 200 within ``timeout_s``."""
+        try:
+            response = self._session.get(f"{self._base}/health",
+                                         timeout=timeout_s)
+            return response.status_code == 200
+        except requests.RequestException:
+            return False
+
     # ------------------------------------------------------------------
     # Input
     # ------------------------------------------------------------------
@@ -175,6 +251,71 @@ class QaLabDevice:
         e.g. ``4`` for ``KEYCODE_BACK``.
         """
         self._post("/key", {"key_code": int(key_code), "down": bool(down)})
+
+    def long_press(self, x: int, y: int, duration_ms: int,
+                   *, display: int = 0) -> None:
+        """Press and hold ``(x, y)`` for ``duration_ms`` milliseconds.
+
+        Useful for opening context menus. ``duration_ms`` is clamped
+        to ``[1, 5000]`` on-device; out-of-range values are not an
+        error, they are silently clamped.
+        """
+        if x < 0 or y < 0:
+            raise ValueError(f"coordinates must be non-negative, got ({x}, {y})")
+        if duration_ms < 1:
+            raise ValueError(f"duration_ms must be >= 1, got {duration_ms}")
+        self._post("/long_press", {
+            "x": int(x), "y": int(y),
+            "duration_ms": int(duration_ms),
+            "display": int(display),
+        })
+
+    def swipe(self, x1: int, y1: int, x2: int, y2: int,
+              steps: int = 20, duration_ms: int = 300,
+              *, display: int = 0) -> None:
+        """Drag from ``(x1, y1)`` to ``(x2, y2)`` over ``duration_ms``.
+
+        ``steps`` intermediate ``ACTION_MOVE`` events are injected;
+        more steps = smoother animation. Clamped to ``[1, 200]`` and
+        ``[1, 10000]`` on-device.
+        """
+        for coord in (x1, y1, x2, y2):
+            if coord < 0:
+                raise ValueError(f"coordinates must be non-negative, got {coord}")
+        if steps < 1:
+            raise ValueError(f"steps must be >= 1, got {steps}")
+        if duration_ms < 1:
+            raise ValueError(f"duration_ms must be >= 1, got {duration_ms}")
+        self._post("/swipe", {
+            "x1": int(x1), "y1": int(y1),
+            "x2": int(x2), "y2": int(y2),
+            "steps": int(steps),
+            "duration_ms": int(duration_ms),
+            "display": int(display),
+        })
+
+    def pinch(self, cx: int, cy: int, r1: int, r2: int,
+              steps: int = 20, duration_ms: int = 300,
+              *, display: int = 0) -> None:
+        """Two-finger zoom centered at ``(cx, cy)``.
+
+        ``r1`` is the starting radius (each pointer at cx-r1 and cx+r1).
+        ``r2`` is the ending radius. A zoom-in: r2 > r1. A zoom-out:
+        r2 < r1. Clamped to ``[1, 200]`` steps and ``[1, 10000]`` ms.
+        """
+        if r1 < 1 or r2 < 1:
+            raise ValueError(f"radii must be >= 1, got r1={r1} r2={r2}")
+        if steps < 1:
+            raise ValueError(f"steps must be >= 1, got {steps}")
+        if duration_ms < 1:
+            raise ValueError(f"duration_ms must be >= 1, got {duration_ms}")
+        self._post("/pinch", {
+            "cx": int(cx), "cy": int(cy),
+            "r1": int(r1), "r2": int(r2),
+            "steps": int(steps),
+            "duration_ms": int(duration_ms),
+            "display": int(display),
+        })
 
     # ------------------------------------------------------------------
     # App lifecycle

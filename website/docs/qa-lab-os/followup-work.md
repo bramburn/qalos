@@ -89,17 +89,17 @@ are real but do not block the v0 build or behaviour:
 ## v1 features (PRD Phase 1.5+)
 
 The original PRD names the following features as "deferred from
-v0" but in-scope for v1:
+v0" but in-scope for v1. **As of v0.1, three of these are done:**
 
-- **`long_press`** — press-and-hold gesture. The v0 has no
-  endpoint for it; an agent that needs to trigger a context menu
-  currently has to chain a tap + a delayed second tap as a
-  workaround.
-- **`swipe`** — drag gesture. The v0 has no endpoint.
-- **`pinch`** — two-finger zoom gesture. The v0 has no endpoint.
-  The implementation needs `MotionEvent` with
-  `ACTION_POINTER_DOWN` / `ACTION_POINTER_UP` to handle the second
-  pointer; the v0 input plumbing only knows one pointer.
+- ~~`long_press`~~ — **shipped in v0.1** (`POST /long_press`).
+- ~~`swipe`~~ — **shipped in v0.1** (`POST /swipe`).
+- ~~`pinch`~~ — **shipped in v0.1** (`POST /pinch`).
+- ~~Screenshots~~ — **shipped in v0.1** (`GET /screenshot` is now
+  a real capture via `ScreenCapture.captureDisplay`, no longer a
+  501 stub).
+
+Still in v1 scope:
+
 - **LLM agent loop template** — a Python skeleton that takes a
   goal, takes a screenshot, asks an LLM, and executes the answer.
   The agent-developer-guide already documents the recommended

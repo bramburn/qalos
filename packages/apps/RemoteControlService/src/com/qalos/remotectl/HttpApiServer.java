@@ -7,9 +7,13 @@
  * configuration change. As a defence-in-depth, every accepted
  * connection must originate from a loopback address.
  *
- * Threading: the listener runs on a dedicated thread. Each accepted
- * connection is handled in its own short-lived thread with a bounded
- * read timeout.
+ * Threading: the listener runs on a dedicated thread (this class).
+ * Each accepted connection is handled in its own short-lived thread
+ * with a bounded read timeout. The accept loop self-heals: a
+ * thrown IOException closes the dead socket, sleeps 1s, and
+ * re-binds the listener. After 5 consecutive bind failures the
+ * loop gives up and logs at wtf level (port may be held by another
+ * process; we cannot free it).
  *
  * The server takes an {@link IRemoteControl} (plain Java interface,
  * same package) and calls it directly. v0 does not publish the
@@ -54,6 +58,24 @@ public final class HttpApiServer extends Thread {
     /** Per-connection socket timeout. */
     private static final int SOCKET_TIMEOUT_MS = 5_000;
 
+    /** Sleep between listener rebinds (ms). */
+    private static final long REBIND_BACKOFF_MS = 1_000L;
+
+    /** Hard cap on consecutive rebind failures before we give up. */
+    private static final int MAX_REBIND_FAILURES = 5;
+
+    /**
+     * The list of endpoint names exposed by this server. Used by
+     * /capabilities to advertise what the client may call. Keep in
+     * sync with the dispatch in {@link #handle}.
+     */
+    private static final String[] ENDPOINTS = {
+            "health", "display", "screenshot", "foreground",
+            "tap", "type", "key", "launch", "force_stop",
+            "long_press", "swipe", "pinch",
+            "capabilities", "info"
+    };
+
     private final int mPort;
     private final IRemoteControl mService;
     private final boolean mBindLocalOnly;
@@ -88,28 +110,60 @@ public final class HttpApiServer extends Thread {
 
     @Override
     public void run() {
-        try {
-            mServer = new ServerSocket(
-                    mPort,
-                    /* backlog */ 16,
-                    mBindLocalOnly ? InetAddress.getByName("127.0.0.1") : null);
-            Log.i(TAG, "listening on "
-                    + (mBindLocalOnly ? "127.0.0.1" : "0.0.0.0") + ":" + mPort);
-            while (mRunning) {
-                final Socket client = mServer.accept();
-                handleConnection(client);
-            }
-        } catch (IOException e) {
-            if (mRunning) {
-                Log.e(TAG, "server error", e);
+        int rebindFailures = 0;
+        while (mRunning) {
+            try {
+                mServer = new ServerSocket(
+                        mPort,
+                        /* backlog */ 16,
+                        mBindLocalOnly ? InetAddress.getByName("127.0.0.1") : null);
+                Log.i(TAG, "listening on "
+                        + (mBindLocalOnly ? "127.0.0.1" : "0.0.0.0") + ":" + mPort);
+                rebindFailures = 0; // reset on successful bind
+                while (mRunning) {
+                    final Socket client = mServer.accept();
+                    handleConnection(client);
+                }
+            } catch (IOException e) {
+                if (!mRunning) {
+                    // shutdown() called; this is the expected close.
+                    break;
+                }
+                // Listener died mid-run. Close the dead socket, sleep,
+                // and re-bind. This is the v0.1 self-heal: previously
+                // a single IOException here killed the thread and left
+                // port 9000 dead until system_server was restarted.
+                Log.e(TAG, "listener failed, will rebind in "
+                        + REBIND_BACKOFF_MS + "ms", e);
+                closeQuietly(mServer);
+                mServer = null;
+                rebindFailures++;
+                if (rebindFailures > MAX_REBIND_FAILURES) {
+                    Log.wtf(TAG, "listener rebind failed "
+                            + rebindFailures + " times; giving up", e);
+                    break;
+                }
+                try {
+                    Thread.sleep(REBIND_BACKOFF_MS);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
         }
+        closeQuietly(mServer);
+        Log.i(TAG, "listener thread exiting");
+    }
+
+    private static void closeQuietly(ServerSocket s) {
+        if (s == null) return;
+        try { s.close(); } catch (IOException ignored) { }
     }
 
     private void handleConnection(Socket client) {
         // Each connection gets its own thread. The HTTP server is not a
         // hot path; we do not pool threads in v0.
-        new Thread(() -> {
+        Thread t = new Thread(() -> {
             try (Socket socket = client) {
                 socket.setSoTimeout(SOCKET_TIMEOUT_MS);
                 if (!socket.getInetAddress().isLoopbackAddress()) {
@@ -125,7 +179,13 @@ public final class HttpApiServer extends Thread {
                 // Client disconnect or timeout — silent. The connection
                 // is already closed by the try-with-resources.
             }
-        }, "qalos-remote-ctl-conn").start();
+        }, "qalos-remote-ctl-conn");
+        // Catch uncaught throwables (e.g. OOM, AssertionError) so a
+        // single bad request does not silently take the connection
+        // thread down without a log entry.
+        t.setUncaughtExceptionHandler((thr, ex) -> Log.e(TAG,
+                "unhandled exception in connection thread", ex));
+        t.start();
     }
 
     private void dispatch(Socket socket) throws IOException {
@@ -183,9 +243,12 @@ public final class HttpApiServer extends Thread {
         } catch (IllegalStateException e) {
             writeError(out, 503, e.getMessage());
         } catch (UnsupportedOperationException e) {
-            // 501 Not Implemented — used for endpoints deferred to v1
-            // (currently: screenshot — see RemoteControlService.screenshotBase64Internal).
+            // 501 Not Implemented — used for endpoints deferred to v1.
             writeError(out, 501, e.getMessage());
+        } catch (JSONException e) {
+            // Malformed JSON body or unexpected JSON type — surface as 400
+            // so the client can distinguish a bad request from a server bug.
+            throw new IllegalArgumentException("invalid JSON: " + e.getMessage(), e);
         } catch (RuntimeException e) {
             // F-2.2: never let a non-IAE/ISE exception kill the
             // per-connection thread silently. The on-device service
@@ -201,7 +264,7 @@ public final class HttpApiServer extends Thread {
     }
 
     private void handle(String method, String path, JSONObject query,
-            String body, OutputStream out) throws IOException {
+            String body, OutputStream out) throws IOException, JSONException {
         try {
             switch (method + " " + path) {
                 case "GET /health":
@@ -216,6 +279,12 @@ public final class HttpApiServer extends Thread {
                     return;
                 case "GET /foreground":
                     handleForeground(out);
+                    return;
+                case "GET /capabilities":
+                    handleCapabilities(out);
+                    return;
+                case "GET /info":
+                    handleInfo(out);
                     return;
             }
             if ("POST".equals(method) && path.equals("/tap")) {
@@ -236,6 +305,18 @@ public final class HttpApiServer extends Thread {
             }
             if ("POST".equals(method) && path.equals("/force_stop")) {
                 handleForceStop(parseJson(body), out);
+                return;
+            }
+            if ("POST".equals(method) && path.equals("/long_press")) {
+                handleLongPress(parseJson(body), out);
+                return;
+            }
+            if ("POST".equals(method) && path.equals("/swipe")) {
+                handleSwipe(parseJson(body), out);
+                return;
+            }
+            if ("POST".equals(method) && path.equals("/pinch")) {
+                handlePinch(parseJson(body), out);
                 return;
             }
             writeError(out, 404, "no such endpoint");
@@ -340,6 +421,102 @@ public final class HttpApiServer extends Thread {
         requireString(body, "package");
         mService.forceStop(body.getString("package"));
         writeOk(out);
+    }
+
+    private void handleLongPress(JSONObject body, OutputStream out)
+            throws IOException, JSONException {
+        requireInt(body, "x");
+        requireInt(body, "y");
+        requireInt(body, "duration_ms");
+        final int x = body.getInt("x");
+        final int y = body.getInt("y");
+        final int durationMs = body.getInt("duration_ms");
+        final int displayId = body.optInt("display", 0);
+        mService.longPress(x, y, durationMs, displayId);
+        writeOk(out);
+    }
+
+    private void handleSwipe(JSONObject body, OutputStream out)
+            throws IOException, JSONException {
+        requireInt(body, "x1");
+        requireInt(body, "y1");
+        requireInt(body, "x2");
+        requireInt(body, "y2");
+        requireInt(body, "steps");
+        requireInt(body, "duration_ms");
+        final int x1 = body.getInt("x1");
+        final int y1 = body.getInt("y1");
+        final int x2 = body.getInt("x2");
+        final int y2 = body.getInt("y2");
+        final int steps = body.getInt("steps");
+        final int durationMs = body.getInt("duration_ms");
+        final int displayId = body.optInt("display", 0);
+        mService.swipe(x1, y1, x2, y2, steps, durationMs, displayId);
+        writeOk(out);
+    }
+
+    private void handlePinch(JSONObject body, OutputStream out)
+            throws IOException, JSONException {
+        requireInt(body, "cx");
+        requireInt(body, "cy");
+        requireInt(body, "r1");
+        requireInt(body, "r2");
+        requireInt(body, "steps");
+        requireInt(body, "duration_ms");
+        final int cx = body.getInt("cx");
+        final int cy = body.getInt("cy");
+        final int r1 = body.getInt("r1");
+        final int r2 = body.getInt("r2");
+        final int steps = body.getInt("steps");
+        final int durationMs = body.getInt("duration_ms");
+        final int displayId = body.optInt("display", 0);
+        mService.pinch(cx, cy, r1, r2, steps, durationMs, displayId);
+        writeOk(out);
+    }
+
+    private void handleCapabilities(OutputStream out)
+            throws IOException {
+        final ServiceInfo info = mService.getServiceInfo();
+        final JSONObject json = new JSONObject();
+        try {
+            json.put("service", "qalos-remote-control");
+            json.put("service_version", info.serviceVersion);
+            json.put("api_version", info.apiVersion);
+            json.put("build_id", info.buildId);
+            json.put("started_at", info.startedAtEpochMs);
+            json.put("uptime_ms", info.uptimeMs);
+            // JSON arrays in org.json require a typed put; cast to a
+            // generic Object[] and let the library serialize.
+            json.put("endpoints", joinEndpoints());
+        } catch (JSONException impossible) {
+            // keys are constants
+        }
+        writeJson(out, 200, json);
+    }
+
+    private void handleInfo(OutputStream out)
+            throws IOException {
+        final DeviceInfo info = mService.getDeviceInfo();
+        final JSONObject json = new JSONObject();
+        try {
+            json.put("manufacturer", info.manufacturer);
+            json.put("model", info.model);
+            json.put("android_release", info.androidRelease);
+            json.put("android_sdk", info.androidSdk);
+            json.put("display_width", info.displayWidth);
+            json.put("display_height", info.displayHeight);
+            json.put("foreground_package", info.foregroundPackage);
+        } catch (JSONException impossible) {
+            // keys are constants
+        }
+        writeJson(out, 200, json);
+    }
+
+    /** Adapt {@link #ENDPOINTS} (String[]) to Object[] for JSONObject. */
+    private static Object joinEndpoints() {
+        final Object[] out = new Object[ENDPOINTS.length];
+        for (int i = 0; i < ENDPOINTS.length; i++) out[i] = ENDPOINTS[i];
+        return out;
     }
 
     // ------------------------------------------------------------------
@@ -508,27 +685,27 @@ public final class HttpApiServer extends Thread {
         int c;
         while ((c = in.read()) != -1) {
             if (c == '\n') {
-                final byte[] data = buf.toByteArray();
-                // strip trailing \r
-                final int end = (data.length > 0 && data[data.length - 1] == '\r')
-                        ? data.length - 1 : data.length;
-                return new String(data, 0, end, StandardCharsets.US_ASCII);
+                if (buf.size() > 0 && buf.toByteArray()[buf.size() - 1] == '\r') {
+                    buf.write(c);
+                    return buf.toString(StandardCharsets.UTF_8).trim();
+                }
+                return buf.toString(StandardCharsets.UTF_8).trim();
             }
             buf.write(c);
         }
-        return buf.size() == 0 ? null : buf.toString(StandardCharsets.US_ASCII);
+        return null;
     }
 
     private static String readBody(InputStream in, int contentLength) throws IOException {
-        final byte[] buf = new byte[contentLength];
+        final byte[] data = new byte[contentLength];
         int read = 0;
         while (read < contentLength) {
-            final int n = in.read(buf, read, contentLength - read);
+            int n = in.read(data, read, contentLength - read);
             if (n < 0) {
-                throw new SocketTimeoutException("body truncated");
+                throw new IOException("unexpected EOF in body");
             }
             read += n;
         }
-        return new String(buf, StandardCharsets.UTF_8);
+        return new String(data, StandardCharsets.UTF_8);
     }
 }

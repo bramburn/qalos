@@ -1,6 +1,6 @@
 # qa-lab-os (Python tools)
 
-Python client SDK and mock server for the on-device
+Python client SDK, mock server, and CLI for the on-device
 RemoteControlService. See the
 [Docusaurus site](https://bramburn.github.io/qalos/docs/qa-lab-os/)
 for the architecture and API reference; this README covers only
@@ -27,6 +27,12 @@ with QaLabDevice("localhost", 9000) as device:
     device.type_text("hello")
     device.screenshot().save("screen.png")
     print(device.foreground_package)
+    # v0.1: gestures + discovery
+    device.long_press(540, 1200, 500)
+    device.swipe(100, 500, 900, 500)
+    device.pinch(540, 1200, 100, 300)
+    print(device.capabilities)
+    print(device.info)
 ```
 
 The default port is 9000. When connecting to an emulator or physical
@@ -35,6 +41,37 @@ device, tunnel the port first:
 ```bash
 adb forward tcp:9000 tcp:9000
 ```
+
+## Use the CLI
+
+The `qalos` command is installed by `pip install -e .`. It is a thin
+wrapper around the Python client, intended for humans and shell
+scripts that want to drive a device without writing Python.
+
+```bash
+qalos status                 # /capabilities + /info for the target device
+qalos devices                # discover reachable qalos services via adb
+qalos tap 540 1200           # one-shot tap
+qalos long-press 540 1200 500
+qalos swipe 100 500 900 500
+qalos pinch 540 1200 100 300
+qalos type "hello world"
+qalos key 4                  # BACK; press+release by default
+qalos launch com.example.app
+qalos force-stop com.example.app
+qalos screenshot out.png     # save to file
+qalos forward                # adb forward tcp:9000 tcp:9000
+qalos wait-until-alive       # block until /health returns 200
+```
+
+Most commands accept `--host` (default `localhost`), `--port`
+(default 9000), and `--timeout` (default 10s). Run `qalos <cmd> --help`
+for the full list of options.
+
+The CLI is **not** a replacement for the Python SDK. The SDK is the
+right tool for an LLM agent loop that needs to call the API many
+times per second. The CLI is the right tool for humans running
+smoke tests and shell scripts running CI checks.
 
 ## Run the mock server
 
@@ -52,7 +89,7 @@ in your own tests:
 
 ```python
 from qa_lab_os.mock_server import MockRemoteControlServer
-from qa_lab_os.client import QaLabDevice
+from qa_lab_os import QaLabDevice
 
 with MockRemoteControlServer() as server:
     device = QaLabDevice("localhost", server.port)
@@ -70,7 +107,8 @@ pytest
 
 The tests spin up the mock server on a random free port and exercise
 the client end-to-end. They run on any host with Python 3.10+ — no
-AOSP build required.
+AOSP build required. 92 tests cover all 14 endpoints, the client
+SDK, the mock server, and the CLI.
 
 ## License
 
@@ -82,10 +120,12 @@ MIT, matching the rest of qalos. See `LICENSE` in the repo root.
 tools/qa-lab-os/
 ├── README.md          ← you are here
 ├── pyproject.toml
-├── client.py          ← QaLabDevice class
+├── client.py          ← QaLabDevice class + dataclasses (DisplaySize, ServiceInfo, DeviceInfo)
 ├── mock_server.py     ← MockRemoteControlServer + MockRemoteControlAPI
+├── cli.py             ← `qalos` command-line tool
 └── tests/
     ├── conftest.py
     ├── test_client.py
-    └── test_mock_server.py
+    ├── test_mock_server.py
+    └── test_cli.py
 ```

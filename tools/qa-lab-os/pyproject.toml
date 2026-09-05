@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "qa-lab-os"
 version = "0.1.0"
-description = "Python client SDK and mock server for the qalos RemoteControlService."
+description = "Python client SDK, mock server, and CLI for the qalos RemoteControlService."
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
@@ -24,10 +24,11 @@ test = [
 ]
 
 [project.scripts]
-qa-lab-os-mock = "qa_lab_os.mock_server:main"
+qa-lab-os-mock = "mock_server:main"
+qalos = "cli:main"
 
 [tool.setuptools]
-py-modules = ["client", "mock_server"]
+py-modules = ["client", "mock_server", "cli"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -22,6 +22,54 @@
  */
 package com.qalos.remotectl;
 
+import android.util.Size;
+
+/**
+ * Service-side metadata. Returned by {@link IRemoteControl#getServiceInfo()}.
+ * Plain-old Java class with public final fields so the HTTP layer can
+ * serialize it without a JSON library.
+ */
+final class ServiceInfo {
+    public final String serviceVersion;
+    public final int apiVersion;
+    public final String buildId;
+    public final long startedAtEpochMs;
+    public final int uptimeMs;
+
+    ServiceInfo(String serviceVersion, int apiVersion, String buildId,
+                long startedAtEpochMs, int uptimeMs) {
+        this.serviceVersion = serviceVersion;
+        this.apiVersion = apiVersion;
+        this.buildId = buildId;
+        this.startedAtEpochMs = startedAtEpochMs;
+        this.uptimeMs = uptimeMs;
+    }
+}
+
+/**
+ * Device-side metadata. Returned by {@link IRemoteControl#getDeviceInfo()}.
+ */
+final class DeviceInfo {
+    public final String manufacturer;
+    public final String model;
+    public final String androidRelease;
+    public final int androidSdk;
+    public final int displayWidth;
+    public final int displayHeight;
+    public final String foregroundPackage;
+
+    DeviceInfo(String manufacturer, String model, String androidRelease,
+               int androidSdk, Size displaySize, String foregroundPackage) {
+        this.manufacturer = manufacturer;
+        this.model = model;
+        this.androidRelease = androidRelease;
+        this.androidSdk = androidSdk;
+        this.displayWidth = displaySize != null ? displaySize.getWidth() : 0;
+        this.displayHeight = displaySize != null ? displaySize.getHeight() : 0;
+        this.foregroundPackage = foregroundPackage != null ? foregroundPackage : "";
+    }
+}
+
 /**
  * Internal contract between {@link RemoteControlService} and
  * {@link HttpApiServer}. See the HTTP API reference for the
@@ -32,6 +80,14 @@ interface IRemoteControl {
     void tap(int x, int y, int displayId);
     void typeText(String text);
     void keyEvent(int keyCode, boolean down);
+
+    // --- Gestures (v0.1) ---
+    /** Press-and-hold: ACTION_DOWN at (x, y), wait {@code durationMs}, ACTION_UP. */
+    void longPress(int x, int y, int durationMs, int displayId);
+    /** Linear drag from (x1, y1) to (x2, y2) over {@code durationMs}, {@code steps} intermediate MOVE events. */
+    void swipe(int x1, int y1, int x2, int y2, int steps, int durationMs, int displayId);
+    /** Two-finger zoom centered at (cx, cy), radius interpolating from r1 to r2 over {@code durationMs}. */
+    void pinch(int cx, int cy, int r1, int r2, int steps, int durationMs, int displayId);
 
     // --- App lifecycle ---
     void launchApp(String packageName);
@@ -45,4 +101,8 @@ interface IRemoteControl {
     // --- Screenshot (returns a base64-encoded PNG so the HTTP layer
     //     does not need to encode it again). ---
     String screenshotBase64(int width, int height, int displayId, int quality);
+
+    // --- Service / device metadata (v0.1) ---
+    ServiceInfo getServiceInfo();
+    DeviceInfo getDeviceInfo();
 }

@@ -20,6 +20,24 @@ from pathlib import Path
 
 TARGET_REL = Path("frameworks/base/core/res/AndroidManifest.xml")
 
+# Anchor for adding the `xmlns:tools` namespace to the root <manifest>
+# element. The root element on AOSP 15 reads:
+#   <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+#             package="android" coreApp="true" ...>
+# The `tools:` prefix used in `tools:ignore="UnflaggedApi"` (see NEW_BLOCK
+# below) MUST be declared on the root or the build dies with
+#   error: unbound prefix: line 9003, column 4
+# at the `framework-res` manifest_fixer step. We add the namespace once
+# and idempotently.
+ROOT_ELEMENT_LINE = '<manifest xmlns:android="http://schemas.android.com/apk/res/android"'
+
+ROOT_ELEMENT_LINE_PATCHED = (
+    '<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n'
+    '          xmlns:tools="http://schemas.android.com/tools"'
+)
+
+NAMESPACE_MARKER = 'xmlns:tools="http://schemas.android.com/tools"'
+
 INSERT_BEFORE = "</manifest>"
 
 IDEMPOTENCY_MARKER = "android.permission.REMOTE_CONTROL"
@@ -45,6 +63,25 @@ def main(work_tree: Path) -> int:
         print(f"[0002] target not found: {target}", file=sys.stderr)
         return 1
     text = target.read_text(encoding="utf-8")
+
+    # Step 1: ensure the root <manifest> declares the `tools` namespace.
+    # Idempotent via NAMESPACE_MARKER; safe to run even if already applied.
+    if NAMESPACE_MARKER not in text:
+        if ROOT_ELEMENT_LINE not in text:
+            print(
+                f"[0002] root <manifest> line not found in {target}. "
+                f"AOSP may have restructured the file. See REBASE.md.",
+                file=sys.stderr,
+            )
+            return 1
+        text = text.replace(ROOT_ELEMENT_LINE, ROOT_ELEMENT_LINE_PATCHED, 1)
+        if not check_only:
+            target.write_text(text, encoding="utf-8")
+            print(f"[0002] added xmlns:tools namespace to root <manifest>")
+        else:
+            print(f"[0002] OK (root namespace anchor found; check mode)")
+
+    # Step 2: insert the REMOTE_CONTROL permission block (idempotent).
     if IDEMPOTENCY_MARKER in text:
         if check_only:
             print(f"[0002] OK (already applied; check mode)")

@@ -67,6 +67,7 @@ const sidebars = {
         'qa-lab-os/decisions',
         'qa-lab-os/architecture',
         'qa-lab-os/api',
+        'qa-lab-os/connecting',
         'qa-lab-os/build-guide',
         'qa-lab-os/agent-developer-guide',
         'qa-lab-os/agent-build-shell',

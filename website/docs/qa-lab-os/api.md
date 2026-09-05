@@ -37,16 +37,20 @@ body shape.
 | --- | --- |
 | 200 | success |
 | 400 | bad request (malformed JSON, missing field, out-of-range value) |
+| 403 | non-loopback client (defence-in-depth; the server is bound to 127.0.0.1) |
 | 404 | no such endpoint |
 | 413 | body larger than 64 KiB |
 | 500 | internal binder error |
+| 501 | not implemented (used for endpoints deferred to a future version) |
 | 503 | a framework dependency (InputManager / ActivityManager / DisplayManager) is not available yet |
 
-## Endpoints (v0)
+## Endpoints
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | [`/health`](#get-health) | liveness check |
+| `GET` | [`/capabilities`](#get-capabilities) | service version, API version, supported endpoints, build id |
+| `GET` | [`/info`](#get-info) | device metadata (model, Android version, display size, foreground package) |
 | `GET` | [`/display`](#get-display) | screen dimensions |
 | `GET` | [`/screenshot`](#get-screenshot) | PNG, base64-encoded |
 | `GET` | [`/foreground`](#get-foreground) | top focused package |
@@ -55,10 +59,16 @@ body shape.
 | `POST` | [`/key`](#post-key) | press / release a hardware key |
 | `POST` | [`/launch`](#post-launch) | launch an app |
 | `POST` | [`/force_stop`](#post-force_stop) | force-stop an app |
-
-Deferred to a follow-up: `/long_press`, `/swipe`, `/pinch`.
+| `POST` | [`/long_press`](#post-long_press) | press and hold at `(x, y)` |
+| `POST` | [`/swipe`](#post-swipe) | linear drag from `(x1, y1)` to `(x2, y2)` |
+| `POST` | [`/pinch`](#post-pinch) | two-finger zoom centered at `(cx, cy)` |
 
 ### `GET /health`
+
+A minimal liveness probe. Use this to check the service is up.
+For richer metadata (build id, uptime, supported endpoints) call
+[`/capabilities`](#get-capabilities). For device hardware info
+(manufacturer, model, display) call [`/info`](#get-info).
 
 ```bash
 curl http://localhost:9000/health
@@ -67,10 +77,76 @@ curl http://localhost:9000/health
 ```json
 {
   "status": "ok",
-  "device": "google/panther/panther:15/...",
+  "service": "qalos-remote-control",
   "android": "15"
 }
 ```
+
+### `GET /capabilities`
+
+Service metadata + the full list of supported endpoints. The endpoint
+list is the source of truth for what the client can call. If you
+target a new endpoint that does not appear here, the server will
+return 404.
+
+```bash
+curl http://localhost:9000/capabilities
+```
+
+```json
+{
+  "service": "qalos-remote-control",
+  "service_version": "0.1.0",
+  "api_version": 1,
+  "build_id": "2026-09-05-abc123",
+  "started_at": 1735689600000,
+  "uptime_ms": 12345,
+  "endpoints": [
+    "health", "capabilities", "info", "display", "screenshot",
+    "foreground", "tap", "type", "key", "launch", "force_stop",
+    "long_press", "swipe", "pinch"
+  ]
+}
+```
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `service_version` | string | semantic version of the qalos build |
+| `api_version` | int | wire-shape version; bump on backward-incompatible changes |
+| `build_id` | string | `ro.qalos.build_id` from the product overlay (set at `lunch` time) |
+| `started_at` | int (epoch ms) | when this service instance started |
+| `uptime_ms` | int | ms since `started_at` |
+| `endpoints` | string[] | every route the server accepts; clients should use this for capability checks |
+
+### `GET /info`
+
+Device-side metadata. Answers the question "what am I talking to?".
+
+```bash
+curl http://localhost:9000/info
+```
+
+```json
+{
+  "manufacturer": "Google",
+  "model": "Pixel 7",
+  "android_release": "15",
+  "android_sdk": 35,
+  "display_width": 1080,
+  "display_height": 2400,
+  "foreground_package": "com.android.launcher"
+}
+```
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `manufacturer` | string | `Build.MANUFACTURER` |
+| `model` | string | `Build.MODEL` |
+| `android_release` | string | `Build.VERSION.RELEASE` |
+| `android_sdk` | int | `Build.VERSION.SDK_INT` |
+| `display_width` | int | primary display width in pixels |
+| `display_height` | int | primary display height in pixels |
+| `foreground_package` | string | top focused task's package (or `""` if home) |
 
 ### `GET /display`
 
@@ -110,6 +186,10 @@ resolution; the framework does not down-scale, so a captured image
 of `480x800` is exactly `480x800` pixels (not a 1080x2400 source
 down-scaled). The PNG is compressed at the requested quality; lower
 quality → smaller payload → faster LLM inference.
+
+The capture is performed by `android.window.ScreenCapture.captureDisplay`
+on a worker thread (the binder thread is not blocked). The underlying
+`HardwareBuffer` is released after the PNG is encoded.
 
 ### `GET /foreground`
 
@@ -201,13 +281,97 @@ curl -X POST http://localhost:9000/force_stop \
 
 Returns `{"status":"ok"}` on success.
 
+### `POST /long_press`
+
+Press and hold at `(x, y)` for `duration_ms` milliseconds. Useful for
+opening context menus. Runs on a worker thread.
+
+```bash
+curl -X POST http://localhost:9000/long_press \
+  -H 'Content-Type: application/json' \
+  -d '{"x": 540, "y": 1200, "duration_ms": 500, "display": 0}'
+```
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `x` | int | yes | pixel x (0..width-1) |
+| `y` | int | yes | pixel y (0..height-1) |
+| `duration_ms` | int | yes | hold duration in ms; clamped to `[1, 5000]` on-device |
+| `display` | int | no (default 0) | display ID |
+
+Returns `{"status":"ok"}` immediately. The actual press-and-release
+completes in the background. The HTTP 200 confirms only that the
+input was queued.
+
+### `POST /swipe`
+
+Linear drag from `(x1, y1)` to `(x2, y2)` with `steps` intermediate
+`ACTION_MOVE` events. More steps = smoother animation. Runs on a
+worker thread.
+
+```bash
+curl -X POST http://localhost:9000/swipe \
+  -H 'Content-Type: application/json' \
+  -d '{"x1": 100, "y1": 500, "x2": 900, "y2": 500, "steps": 20, "duration_ms": 300, "display": 0}'
+```
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `x1`, `y1` | int | yes | start coordinates (0..width-1, 0..height-1) |
+| `x2`, `y2` | int | yes | end coordinates |
+| `steps` | int | yes | intermediate MOVE events; clamped to `[1, 200]` on-device |
+| `duration_ms` | int | yes | total swipe duration; clamped to `[1, 10000]` on-device |
+| `display` | int | no (default 0) | display ID |
+
+### `POST /pinch`
+
+Two-finger zoom centered at `(cx, cy)`. The two pointers start at
+`(cx - r1, cy)` and `(cx + r1, cy)`, and the radius interpolates to
+`r2` over `duration_ms`. `r2 > r1` is a zoom-in; `r2 < r1` is a
+zoom-out. Runs on a worker thread.
+
+```bash
+curl -X POST http://localhost:9000/pinch \
+  -H 'Content-Type: application/json' \
+  -d '{"cx": 540, "cy": 1200, "r1": 100, "r2": 300, "steps": 20, "duration_ms": 300, "display": 0}'
+```
+
+| Field | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `cx`, `cy` | int | yes | center of the pinch, must be inside the display |
+| `r1` | int | yes | starting radius in pixels (per pointer); must be `>= 1` |
+| `r2` | int | yes | ending radius in pixels; must be `>= 1` |
+| `steps` | int | yes | intermediate MOVE events; clamped to `[1, 200]` on-device |
+| `duration_ms` | int | yes | total pinch duration; clamped to `[1, 10000]` on-device |
+| `display` | int | no (default 0) | display ID |
+
 ## Python client
 
 The full Python client lives at
 [`tools/qa-lab-os/client.py`](https://github.com/bramburn/qalos/blob/feat/qa-lab-os-v0/tools/qa-lab-os/client.py).
-The 51-test suite at
+The 92-test suite at
 [`tools/qa-lab-os/tests/`](https://github.com/bramburn/qalos/blob/feat/qa-lab-os-v0/tools/qa-lab-os/tests/)
 exercises every endpoint against the mock server.
+
+## `qalos` CLI
+
+The `qalos` command (installed by `pip install -e .`) is a thin
+wrapper around the Python client. Run `qalos --help` to list the
+subcommands. Most useful ones:
+
+```bash
+qalos status                 # /capabilities + /info
+qalos devices                # discover reachable services via adb
+qalos tap 540 1200           # one-shot tap
+qalos long-press 540 1200 500
+qalos swipe 100 500 900 500
+qalos pinch 540 1200 100 300
+qalos screenshot out.png
+qalos forward                # adb forward tcp:9000 tcp:9000
+qalos wait-until-alive
+```
+
+See [`connecting.md`](./connecting) for the full connection guide.
 
 ## Curl cookbook
 
@@ -217,6 +381,9 @@ curl -s http://localhost:9000/health | jq
 
 # Display
 curl -s http://localhost:9000/display | jq
+
+# Capabilities
+curl -s http://localhost:9000/capabilities | jq
 
 # Tap centre
 curl -s -X POST http://localhost:9000/tap \

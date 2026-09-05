@@ -32,7 +32,13 @@ def _capture(api: MockRemoteControlAPI, method: str, path: str, body: dict = Non
 
 def test_health(api):
     responses, _ = _capture(api, "GET", "/health")
-    assert responses == [(200, {"status": "ok", "device": "mock", "android": "mock"})]
+    payload = responses[0][1]
+    assert responses[0][0] == 200
+    assert payload["status"] == "ok"
+    assert payload["service"] == "qalos-remote-control"
+    # The mock android_release is MOCK_ANDROID_RELEASE ("15"); the
+    # on-device value is android.os.Build.VERSION.RELEASE.
+    assert "android" in payload
 
 
 def test_display(api):
@@ -160,6 +166,124 @@ def test_screenshot_rejects_quality_too_low(api):
 def test_screenshot_rejects_quality_too_high(api):
     responses, _ = _capture(api, "GET", "/screenshot", {"quality": 101})
     assert responses[0][0] == 400
+
+
+# ----------------------------------------------------------------------
+# Gestures (v0.1)
+# ----------------------------------------------------------------------
+
+def test_long_press_happy(api):
+    responses, calls = _capture(api, "POST", "/long_press",
+                                {"x": 100, "y": 200, "duration_ms": 500})
+    assert responses == [(200, {"status": "ok"})]
+    assert calls == [("POST", "/long_press",
+                      {"x": 100, "y": 200, "duration_ms": 500})]
+
+
+def test_long_press_rejects_missing_duration(api):
+    responses, _ = _capture(api, "POST", "/long_press", {"x": 100, "y": 200})
+    assert responses[0][0] == 400
+    assert "duration_ms" in responses[0][1]["message"]
+
+
+def test_long_press_rejects_negative_coords(api):
+    responses, _ = _capture(api, "POST", "/long_press",
+                            {"x": -1, "y": 200, "duration_ms": 500})
+    assert responses[0][0] == 400
+    assert "non-negative" in responses[0][1]["message"]
+
+
+def test_long_press_rejects_too_short_duration(api):
+    responses, _ = _capture(api, "POST", "/long_press",
+                            {"x": 100, "y": 200, "duration_ms": 0})
+    assert responses[0][0] == 400
+
+
+def test_swipe_happy(api):
+    responses, _ = _capture(api, "POST", "/swipe", {
+        "x1": 100, "y1": 500, "x2": 900, "y2": 500,
+        "steps": 10, "duration_ms": 200,
+    })
+    assert responses == [(200, {"status": "ok"})]
+
+
+def test_swipe_rejects_missing_steps(api):
+    responses, _ = _capture(api, "POST", "/swipe", {
+        "x1": 100, "y1": 500, "x2": 900, "y2": 500, "duration_ms": 200,
+    })
+    assert responses[0][0] == 400
+    assert "steps" in responses[0][1]["message"]
+
+
+def test_swipe_rejects_zero_steps(api):
+    responses, _ = _capture(api, "POST", "/swipe", {
+        "x1": 100, "y1": 500, "x2": 900, "y2": 500,
+        "steps": 0, "duration_ms": 200,
+    })
+    assert responses[0][0] == 400
+
+
+def test_pinch_happy(api):
+    responses, _ = _capture(api, "POST", "/pinch", {
+        "cx": 540, "cy": 1200, "r1": 100, "r2": 300,
+        "steps": 10, "duration_ms": 200,
+    })
+    assert responses == [(200, {"status": "ok"})]
+
+
+def test_pinch_rejects_zero_r1(api):
+    responses, _ = _capture(api, "POST", "/pinch", {
+        "cx": 540, "cy": 1200, "r1": 0, "r2": 300,
+        "steps": 10, "duration_ms": 200,
+    })
+    assert responses[0][0] == 400
+
+
+def test_pinch_rejects_out_of_bounds_center(api):
+    responses, _ = _capture(api, "POST", "/pinch", {
+        "cx": 99999, "cy": 1200, "r1": 100, "r2": 300,
+        "steps": 10, "duration_ms": 200,
+    })
+    assert responses[0][0] == 400
+
+
+# ----------------------------------------------------------------------
+# Discovery (v0.1): /capabilities + /info
+# ----------------------------------------------------------------------
+
+def test_capabilities_happy(api):
+    responses, _ = _capture(api, "GET", "/capabilities")
+    payload = responses[0][1]
+    assert responses[0][0] == 200
+    assert payload["service"] == "qalos-remote-control"
+    assert payload["api_version"] == 1
+    assert "build_id" in payload
+    assert "started_at" in payload
+    assert "uptime_ms" in payload
+    assert "endpoints" in payload
+    for required in ("health", "tap", "long_press", "swipe", "pinch",
+                     "screenshot", "capabilities", "info"):
+        assert required in payload["endpoints"], \
+            f"{required} missing from capabilities endpoints"
+
+
+def test_info_happy(api):
+    responses, _ = _capture(api, "GET", "/info")
+    payload = responses[0][1]
+    assert responses[0][0] == 200
+    assert payload["manufacturer"] == "Mock"
+    assert payload["model"] == "qalos-emulator-mock"
+    assert payload["android_release"] == "15"
+    assert payload["android_sdk"] == 35
+    assert payload["display_width"] == 1080
+    assert payload["display_height"] == 2400
+    assert payload["foreground_package"] == "com.android.launcher"
+
+
+def test_info_reflects_foreground_change(api):
+    api.foreground_package = "com.example.app"
+    responses, _ = _capture(api, "GET", "/info")
+    assert responses[0][1]["foreground_package"] == "com.example.app"
 
 
 # ----------------------------------------------------------------------

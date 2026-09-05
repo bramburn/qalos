@@ -5,7 +5,7 @@ A pure-Python stand-in for the on-device service, intended for
 host-side testing of the Python client SDK and any future LLM agent
 loop. It is **not** a behaviour-faithful emulator — the real service
 calls into ``InputManagerService``, ``IActivityManager`` and
-``SurfaceControl``; this mock just records what was asked and
+``ScreenCapture``; this mock just records what was asked and
 returns canned responses.
 
 Run standalone::
@@ -44,6 +44,22 @@ DEFAULT_DISPLAY_HEIGHT = 2400
 # (`website/docs/qa-lab-os/api.md`). Bodies larger than this are
 # rejected with HTTP 413 before any handler runs.
 MAX_BODY_BYTES = 64 * 1024
+
+# Mirrors the on-device service. Bump when the wire shape changes.
+MOCK_SERVICE_VERSION = "0.1.0"
+MOCK_API_VERSION = 1
+MOCK_BUILD_ID = "mock-build-20260905-0000"
+MOCK_STARTED_AT_MS = 1735689600000  # fixed for deterministic tests
+MOCK_ANDROID_RELEASE = "15"
+MOCK_ANDROID_SDK = 35
+MOCK_MANUFACTURER = "Mock"
+MOCK_MODEL = "qalos-emulator-mock"
+MOCK_ENDPOINTS = [
+    "health", "display", "screenshot", "foreground",
+    "tap", "type", "key", "launch", "force_stop",
+    "long_press", "swipe", "pinch",
+    "capabilities", "info",
+]
 
 
 def _strip_query(path: str) -> str:
@@ -84,13 +100,15 @@ def _parse_query(path: str) -> dict:
             out[key] = value
     return out
 
-# 1x1 transparent PNG, base64-encoded. Returned for every screenshot.
-PLACEHOLDER_PNG_B64 = base64.b64encode(
-    bytes.fromhex(
-        "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4"
-        "890000000d49444154789c6300010000000500010d0a2db40000000049454e44ae426082"
-    )
-).decode("ascii")
+# 1x1 transparent RGBA PNG, base64-encoded. Returned for every
+# screenshot. The previous hex had a length/checksum mismatch that
+# made the file un-re-saveable (Image.open succeeded because PIL is
+# lenient on open, but Image.save triggered a strict re-parse). This
+# canonical 1x1 PNG round-trips cleanly.
+PLACEHOLDER_PNG_B64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNg"
+    "AAIAAAUAAXpeqz8AAAAASUVORK5CYII="
+)
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -214,8 +232,8 @@ class MockRemoteControlAPI:
         if method == "GET" and path == "/health":
             respond(200, {
                 "status": "ok",
-                "device": "mock",
-                "android": "mock",
+                "service": "qalos-remote-control",
+                "android": MOCK_ANDROID_RELEASE,
             })
             return
         if method == "GET" and path == "/display":
@@ -226,6 +244,30 @@ class MockRemoteControlAPI:
             return
         if method == "GET" and path == "/foreground":
             respond(200, {"package": self.foreground_package})
+            return
+        if method == "GET" and path == "/capabilities":
+            uptime_ms = max(0, 1735689600000 - MOCK_STARTED_AT_MS)
+            # Real-looking uptime; not used for assertions.
+            respond(200, {
+                "service": "qalos-remote-control",
+                "service_version": MOCK_SERVICE_VERSION,
+                "api_version": MOCK_API_VERSION,
+                "build_id": MOCK_BUILD_ID,
+                "started_at": MOCK_STARTED_AT_MS,
+                "uptime_ms": 12345,
+                "endpoints": list(MOCK_ENDPOINTS),
+            })
+            return
+        if method == "GET" and path == "/info":
+            respond(200, {
+                "manufacturer": MOCK_MANUFACTURER,
+                "model": MOCK_MODEL,
+                "android_release": MOCK_ANDROID_RELEASE,
+                "android_sdk": MOCK_ANDROID_SDK,
+                "display_width": self.display_width,
+                "display_height": self.display_height,
+                "foreground_package": self.foreground_package,
+            })
             return
         if method == "POST" and path == "/tap":
             self._handle_tap(body, respond)
@@ -241,6 +283,15 @@ class MockRemoteControlAPI:
             return
         if method == "POST" and path == "/force_stop":
             self._handle_force_stop(body, respond)
+            return
+        if method == "POST" and path == "/long_press":
+            self._handle_long_press(body, respond)
+            return
+        if method == "POST" and path == "/swipe":
+            self._handle_swipe(body, respond)
+            return
+        if method == "POST" and path == "/pinch":
+            self._handle_pinch(body, respond)
             return
         respond(404, {"status": "error", "message": f"no such endpoint: {method} {path}"})
 
@@ -304,6 +355,56 @@ class MockRemoteControlAPI:
     def _handle_force_stop(self, body: dict, respond) -> None:
         package = self._need(body, "package")
         _validate_package_name(package)
+        respond(200, {"status": "ok"})
+
+    def _handle_long_press(self, body: dict, respond) -> None:
+        x = int(self._need(body, "x"))
+        y = int(self._need(body, "y"))
+        if x < 0 or y < 0:
+            raise _BadRequest("coordinates must be non-negative")
+        if x >= self.display_width or y >= self.display_height:
+            raise _BadRequest(
+                f"coordinates ({x}, {y}) outside display "
+                f"({self.display_width}x{self.display_height})"
+            )
+        duration = int(self._need(body, "duration_ms"))
+        if duration < 1:
+            raise _BadRequest("duration_ms must be >= 1")
+        respond(200, {"status": "ok"})
+
+    def _handle_swipe(self, body: dict, respond) -> None:
+        for k in ("x1", "y1", "x2", "y2"):
+            v = int(self._need(body, k))
+            if v < 0:
+                raise _BadRequest(f"{k} must be non-negative")
+            if v >= (self.display_width if k in ("x1", "x2") else self.display_height):
+                raise _BadRequest(
+                    f"{k}={v} outside display "
+                    f"({self.display_width}x{self.display_height})"
+                )
+        steps = int(self._need(body, "steps"))
+        if steps < 1:
+            raise _BadRequest("steps must be >= 1")
+        duration = int(self._need(body, "duration_ms"))
+        if duration < 1:
+            raise _BadRequest("duration_ms must be >= 1")
+        respond(200, {"status": "ok"})
+
+    def _handle_pinch(self, body: dict, respond) -> None:
+        cx = int(self._need(body, "cx"))
+        cy = int(self._need(body, "cy"))
+        if cx < 0 or cy < 0 or cx >= self.display_width or cy >= self.display_height:
+            raise _BadRequest("cx/cy must be inside the display")
+        r1 = int(self._need(body, "r1"))
+        r2 = int(self._need(body, "r2"))
+        if r1 < 1 or r2 < 1:
+            raise _BadRequest("r1 and r2 must be >= 1")
+        steps = int(self._need(body, "steps"))
+        if steps < 1:
+            raise _BadRequest("steps must be >= 1")
+        duration = int(self._need(body, "duration_ms"))
+        if duration < 1:
+            raise _BadRequest("duration_ms must be >= 1")
         respond(200, {"status": "ok"})
 
 
