@@ -1,0 +1,61 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "input": {
+    "maxFileSize": 524288
+  },
+  "output": {
+    "filePath": "D:\\qalos\\.worktrees\\qa-lab-os-v0\\.pi\\out\\repomix-v0.1.xml",
+    "style": "xml",
+    "parsableStyle": true,
+    "fileSummary": true,
+    "directoryStructure": true,
+    "files": true,
+    "removeComments": false,
+    "removeEmptyLines": false,
+    "topFilesLength": 20,
+    "showLineNumbers": true,
+    "copyToClipboard": false,
+    "compress": false,
+    "tokenCountTree": 100
+  },
+  "include": [
+    "packages/apps/RemoteControlService/patches/0002-AndroidManifest-REMOTE_CONTROL-permission.py",
+    "packages/apps/RemoteControlService/patches/0003-strings-REMOTE_CONTROL.py",
+    "packages/apps/RemoteControlService/patches/0004-SystemServer-StartRemoteControlService.py",
+    "packages/apps/RemoteControlService/patches/check-patches.py",
+    "packages/apps/RemoteControlService/src/com/qalos/remotectl/IRemoteControl.java",
+    "packages/apps/RemoteControlService/src/com/qalos/remotectl/RemoteControlService.java",
+    "packages/apps/RemoteControlService/src/com/qalos/remotectl/HttpApiServer.java",
+    "tools/qa-lab-os/README.md",
+    "tools/qa-lab-os/client.py",
+    "tools/qa-lab-os/mock_server.py",
+    "tools/qa-lab-os/cli.py",
+    "tools/qa-lab-os/pyproject.toml",
+    "tools/qa-lab-os/tests/test_client.py",
+    "tools/qa-lab-os/tests/test_mock_server.py",
+    "tools/qa-lab-os/tests/test_cli.py",
+    "website/docs/qa-lab-os/api.md",
+    "website/docs/qa-lab-os/followup-work.md",
+    "website/docs/qa-lab-os/connecting.md",
+    "website/sidebars.js"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      ".pi/**",
+      "node_modules/**",
+      "__pycache__/**",
+      ".pytest_cache/**",
+      "out/**",
+      "*.pyc",
+      "*.class"
+    ]
+  },
+  "security": {
+    "enableSecurityCheck": true
+  },
+  "tokenCount": {
+    "encoding": "o200k_base"
+  }
+}

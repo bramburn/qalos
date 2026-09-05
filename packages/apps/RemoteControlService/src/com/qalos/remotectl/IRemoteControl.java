@@ -47,6 +47,25 @@ final class ServiceInfo {
 }
 
 /**
+ * Screenshot payload with effective dimensions. Returned by
+ * {@link IRemoteControl#screenshotBase64}. The base64 string is the
+ * PNG bytes; the width/height are the dimensions the bitmap was
+ * actually encoded at (not necessarily the requested ones — passing
+ * 0 means "native display size" and the result reflects that).
+ */
+final class ScreenshotResult {
+    public final String base64;
+    public final int width;
+    public final int height;
+
+    ScreenshotResult(String base64, int width, int height) {
+        this.base64 = base64;
+        this.width = width;
+        this.height = height;
+    }
+}
+
+/**
  * Device-side metadata. Returned by {@link IRemoteControl#getDeviceInfo()}.
  */
 final class DeviceInfo {
@@ -99,8 +118,13 @@ interface IRemoteControl {
     int getDisplayHeight(int displayId);
 
     // --- Screenshot (returns a base64-encoded PNG so the HTTP layer
-    //     does not need to encode it again). ---
-    String screenshotBase64(int width, int height, int displayId, int quality);
+    //     does not need to encode it again). The result includes the
+    //     *effective* capture dimensions, which may differ from the
+    //     requested (width, height) when the caller passed 0. v0.1.1
+    //     review-triage: the HTTP layer echoes these back to the
+    //     client so a `?width=0&height=0` request returns native
+    //     display dimensions, not 0. ---
+    ScreenshotResult screenshotBase64(int width, int height, int displayId, int quality);
 
     // --- Service / device metadata (v0.1) ---
     ServiceInfo getServiceInfo();

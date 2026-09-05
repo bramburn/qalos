@@ -184,6 +184,86 @@ def test_pinch_rejects_zero_radius(device, server):
 
 
 # ----------------------------------------------------------------------
+# v0.1.1 review-triage regressions
+# ----------------------------------------------------------------------
+
+def test_pinch_rejects_negative_center_client_side(device, server):
+    """Negative (cx, cy) is caught by the client before any HTTP call.
+
+    Regression for the v0.1.1 client-side validation gap. The server
+    was already catching it (via the extreme-points check), but the
+    client should pre-validate the centre coordinates the same way
+    it does for tap/long_press.
+    """
+    with pytest.raises(ValueError):
+        device.pinch(-1, 1200, 100, 300)
+    with pytest.raises(ValueError):
+        device.pinch(540, -1, 100, 300)
+    assert server.api.calls == []
+
+
+def test_long_press_rejects_overlong_duration_client_side(device, server):
+    """duration_ms > MAX_LONG_PRESS_MS is rejected client-side.
+
+    Regression for the v0.1.1 client-side upper-bound check.
+    """
+    from client import MAX_LONG_PRESS_MS
+    with pytest.raises(ValueError):
+        device.long_press(540, 1200, MAX_LONG_PRESS_MS + 1)
+    assert server.api.calls == []
+
+
+def test_swipe_rejects_overlong_duration_client_side(device, server):
+    """duration_ms > MAX_GESTURE_DURATION_MS is rejected client-side."""
+    from client import MAX_GESTURE_DURATION_MS
+    with pytest.raises(ValueError):
+        device.swipe(0, 0, 100, 100, steps=10,
+                     duration_ms=MAX_GESTURE_DURATION_MS + 1)
+    assert server.api.calls == []
+
+
+def test_swipe_rejects_too_many_steps_client_side(device, server):
+    """steps > MAX_GESTURE_STEPS is rejected client-side."""
+    from client import MAX_GESTURE_STEPS
+    with pytest.raises(ValueError):
+        device.swipe(0, 0, 100, 100, steps=MAX_GESTURE_STEPS + 1,
+                     duration_ms=200)
+    assert server.api.calls == []
+
+
+def test_pinch_rejects_too_many_steps_client_side(device, server):
+    """steps > MAX_GESTURE_STEPS is rejected client-side."""
+    from client import MAX_GESTURE_STEPS
+    with pytest.raises(ValueError):
+        device.pinch(540, 1200, 100, 300, steps=MAX_GESTURE_STEPS + 1,
+                     duration_ms=200)
+    assert server.api.calls == []
+
+
+def test_invalidate_cache_clears_all_caches(device, server):
+    """invalidate_cache() forces the next access to re-fetch.
+
+    Regression for the v0.1 cache-never-invalidated issue. Without
+    this, a rotation or build upgrade would leave stale data.
+    """
+    # Warm all three caches.
+    _ = device.display_size
+    _ = device.capabilities
+    _ = device.info
+    # The mock records calls only on /tap etc., but the public
+    # /display, /capabilities, /info calls go through the same HTTP
+    # path. We can observe a re-fetch by mutating the mock state
+    # BEFORE invalidating and verifying the second access picks up
+    # the mutation.
+    server.api.foreground_package = "com.example.app"
+    # Cache still has the old (launcher) value.
+    assert device.info.foreground_package == "com.android.launcher"
+    # After invalidating, the next access re-fetches.
+    device.invalidate_cache()
+    assert device.info.foreground_package == "com.example.app"
+
+
+# ----------------------------------------------------------------------
 # Discovery (v0.1): /capabilities + /info
 # ----------------------------------------------------------------------
 

@@ -259,7 +259,7 @@ public final class RemoteControlService extends SystemService implements IRemote
     }
 
     @Override
-    public String screenshotBase64(int width, int height, int displayId, int quality) {
+    public ScreenshotResult screenshotBase64(int width, int height, int displayId, int quality) {
         if (quality < 1 || quality > 100) {
             throw new IllegalArgumentException("quality must be in [1, 100]");
         }
@@ -356,14 +356,17 @@ public final class RemoteControlService extends SystemService implements IRemote
             down.setDisplayId(displayId);
             up.setDisplayId(displayId);
         }
+        // MotionEvent.recycle() is deprecated since API 28; in AOSP 15
+        // MotionEvents are pooled by the finalizer. Calling recycle()
+        // is harmless but unnecessary; align with the Bitmap.recycle()
+        // cleanup already in followup-work.md (review-triage 2026-09-05).
         try {
             injectEvent(down);
             injectEvent(up);
-        } finally {
-            // Recycle even on the error path so a failed tap does not
-            // leak a MotionEvent allocation.
-            down.recycle();
-            up.recycle();
+        } catch (RuntimeException e) {
+            // The events are now owned by the input system; on failure
+            // we let them drain via the finalizer rather than recycling.
+            throw e;
         }
     }
 
@@ -425,7 +428,8 @@ public final class RemoteControlService extends SystemService implements IRemote
                 0, 1.0f, 1.0f, 0, 0);
         if (displayId != 0) down.setDisplayId(displayId);
         injectEvent(down);
-        down.recycle();
+        // MotionEvent.recycle() deprecated in API 28; AOSP 15 pools
+        // automatically (see injectTap). Review-triage 2026-09-05.
 
         try {
             Thread.sleep(durationMs);
@@ -439,7 +443,6 @@ public final class RemoteControlService extends SystemService implements IRemote
                 0, 1.0f, 1.0f, 0, 0);
         if (displayId != 0) up.setDisplayId(displayId);
         injectEvent(up);
-        up.recycle();
     }
 
     private void injectSwipe(int x1, int y1, int x2, int y2,
@@ -450,7 +453,6 @@ public final class RemoteControlService extends SystemService implements IRemote
                 0, 1.0f, 1.0f, 0, 0);
         if (displayId != 0) down.setDisplayId(displayId);
         injectEvent(down);
-        down.recycle();
 
         final long stepMillis = Math.max(1, durationMs / steps);
         for (int i = 1; i <= steps; i++) {
@@ -463,11 +465,15 @@ public final class RemoteControlService extends SystemService implements IRemote
                     0, 1.0f, 1.0f, 0, 0);
             if (displayId != 0) move.setDisplayId(displayId);
             injectEvent(move);
-            move.recycle();
-            // Best-effort pacing. The framework's input dispatcher
-            // tolerates bursts, but a short sleep per frame gives
-            // the receiving app a chance to repaint.
-            try { Thread.sleep(1); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            // Align wall-clock pacing with the event timestamps so the
+            // gesture is not collapsed by the dispatcher. Previously
+            // this was a hard-coded `Thread.sleep(1)`; with steps=20
+            // and durationMs=300 that meant 20ms of wall-clock for
+            // 300ms of timestamp span, and the dispatcher would
+            // sometimes drop intermediate events. Review-triage
+            // 2026-09-05.
+            try { Thread.sleep(stepMillis); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
         }
 
         final long tN = t0 + durationMs;
@@ -476,7 +482,6 @@ public final class RemoteControlService extends SystemService implements IRemote
                 0, 1.0f, 1.0f, 0, 0);
         if (displayId != 0) up.setDisplayId(displayId);
         injectEvent(up);
-        up.recycle();
     }
 
     private void injectPinch(int cx, int cy, int r1, int r2,
@@ -495,6 +500,10 @@ public final class RemoteControlService extends SystemService implements IRemote
             pc[i].pressure = 1.0f;
             pc[i].size = 1.0f;
         }
+        // Multi-pointer events are stricter about the `source` field.
+        // Use SOURCE_TOUCHSCREEN explicitly so the dispatcher routes
+        // them to the touch input pipeline (review-triage 2026-09-05).
+        final int source = InputDevice.SOURCE_TOUCHSCREEN;
         final long t0 = SystemClock.uptimeMillis();
         // ACTION_DOWN with one pointer.
         pc[0].x = cx - r1;
@@ -503,10 +512,11 @@ public final class RemoteControlService extends SystemService implements IRemote
         pc[1].y = 0;
         MotionEvent down = MotionEvent.obtain(
                 t0, t0, MotionEvent.ACTION_DOWN, 1, pp, pc,
-                0, 0, 1.0f, 1.0f, 0, 0, 0, 0);
+                0, 0, 1.0f, 1.0f, 0, 0, source, 0);
         if (displayId != 0) down.setDisplayId(displayId);
         injectEvent(down);
-        down.recycle();
+        // MotionEvent.recycle() deprecated in API 28; AOSP 15 pools
+        // automatically (see injectTap). Review-triage 2026-09-05.
 
         // ACTION_POINTER_DOWN (second pointer lands).
         pc[0].x = cx - r1;
@@ -517,10 +527,9 @@ public final class RemoteControlService extends SystemService implements IRemote
                 t0 + 1, t0 + 1,
                 MotionEvent.ACTION_POINTER_DOWN
                         | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
-                2, pp, pc, 0, 0, 1.0f, 1.0f, 0, 0, 0, 0);
+                2, pp, pc, 0, 0, 1.0f, 1.0f, 0, 0, source, 0);
         if (displayId != 0) pointerDown.setDisplayId(displayId);
         injectEvent(pointerDown);
-        pointerDown.recycle();
 
         // `steps` ACTION_MOVE events with both pointers, r interpolating.
         final long stepMillis = Math.max(1, durationMs / steps);
@@ -534,11 +543,15 @@ public final class RemoteControlService extends SystemService implements IRemote
             pc[1].y = cy;
             MotionEvent move = MotionEvent.obtain(
                     t, t, MotionEvent.ACTION_MOVE, 2, pp, pc,
-                    0, 0, 1.0f, 1.0f, 0, 0, 0, 0);
+                    0, 0, 1.0f, 1.0f, 0, 0, source, 0);
             if (displayId != 0) move.setDisplayId(displayId);
             injectEvent(move);
-            move.recycle();
-            try { Thread.sleep(1); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            // Align wall-clock pacing with the event timestamps so the
+            // gesture is not collapsed by the dispatcher. See
+            // injectSwipe for the full rationale. Review-triage
+            // 2026-09-05.
+            try { Thread.sleep(stepMillis); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
         }
 
         // ACTION_POINTER_UP (second pointer lifts).
@@ -551,10 +564,9 @@ public final class RemoteControlService extends SystemService implements IRemote
                 tN, tN,
                 MotionEvent.ACTION_POINTER_UP
                         | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
-                2, pp, pc, 0, 0, 1.0f, 1.0f, 0, 0, 0, 0);
+                2, pp, pc, 0, 0, 1.0f, 1.0f, 0, 0, source, 0);
         if (displayId != 0) pointerUp.setDisplayId(displayId);
         injectEvent(pointerUp);
-        pointerUp.recycle();
 
         // ACTION_UP (final pointer up).
         pc[0].x = cx - r2;
@@ -563,10 +575,9 @@ public final class RemoteControlService extends SystemService implements IRemote
         pc[1].y = cy;
         MotionEvent up = MotionEvent.obtain(
                 tN, tN, MotionEvent.ACTION_UP, 1, pp, pc,
-                0, 0, 0.0f, 0.0f, 0, 0, 0, 0);
+                0, 0, 0.0f, 0.0f, 0, 0, source, 0);
         if (displayId != 0) up.setDisplayId(displayId);
         injectEvent(up);
-        up.recycle();
     }
 
     // ------------------------------------------------------------------
@@ -650,8 +661,13 @@ public final class RemoteControlService extends SystemService implements IRemote
         // legacy API; tap coordinates are also in pixels.
         // S-B in the v0 followup list: migrate to
         // `WindowManager.getCurrentWindowMetrics().getBounds()` in v1.
+        // Note: the `display` argument above is the one that matches
+        // `displayId` — do NOT call `mContext.getDisplay()` here, that
+        // returns the context's own display (always display 0 in
+        // system_server) and silently ignores the requested displayId.
+        // Review-triage 2026-09-05.
         final android.graphics.Point size = new android.graphics.Point();
-        mContext.getDisplay().getRealSize(size);
+        display.getRealSize(size);
         // android.util.Size.of(int, int) was removed in AOSP 15; use the
         // public 2-arg constructor instead.
         return new Size(size.x, size.y);
@@ -661,11 +677,13 @@ public final class RemoteControlService extends SystemService implements IRemote
     // Screenshot
     // ------------------------------------------------------------------
 
-    private String screenshotBase64Internal(int width, int height,
+    private ScreenshotResult screenshotBase64Internal(int width, int height,
                                              Display display, int quality) {
         // Resolve capture size: 0 means native display size.
-        final int capW = width > 0 ? width : display.getMode().getMode().getPhysicalWidth();
-        final int capH = height > 0 ? height : display.getMode().getMode().getPhysicalHeight();
+        // `Display.getMode()` returns a `Display.Mode`; there is no
+        // `getMode()` on that type. Review-triage 2026-09-05.
+        final int capW = width > 0 ? width : display.getMode().getPhysicalWidth();
+        final int capH = height > 0 ? height : display.getMode().getPhysicalHeight();
 
         ScreenCapture.CaptureDisplayArgs args =
                 new ScreenCapture.CaptureDisplayArgs.Builder(display)
@@ -687,9 +705,19 @@ public final class RemoteControlService extends SystemService implements IRemote
             // requested size; if the caller passed 0, the bitmap is
             // already at the native resolution.
             // (No rescale: the framework honors setSize exactly.)
+            // NOTE: `quality` is ignored by `Bitmap.compress` for PNG
+            // (PNG is lossless). The parameter is accepted for forward
+            // compatibility with a future JPEG backend; clients should
+            // not depend on it. Documented in api.md.
             final ByteArrayOutputStream baos = new ByteArrayOutputStream(64 * 1024);
             bitmap.compress(Bitmap.CompressFormat.PNG, quality, baos);
-            return Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
+            final String b64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
+            // Return the *effective* capture size (not the requested
+            // params) so the HTTP layer can echo the truth to the
+            // client. When `width=0`/`height=0` was passed, the bitmap
+            // is at native display resolution and that is what we
+            // return. Review-triage 2026-09-05.
+            return new ScreenshotResult(b64, bitmap.getWidth(), bitmap.getHeight());
         } finally {
             if (bitmap != null) bitmap.recycle();
             // The underlying HardwareBuffer must be released. The class

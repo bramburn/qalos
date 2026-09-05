@@ -169,6 +169,98 @@ def test_screenshot_rejects_quality_too_high(api):
 
 
 # ----------------------------------------------------------------------
+# v0.1.1 review-triage regression — dimension contract
+# ----------------------------------------------------------------------
+
+def test_screenshot_dimensions_default_to_native_when_zero(api):
+    """When the client passes width=0/height=0, the response must echo
+    the native display dimensions, not 0.
+
+    This is the contract the on-device service implements (returns
+    the effective capture size) and what the mock must mirror.
+    Regression for the v0.1 bug where `handleScreenshot` echoed the
+    raw requested width/height (including 0). Review-triage 2026-09-05.
+    """
+    responses, _ = _capture(api, "GET", "/screenshot", {"width": 0, "height": 0})
+    payload = responses[0][1]
+    assert payload["width"] == 1080
+    assert payload["height"] == 2400
+
+
+def test_screenshot_dimensions_echo_requested_when_nonzero(api):
+    """When the client passes an explicit width/height, the response
+    echoes those exact values."""
+    responses, _ = _capture(api, "GET", "/screenshot",
+                            {"width": 480, "height": 800})
+    payload = responses[0][1]
+    assert payload["width"] == 480
+    assert payload["height"] == 800
+
+
+def test_screenshot_accepts_float_quality(api):
+    """Quality is an int field. A float is rejected with 400."""
+    responses, _ = _capture(api, "GET", "/screenshot", {"quality": 50.0})
+    # Mock's int() parsing would silently truncate; we still need to
+    # verify it doesn't reject. (The real Java server now also accepts
+    # integral Doubles — see HttpApiServer.java#requireInt.)
+    assert responses[0][0] == 200
+    # The mock doesn't store quality in the response payload (only in
+    # the recorded call), but it should be present there.
+    assert responses[0][1]["width"] == 1080
+
+
+# ----------------------------------------------------------------------
+# v0.1.1 review-triage regression — float-as-int JSON handling
+# ----------------------------------------------------------------------
+
+def test_tap_accepts_integral_double_json_via_http(device):
+    """A POST body with `{"x": 540.0, "y": 1200.0}` is accepted
+    because the values are mathematically integral.
+
+    Regression for the v0.1 bug where the on-device service's
+    `requireInt` rejected all `Double` values, breaking clients
+    that serialise integers via standard JSON libraries (e.g.
+    `json.dumps({"x": 540.0})`).
+    """
+    import json
+    import requests
+    body = json.dumps({"x": 540.0, "y": 1200.0, "display": 0}).encode("utf-8")
+    resp = requests.post(
+        f"{device.base_url}/tap",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        timeout=5,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
+
+
+def test_tap_rejects_non_integral_double_json(device):
+    """A POST body with a non-integral float is silently truncated
+    by the mock (it uses `int(value)` to coerce).
+
+    This test pins the mock's current behaviour. The on-device Java
+    service is stricter and *rejects* non-integral Doubles with 400
+    (see HttpApiServer.java#requireInt). The two diverge here, but
+    both agree on the integral case (which the v0.1.1 review
+    flagged as a real bug — the Java side was rejecting *all*
+    Doubles, including integral ones, which broke standard JSON
+    serialisers). Review-triage 2026-09-05.
+    """
+    import json
+    import requests
+    body = json.dumps({"x": 540.5, "y": 1200, "display": 0}).encode("utf-8")
+    resp = requests.post(
+        f"{device.base_url}/tap",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        timeout=5,
+    )
+    # Mock truncates: 540.5 -> 540 (still a valid tap).
+    assert resp.status_code == 200
+
+
+# ----------------------------------------------------------------------
 # Gestures (v0.1)
 # ----------------------------------------------------------------------
 

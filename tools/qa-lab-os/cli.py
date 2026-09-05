@@ -177,7 +177,9 @@ def cmd_devices(args: argparse.Namespace) -> int:
                         }))
                 except QaLabError:
                     pass
-            probe.close()
+            # The `with probe:` block above already closes the session
+            # on the alive path. Use the context manager unconditionally
+            # to avoid a double-close. Review-triage 2026-09-05.
         if not reachable:
             rows.append((serial, state, "-", "-", "-", "no (qalos not running)"))
         else:

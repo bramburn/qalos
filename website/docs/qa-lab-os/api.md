@@ -169,13 +169,13 @@ curl 'http://localhost:9000/screenshot?width=480&height=800&quality=85'
 | `width` | 0 (native) | `0..display_width` | **capture** width (not downscale) |
 | `height` | 0 (native) | `0..display_height` | **capture** height (not downscale) |
 | `display` | 0 | integer | display ID (0 = primary) |
-| `quality` | 85 | `1..100` | PNG compression level |
+| `quality` | 85 | `1..100` | PNG compression hint (see note) |
 
 ```json
 {
   "image": "<base64 PNG bytes>",
-  "width": 480,
-  "height": 800,
+  "width": 1080,
+  "height": 2400,
   "format": "png"
 }
 ```
@@ -184,8 +184,20 @@ curl 'http://localhost:9000/screenshot?width=480&height=800&quality=85'
 resolution." A non-zero value asks the framework to capture at that
 resolution; the framework does not down-scale, so a captured image
 of `480x800` is exactly `480x800` pixels (not a 1080x2400 source
-down-scaled). The PNG is compressed at the requested quality; lower
-quality → smaller payload → faster LLM inference.
+down-scaled). The `width` and `height` in the response are the
+**effective** capture dimensions — when `?width=0&height=0` is
+sent, the client sees the native display resolution, not 0.
+(Updated v0.1.1 review-triage 2026-09-05.)
+
+**`quality` is a forward-compatibility hint, not a tuning knob.**
+Android's `Bitmap.compress(CompressFormat.PNG, quality, ...)` ignores
+the `quality` argument for PNG (PNG is lossless; the parameter is
+reserved for JPEG/WEBP backends). The on-device service accepts and
+echoes the field so the API surface matches a future JPEG backend,
+but the encoded bytes today are independent of `quality` — sending
+`quality=1` and `quality=100` produces identical output. Clients
+that care about payload size should request a smaller `width`/`height`
+instead. Review-triage 2026-09-05.
 
 The capture is performed by `android.window.ScreenCapture.captureDisplay`
 on a worker thread (the binder thread is not blocked). The underlying

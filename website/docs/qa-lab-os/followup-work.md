@@ -86,6 +86,61 @@ are real but do not block the v0 build or behaviour:
 | F-3.3 | `HttpApiServer` dispatch table | The switch + if-ladder works but is hard to extend. Replace with a `Map<String, BiConsumer<...>>` populated in the constructor. |
 | F-3.6 | `QaLabError.code` and `QaLabError.http_status` fields | The current `QaLabError` is a bare `RuntimeError` subclass. Add structured fields so the agent loop can branch on error class. |
 
+## v0.1.1 review-triage (2026-09-05)
+
+A second LLM reviewed the v0.1 changes (commit `867bcaf`) and
+flagged 4 must-fix bugs plus 9 should-fix items. All must-fixes
+and 7 of the 9 should-fixes are applied in v0.1.1 (the same
+commit that ships the gestures). The deferred items are noted in
+each row.
+
+### Must-fixes (all applied)
+
+| ID | What was wrong | Fix |
+| --- | --- | --- |
+| M-1 | `RemoteControlService.screenshotBase64Internal` called `display.getMode().getMode().getPhysicalWidth()` — there is no `getMode()` on `Display.Mode`, this would `NoSuchMethodError` on the first `/screenshot` | One-token fix: dropped the second `.getMode()` |
+| M-2 | `getDisplaySizeInternal(int displayId)` ignored its `displayId` argument and called `mContext.getDisplay().getRealSize(...)` (always display 0 in system_server) | Use the `display` object resolved by `mDisplayManager.getDisplay(displayId)` |
+| M-3 | `handleScreenshot` echoed the raw requested `width`/`height` (including 0) in the JSON response — a `?width=0&height=0` request lied about the captured dimensions | Service now returns a `ScreenshotResult` with effective dimensions; HTTP layer echoes those |
+| M-4 | `dispatch()` had a `catch (JSONException e) { throw new IllegalArgumentException(...); }` — the throw inside the catch escaped *all* the dispatch catches, so a `JSONException` would land in the connection-thread uncaught handler instead of returning 400. Currently unreachable (because `handle()` catches JSONException internally) but a maintenance land-mine | Removed the dead `JSONException` catch from `dispatch()` |
+
+### Should-fixes (applied)
+
+- `requireInt` now accepts integral `Double` values (e.g.
+  `{"x": 540.0}`) so the Java server and the Python mock agree on
+  float-vs-int JSON. The mock already used `int(value)` which
+  silently accepted `20.0`; the Java side now matches.
+- Client-side upper-bound validation on `long_press`/`swipe`/`pinch`
+  matches the server's clamp ranges. Defense in depth.
+- `pinch()` now rejects negative `cx`/`cy` client-side (server
+  already caught it via the extreme-points check).
+- `injectSwipe`/`injectPinch` use `stepMillis` for the inter-frame
+  `Thread.sleep` instead of a hard-coded `1 ms`. Wall-clock pacing
+  now matches the event timestamps so the dispatcher doesn't drop
+  intermediate frames.
+- `cmd_devices` no longer double-closes the `QaLabDevice` session.
+- `MotionEvent.recycle()` calls dropped (deprecated in API 28+; in
+  AOSP 15 the events are pooled automatically). Aligns with the
+  `Bitmap.recycle()` cleanup already in the v0 followup list.
+- `injectPinch` now sets `source = InputDevice.SOURCE_TOUCHSCREEN`
+  on every event (multi-pointer events are stricter about source).
+- `QaLabDevice.invalidate_cache()` method added for callers that
+  need to refresh `display_size`/`capabilities`/`info` after a
+  configuration change without re-creating the client.
+- PNG `quality` parameter is documented as a forward-compat hint
+  in `api.md`. The on-device encoder ignores it today; clients
+  should size via `width`/`height` instead.
+
+### Should-fixes (deferred)
+
+- `MotionEvent.recycle()` removal in the 12-arg `injectTap` path is
+  in place; the 14-arg `injectPinch` / `injectSwipe` paths no
+  longer recycle either, for the same reason.
+- Self-heal test (force-close the listener) and worker-pool
+  saturation test need a real device; deferred to v1 device tests.
+- `readLine` O(n²) `toByteArray()` allocation is real but harmless
+  for a localhost server that processes short requests; deferred
+  to v1 refactor.
+
 ## v1 features (PRD Phase 1.5+)
 
 The original PRD names the following features as "deferred from

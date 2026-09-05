@@ -245,10 +245,6 @@ public final class HttpApiServer extends Thread {
         } catch (UnsupportedOperationException e) {
             // 501 Not Implemented — used for endpoints deferred to v1.
             writeError(out, 501, e.getMessage());
-        } catch (JSONException e) {
-            // Malformed JSON body or unexpected JSON type — surface as 400
-            // so the client can distinguish a bad request from a server bug.
-            throw new IllegalArgumentException("invalid JSON: " + e.getMessage(), e);
         } catch (RuntimeException e) {
             // F-2.2: never let a non-IAE/ISE exception kill the
             // per-connection thread silently. The on-device service
@@ -363,13 +359,16 @@ public final class HttpApiServer extends Thread {
         final int height = body.optInt("height", 0);
         final int quality = body.optInt("quality", 85);
         final int displayId = body.optInt("display", 0);
-        final String b64 = mService.screenshotBase64(width, height, displayId, quality);
+        final ScreenshotResult result =
+                mService.screenshotBase64(width, height, displayId, quality);
         final JSONObject json = new JSONObject();
-        json.put("image", b64);
-        // Report the requested (effective) capture size, not the
-        // input — the client wants to know what was actually captured.
-        json.put("width", width);
-        json.put("height", height);
+        json.put("image", result.base64);
+        // Report the *effective* capture dimensions, not the requested
+        // params. For `?width=0&height=0` the service captures at
+        // native display resolution and the client should see those
+        // numbers, not 0. v0.1.1 review-triage 2026-09-05.
+        json.put("width", result.width);
+        json.put("height", result.height);
         json.put("format", "png");
         writeJson(out, 200, json);
     }
@@ -611,10 +610,23 @@ public final class HttpApiServer extends Thread {
         }
         // optInt would silently default to 0; we want to reject if
         // the field is present but not a number.
+        // v0.1.1 review-triage 2026-09-05: accept integral `Double`
+        // values too (e.g. `{"x": 540.0}`) so this server matches
+        // the Python mock's `int(value)` leniency. JSON has no
+        // separate int/float types, so well-formed clients that
+        // serialise via libraries like Python's `json.dumps(540.0)`
+        // would otherwise see a 400 here.
         final Object v = body.opt(key);
-        if (!(v instanceof Integer) && !(v instanceof Long)) {
-            throw new IllegalArgumentException("field not an integer: " + key);
+        if (v instanceof Integer || v instanceof Long) {
+            return;
         }
+        if (v instanceof Double) {
+            final double d = (Double) v;
+            if (d == Math.floor(d) && !Double.isInfinite(d)) {
+                return;
+            }
+        }
+        throw new IllegalArgumentException("field not an integer: " + key);
     }
 
     private static void requireString(JSONObject body, String key) {
