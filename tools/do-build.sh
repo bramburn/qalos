@@ -188,6 +188,30 @@ log "lunch $BUILD_TARGET-$BUILD_RELEASE-$BUILD_VARIANT"
 source build/envsetup.sh
 lunch "$BUILD_TARGET-$BUILD_RELEASE-$BUILD_VARIANT"
 
+# ----------------------------------------------------------------------------
+# Pre-flight: build ONLY the api-stubs target first (5-15 min on a 16 vCPU
+# c3d-highmem-16, 10-25 min on a c-8). This is the step that catches the
+# metalava `UnflaggedApi` / `@FlaggedApi` lint for any new permissions or
+# APIs the qalos patches added to the framework. If this fails, abort
+# immediately rather than waiting 2-4 hours to discover the same error
+# in the full build. AGENTS.md §8.2 documents why this is needed: the
+# patch dry-run validates *mechanics* (regex match, apply cleanly), not
+# *build behaviour*. The pre-flight closes that gap.
+# ----------------------------------------------------------------------------
+log "PREFLIGHT: building frameworks/base/api:api-stubs-docs-non-updatable (catches metalava UnflaggedApi early)"
+if ! m -j"$BUILD_JOBS" frameworks/base/api:api-stubs-docs-non-updatable 2>&1 | tee "$LOG_DIR/preflight.log"; then
+    log "FATAL: preflight metalava check failed -- new framework API is missing @FlaggedApi"
+    log "  This means one of the qalos patches added a new <permission>, <uses-permission>, or"
+    log "  public class/method that AOSP 15's metalava requires to be @FlaggedApi. The fix is"
+    log "  one of: (a) add a UnflaggedApi entry to frameworks/base/api/lint-baseline.txt, or"
+    log "  (b) define an aconfig flag and reference it in the new code. Do NOT launch a full"
+    log "  cloud build until the preflight passes. See AGENTS.md §8.2 for the workflow."
+    log "  Last 30 lines of preflight.log:"
+    tail -30 "$LOG_DIR/preflight.log" | sed 's/^/  /'
+    shutdown_droplet
+fi
+log "PREFLIGHT: api-stubs-docs-non-updatable built cleanly, proceeding to full build"
+
 log "m -j$BUILD_JOBS (this takes 1-4 hours on a c-8 droplet)"
 m -j"$BUILD_JOBS" 2>&1 | tee "$LOG_DIR/build.log"
 
