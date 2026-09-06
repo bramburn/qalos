@@ -109,6 +109,12 @@ const config = {
             label: 'QA Lab OS',
           },
           {
+            type: 'docSidebar',
+            sidebarId: 'legalSidebar',
+            position: 'left',
+            label: 'Legal',
+          },
+          {
             href: 'https://github.com/bramburn/qalos',
             label: 'GitHub',
             position: 'right',
@@ -124,6 +130,8 @@ const config = {
               { label: 'Get started', to: '/docs/getting-started/' },
               { label: 'Architecture', to: '/docs/architecture/overview' },
               { label: 'Reference', to: '/docs/reference/folder-structure' },
+              { label: 'Legal', to: '/docs/legal/' },
+              { label: 'Legal', to: '/docs/legal/' },
             ],
           },
           {

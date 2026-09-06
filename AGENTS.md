@@ -15,7 +15,7 @@
 - **Three build paths:** Local Linux box (primary), DigitalOcean droplet (fallback #1), Aliyun ECS (fallback #2), GCP Compute Engine (fallback #3).
 - **Cloud SSH transport:** All three cloud paths use **native SSH** to talk to the build instance. The GCP path uses Windows OpenSSH (`C:\Windows\System32\OpenSSH\ssh.exe`) on the host because the gcloud SDK hardcodes PuTTY/Plink which fails against modern Linux VMs (see §7.6).
 - **Single source of truth for on-host build steps:** `tools/do-build.sh`. Both cloud orchestrators invoke it.
-- **Repo:** <https://github.com/bramburn/qalos> · **Docs site:** <https://bramburn.github.io/qalos/> · **License:** MIT (qalos) + Apache 2.0 (AOSP)
+- **Repo:** <https://github.com/bramburn/qalos> · **Docs site:** <https://bramburn.github.io/qalos/> · **License:** MIT (qalos) + Apache 2.0 (AOSP) · **Legal framework:** see [`legal/`](legal/) — the licence covers copying, not use; KYC + audit logging are mandatory for any commercial distribution (see §2.9).
 
 ## 1. Folder layout
 
@@ -27,6 +27,16 @@ qalos/
 ├── CODE_OF_CONDUCT.md
 ├── BRANCH_PROTECTION.md            ← exact gh api command to apply branch protection
 ├── LICENSE                        ← MIT for qalos + Apache 2.0 attribution for AOSP
+│
+├── legal/                         ← LEGAL FRAMEWORK (use restrictions, ToS, KYC, audit, CLA, security)
+│   ├── README.md                  ← the index; which doc applies to whom
+│   ├── DISCLAIMER.md              ← the umbrella: no warranty, no liability for misuse
+│   ├── TERMS_OF_SERVICE.md        ← the binding contract for users
+│   ├── ACCEPTABLE_USE_POLICY.md   ← prohibited uses (fraud, scraping, sanctions, etc.)
+│   ├── KYC.md                     ← KYC for commercial customers (prebuilt image / hosted / support)
+│   ├── AUDIT_LOGGING.md           ← audit-log spec for any commercial fleet
+│   ├── CLA.md                     ← Contributor License Agreement
+│   └── SECURITY.md                ← vulnerability disclosure policy
 │
 ├── .github/                       ← GitHub-side config
 │   ├── CODEOWNERS                 ← review-request routing
@@ -143,6 +153,61 @@ The convention: the **LLM** (mavis) sets up the monitor cron, NOT the script. Af
 The script stays focused on what it does well (create / run / cleanup). The LLM stays focused on what it does well (cross-session state, cron lifecycle, smart decisions, artifact download via SSH/SCP). Both pieces have explicit fallbacks: the script works without the LLM (just no monitor), and the LLM works without the script (manually re-runs and reads the same prompts).
 
 This rule applies to all three cloud paths: gcp / aliyun / DO.
+
+### 2.9 The legal framework is non-negotiable
+
+Used for QA testing, it is benign. Used for fake-account creation,
+ad fraud, credential stuffing, or bulk scraping, it is harmful and
+may be illegal.
+
+The legal framework in [`legal/`](legal/) is the project's only
+defence against the second case — the source is public, the build
+is reproducible, and there is no technical "fuse" that prevents
+misuse. The framework therefore imposes **mandatory** process
+controls (KYC, audit logging) on any commercial distribution, and
+**explicit** use restrictions (the AUP) on every user.
+
+**Non-negotiables:**
+
+1. **KYC is mandatory for commercial distribution.** Anyone who
+   receives a prebuilt image, hosted service, or commercial
+   support goes through the KYC process in [`legal/KYC.md`](legal/KYC.md).
+   No exceptions. The alternative is the project becoming an
+   attractive nuisance for fraud.
+2. **Audit logging is mandatory for any commercial fleet.** The
+   spec in [`legal/AUDIT_LOGGING.md`](legal/AUDIT_LOGGING.md) is
+   the minimum; the `RemoteControlService` in
+   `packages/apps/RemoteControlService/` is intended to implement
+   the event-capture part natively. A device that runs a prebuilt
+   image in a commercial context MUST keep an audit log.
+3. **The AUP cannot be relaxed by a PR.** The list in
+   [`legal/ACCEPTABLE_USE_POLICY.md`](legal/ACCEPTABLE_USE_POLICY.md)
+   is the floor. Adding a new permitted use requires a documented
+   PR that explicitly addresses the new use case against the
+   framework principles (fraud risk, regulator exposure, audit-log
+   sufficiency).
+4. **Contributors accept the CLA.** The CLA in [`legal/CLA.md`](legal/CLA.md)
+   is accepted by conduct (submitting a PR). The CLA is the
+   project's only defence against an IP-claim from a third party
+   about a contribution.
+5. **Material changes to the legal framework require a release
+   note.** A change to a legal document is a breaking change for
+   users who have accepted the prior version. PRs that change a
+   legal document MUST add a release-note entry and, for
+   commercial customers, MUST trigger a direct-notice workflow.
+6. **The legal framework is DRAFT.** Every document in `legal/`
+   carries a "DRAFT — not legal advice" banner. None of it has
+   been reviewed by a solicitor. A PR that moves any of the
+   documents out of DRAFT status MUST include a confirmation from
+   a solicitor (or a link to a PR that adds such a confirmation
+   to the project record).
+
+**Trigger to escalate the legal framework:** if a regulatory
+development (UK Online Safety Act, EU AI Act, US state-level bot
+disclosure, a court ruling on open-source liability) materially
+changes the risk profile of the project, the framework must be
+reviewed and updated, and the update must be communicated to all
+known commercial customers.
 
 ## 3. CI: what runs on every PR
 
@@ -554,4 +619,5 @@ Linux instance.
 - **The warm image is the unit of cost optimization.** Pay ~$1/month for the snapshot/image, save 30 min per build.
 - **GCP: use Spot with a retry mindset.** 30-second preemption notice means a mid-build reclaim costs one extra `m` round — `repo sync` and `ccache` survive it.
 - **Read the gotchas (§7) before you debug Aliyun.** The CLI's error messages are useless; the gotchas are where the real signal is.
+- **The legal framework in `legal/` is the project's liability shield.** KYC + audit logging are mandatory for any commercial distribution. Contributors accept the CLA by submitting a PR. See §2.9 for the non-negotiables. Every document in `legal/` is currently DRAFT and must be reviewed by a solicitor before reliance.
 - **The docs site is at <https://bramburn.github.io/qalos/>** and is the human-facing mirror of this file. Update both when you change architecture.
