@@ -13,13 +13,12 @@ for why `BOARD_SEPOLICY_DIRS` must be set in `BoardConfig.mk` and not in
 
 ## What's in this folder
 
-```
+```text
 sepolicy/
 ├── qalos_remote_control.te    ← type definition for the new service
 ├── service_contexts           ← file-context label for the service binary
 └── system_server.te           ← allow rules appended to upstream
-```
-
+```text
 The AOSP sepolicy build concatenates every directory listed in
 `BOARD_SEPOLICY_DIRS` with the upstream system policy. **Rules here are
 appended to (not replacing) the upstream AOSP system_server.te.**

@@ -24,16 +24,16 @@ qalos is bare-bones: same kernel, same HALs as upstream AOSP, with a custom prod
 | **DigitalOcean droplet** (fallback #1) | Clean-room CI, sharing a build | ~$0.50-0.80 |
 | **Aliyun ECS** (fallback #2) | China region, cheaper spot pricing | ~¥7-14 |
 
-**Default to local.** Cloud is for clean-room CI and sharing, not for everyday dev. See [Architecture overview](architecture/overview) for why.
+**Default to local.** Cloud is for clean-room CI and sharing, not for everyday dev. See [Architecture overview](architecture/overview.md) for why.
 
 ## Where to start
 
-- New to qalos? → [Local build](getting-started/local-build)
-- Want a clean-room CI build? → [DO build](getting-started/do-build) or [Aliyun build](getting-started/aliyun-build)
-- Want to understand the design rules? → [Architecture overview](architecture/overview)
-- Want to send a PR? → [How to contribute](contributing/how-to-contribute)
-- Looking up a script or file? → [Tools reference](reference/tools-reference) or [Folder structure](reference/folder-structure)
-- Hit an Aliyun `SDK.ServerError`? → [Gotchas](reference/gotchas)
+- New to qalos? → [Local build](getting-started/local-build.md)
+- Want a clean-room CI build? → [DO build](getting-started/do-build.md) or [Aliyun build](getting-started/aliyun-build.md)
+- Want to understand the design rules? → [Architecture overview](architecture/overview.md)
+- Want to send a PR? → [How to contribute](contributing/how-to-contribute.md)
+- Looking up a script or file? → [Tools reference](reference/tools-reference.md) or [Folder structure](reference/folder-structure.md)
+- Hit an Aliyun `SDK.ServerError`? → [Gotchas](reference/gotchas.md)
 
 ## The single source of truth
 
@@ -52,4 +52,4 @@ The on-host script handles:
 
 1. AOSP repo sync.
 2. Build (`source build/envsetup.sh && lunch ... && m -j$(nproc)`).
-3. Artifact upload to cloud storage (currently DO Spaces, see [Gotchas](reference/gotchas) for the Aliyun caveat).
+3. Artifact upload to cloud storage (currently DO Spaces, see [Gotchas](reference/gotchas.md) for the Aliyun caveat).

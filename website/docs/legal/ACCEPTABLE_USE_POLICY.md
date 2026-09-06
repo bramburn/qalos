@@ -6,12 +6,12 @@ sidebar_position: 4
 
 > **DRAFT — not legal advice.**
 > This document is a draft for review by a solicitor qualified in England & Wales before reliance.
-> See [README.md](index) for the framework context.
+> See [README.md](index.md) for the framework context.
 
 **Effective date:** 2026-09-03
 
 This Acceptable Use Policy (the **"AUP"**) lists the uses that are **prohibited** when using the qalos project.
-It is incorporated by reference into the [TERMS_OF_SERVICE.md](terms-of-service) (the "ToS").
+It is incorporated by reference into the [TERMS_OF_SERVICE.md](TERMS_OF_SERVICE.md) (the "ToS").
 A breach of the AUP is a breach of the ToS.
 
 If you are unsure whether a use is permitted, the answer is **no**.
@@ -68,7 +68,7 @@ The list is illustrative, not exhaustive: anything that is not on the list but t
 
 ### 3.4 Integrity, safety, and the audit mechanism
 
-- **Disabling audit.** Disabling, circumventing, or tampering with the audit-logging mechanism described in [AUDIT_LOGGING.md](audit-logging), where such a mechanism is built into the project or required by a contract.
+- **Disabling audit.** Disabling, circumventing, or tampering with the audit-logging mechanism described in [AUDIT_LOGGING.md](AUDIT_LOGGING.md), where such a mechanism is built into the project or required by a contract.
 - **Hiding the build source.** Distributing a Prebuilt Image or Derivative without the required source-availability, attribution, or trade-mark notice under the Software Licence.
 - **Removing safety rails.** Removing or weakening the confirmation dialogs, rate limits, allow-lists, or any other safety rail built into the project.
 - **Reverse-engineering for harm.** Reverse-engineering the project's safety, security, or audit mechanisms for the purpose of bypassing them (studying them under the Software Licence is permitted).
@@ -83,7 +83,7 @@ The list is illustrative, not exhaustive: anything that is not on the list but t
 
 ### 3.6 Commercial and resale restrictions
 
-- **Reselling prebuilt images to unverified parties.** A third party who receives a Prebuilt Image from you must go through the KYC process in [KYC.md](kyc) before you ship.
+- **Reselling prebuilt images to unverified parties.** A third party who receives a Prebuilt Image from you must go through the KYC process in [KYC.md](KYC.md) before you ship.
 - **Reselling as a "clean" OS.** Marketing a Derivative as "untraceable", "anonymous", "undetectable", "stealth", "fingerprint-clean", or in any way that emphasises evasion of platform-level detection, is prohibited.
 - **Reselling the trade name.** Selling a Prebuilt Image, Derivative, or hosted service under the "qalos" or "QA Lab Operating System" trade name without the trade-mark licence in the ToS is prohibited.
 
@@ -110,7 +110,7 @@ Even if a use is not listed above, it is prohibited if it:
 
 ## 6. Reporting suspected violations
 
-6.1. If you believe a user of the project is in breach of this AUP, you may report it to the project owner at the address in [TERMS_OF_SERVICE.md §14](terms-of-service)#14-contact).
+6.1. If you believe a user of the project is in breach of this AUP, you may report it to the project owner at the address in [TERMS_OF_SERVICE.md §14](TERMS_OF_SERVICE.md)#14-contact).
 
 6.2. Reports should include: the user (if known), the use (with as much specificity as you can share without violating another person's rights), the evidence (logs, screenshots, public records), and your contact details so the project owner can follow up.
 

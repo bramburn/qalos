@@ -14,7 +14,7 @@ Use the issue templates in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/):
 
 - **Bug report** — for AOSP build failures, script crashes, CI failures.
 - **Feature request** — for new build paths, new tools, or new AOSP integrations.
-- **Question** — use [GitHub Discussions](https://github.com/bramburn/qalos/discussions), not issues, for "how do I..." questions.
+- **Question** — use [GitHub Discussions](https://github.com/bramburn/qalos/issues), not issues, for "how do I..." questions.
 
 For security issues, **do not file a public issue** — see [legal/SECURITY.md](legal/SECURITY.md).
 For general legal questions (clauses in the ToS, the AUP, the CLA), see the
@@ -23,17 +23,20 @@ For general legal questions (clauses in the ToS, the AUP, the CLA), see the
 ## Filing PRs
 
 1. Fork the repo and create a topic branch off `main`:
+
    ```bash
    git checkout main
    git pull
    git checkout -b feat/short-descriptive-name
    ```
+
 2. Make your change. Keep commits small and atomic. Write commit messages in the imperative mood: `add aliyun smoke test`, not `added` or `adds`.
 3. Update relevant docs:
    - **New tool / script**: add to the [tools reference](website/docs/reference/tools-reference.md) and the [architecture overview](website/docs/architecture/overview.md) if it introduces a new concept.
    - **AGENTS.md change**: PRs that touch the architecture, the safety nets, or the warm-image pattern MUST update AGENTS.md in the same PR.
    - **Bug fix**: add a `### Known limitations` note to the affected page if the fix is partial.
 4. Run the local CI checks before pushing:
+
    ```bash
    # PowerShell scripts
    Invoke-ScriptAnalyzer -Path tools/ -Settings PSGallery
@@ -47,6 +50,7 @@ For general legal questions (clauses in the ToS, the AUP, the CLA), see the
    # Secrets
    gitleaks detect --source . --no-banner
    ```
+
 5. Push and open a PR against `main`. Fill in the [PR template](.github/PULL_REQUEST_TEMPLATE.md) completely — incomplete PRs will be closed.
 6. Address review feedback with new commits (don't squash mid-review). The maintainer will squash-merge once approved.
 
@@ -93,11 +97,13 @@ For general legal questions (clauses in the ToS, the AUP, the CLA), see the
 - **Folder structure** is documented in [website/docs/reference/folder-structure.md](website/docs/reference/folder-structure.md). If your change adds a new top-level folder, update that doc in the same PR.
 - **Tooling changes** (anything in `tools/` or `scripts/`) MUST keep the PowerShell and shell versions in sync. If you change one, change the other. If you can't, file an issue describing the gap.
 - **Docusaurus content** lives in `website/docs/`. To preview the docs site locally:
+
   ```bash
   cd website
   npm install
   npm run start
   ```
+
   The site is at http://localhost:3000.
 
 ## What CI checks
@@ -117,6 +123,7 @@ If a CI check fails on your PR, the failure message will tell you which tool fla
 ## Release process
 
 There is no formal release process yet. Builds are produced by:
+
 - Local Linux box (the primary path)
 - DO droplet or Aliyun ECS (fallback, see [AGENTS.md §4.2 and §4.3](AGENTS.md))
 

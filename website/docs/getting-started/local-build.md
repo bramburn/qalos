@@ -47,6 +47,7 @@ The three images you want land in `~/aosp/out/target/product/qalos_emulator/`:
 ## Iterating
 
 ```bash
+
 # after editing QaLab code:
 cd ~/aosp
 . build/envsetup.sh
@@ -63,11 +64,12 @@ emulator -avd qalos-test -no-snapshot -wipe-data \
     -kernel kernel
 ```
 
-Or use `avdmanager` to create a proper AVD and point it at the image. See the [AOSP emulator docs](https://source.android.com/docs/setup/start/run-avd) for the full walkthrough.
+Or use `avdmanager` to create a proper AVD and point it at the image. See the [AOSP emulator docs](https://developer.android.com/studio/run/emulator) for the full walkthrough.
 
 ## Cleaning up
 
 ```bash
+
 # nuke a single build output (keeps the source tree)
 rm -rf ~/aosp/out
 
@@ -80,6 +82,7 @@ rm -rf ~/aosp
 `ccache` is installed by the package list above. It caches compiled objects across builds, so a no-op rebuild takes seconds instead of hours.
 
 ```bash
+
 # set the cache size (50 GB is reasonable for a single AOSP project)
 ccache -M 50G
 
@@ -89,6 +92,6 @@ ccache -s
 
 ## What's next
 
-- Want to share a build? → [DO build](do-build) or [Aliyun build](aliyun-build)
-- Want to add a feature? → [How to contribute](../contributing/how-to-contribute)
+- Want to share a build? → [DO build](do-build.md) or [Aliyun build](aliyun-build.md)
+- Want to add a feature? → [How to contribute](../contributing/how-to-contribute.md)
 - Hit a build error? → check the [Troubleshooting](https://source.android.com/docs/setup/build/building#troubleshooting) page in the AOSP docs first, then open an issue if the bug is in qalos.

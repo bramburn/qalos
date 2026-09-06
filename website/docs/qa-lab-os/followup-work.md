@@ -45,7 +45,7 @@ catches what code review cannot:
    rebase.
 
 The full recipe is in
-[`lessons-learned.md`](./lessons-learned). The bugs it caught:
+[`lessons-learned.md`](./lessons-learned.md). The bugs it caught:
 
 | ID | What was wrong | What we changed |
 | --- | --- | --- |
@@ -140,8 +140,8 @@ branch because they change the trust model or the kernel surface:
    top of `feat/qa-lab-os-v0`. v0 is done; v1 should be a clean
    new PR.
 3. If you add a new AIDL method, mirror the same 4-pass review
-   + AOSP dry-run cycle. The pattern is documented in
-   [`lessons-learned.md`](./lessons-learned).
+     - AOSP dry-run cycle. The pattern is documented in
+   [`lessons-learned.md`](./lessons-learned.md).
 4. **Do not** mix Phase 1 (gestures, agent loop) with Phase 2
    (kernel hiding, GPS spoofing) in the same branch. The
    diff size and the reviewer cognitive load will explode.
@@ -161,7 +161,7 @@ branch because they change the trust model or the kernel surface:
 
 ## See also
 
-- [`v0 plan`](./plan) — what is in scope
-- [`decisions log`](./decisions) — opinionated choices
-- [`lessons learned`](./lessons-learned) — the 5-min dry-run recipe
-- [`review log`](./review-log) — the per-pass reports
+- [`v0 plan`](./plan.md) — what is in scope
+- [`decisions log`](./decisions.md) — opinionated choices
+- [`lessons learned`](./lessons-learned.md) — the 5-min dry-run recipe
+- [`review log`](./review-log.md) — the per-pass reports

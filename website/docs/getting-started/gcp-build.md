@@ -35,6 +35,7 @@ Spot can be reclaimed with 30-second notice. `repo sync` is resumable and `ccach
 ## One-time setup (~15 min)
 
 ```powershell
+
 # 1. Install / verify the gcloud CLI
 .\tools\gcp-install.ps1
 
@@ -49,6 +50,7 @@ Spot can be reclaimed with 30-second notice. `repo sync` is resumable and `ccach
 ```
 
 The setup script:
+
 1. Launches an `e2-medium` base instance from `debian-12` in `us-central1-a`.
 2. Runs `tools/setup-droplet.sh` to install every AOSP build dependency.
 3. Stops the base instance.
@@ -59,6 +61,7 @@ The setup script:
 ## On-demand build
 
 ```powershell
+
 # Standard: 16 vCPU / 32 GB, ~$0.76 for 6h
 .\tools\gcp-build.ps1
 
@@ -73,6 +76,7 @@ The setup script:
 ```
 
 What the build script does:
+
 1. Creates a Spot instance from the `qalos-build-warm` snapshot. Provisions `MAX_RUNTIME_MINUTES` minutes of Spot uptime.
 2. Waits for the instance to be RUNNING.
 3. **Uploads `do-build.sh` and a generated env file** to the instance via native `scp.exe` (see SSH transport below).
@@ -91,9 +95,11 @@ What the build script does:
 >
 > 1. `gcp-build.ps1` may create the instance and upload files, but should NOT own the cleanup. (You can manually delete the instance after the build is done, or use `-KeepOnFailure` to leave it up for inspection.)
 > 2. **Launch the build itself via `systemd-run`** on the instance, so it survives any SSH-disconnect that gcp-build.ps1 might suffer. Pattern:
+>
 >    ```bash
 >    systemd-run --unit=qalos-build --setenv=HOME=/root --setenv=XDG_CACHE_HOME=/root/.cache /tmp/do-build.sh
 >    ```
+>
 > 3. **The LLM monitor cron is the single owner of `gcloud compute instances delete`** (see [Safety nets → LLM-driven cron](../architecture/safety-nets.md#build-monitor-cron-llm-driven-not-script-driven)). The cron's step 6 runs after artifact download.
 > 4. The proper long-term fix is patching `gcp-build.ps1` to remove the unconditional `try/finally` delete, or to add a `-NoAutoDelete` switch.
 >
@@ -132,6 +138,7 @@ For details, see [GCP gotchas: §7.6 gcloud compute ssh uses PuTTY/Plink on Wind
 `us-central1-a` is the default. It's the cheapest region for Spot on the `c3` family. Other US regions (`us-east1`, `us-west1`) are within 5% on price. Don't pick a region that doesn't have `c3d` instance types — `gcloud compute instances create` will fail with `Invalid zone`.
 
 ```powershell
+
 # List zones that have c3d
 gcloud compute zones list --filter="name=us-central1-*" --format="value(name)"
 ```
@@ -154,6 +161,7 @@ The 30-second preemption notice is logged by the instance. The on-host watchdog 
 The build itself was running via a separate `systemd-run` unit, so the in-progress build was killed too. There is no way to recover — `out/` is gone with the instance. Fix: re-run the build using the `systemd-run` pattern documented in the warning box above, and let the LLM monitor cron own the cleanup.
 
 **Orphaned instance** (should never happen with safety nets, but):
+
 ```powershell
 gcloud compute instances list --zones=us-central1-a --format="value(name,status)"
 # If a qalos-* instance is RUNNING:

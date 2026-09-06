@@ -18,6 +18,7 @@ The clean-room CI path. Picks up when your local box is unavailable, or when you
 From the repo root:
 
 ```powershell
+
 # 1. Install doctl (DigitalOcean CLI)
 .\tools\doctl-install.ps1
 
@@ -29,6 +30,7 @@ $env:DO_API_TOKEN = '<your-read-write-token>'
 ```
 
 The setup script:
+
 1. Spins up a fresh c-8 (8 vCPU / 16 GB) droplet from the stock Ubuntu 22.04 image.
 2. Runs `tools/setup-droplet.sh` to install every AOSP build dependency.
 3. Snapshots the result as `qalos-build-warm` (~3-4 GB).
@@ -45,6 +47,7 @@ The snapshot is the artefact you keep. Every subsequent build launches from it, 
 ```
 
 The build script:
+
 1. Creates a droplet from the `qalos-build-warm` snapshot.
 2. Waits for SSH.
 3. Scp's `tools/do-build.sh` onto it.
@@ -60,16 +63,16 @@ The build script:
 | DO Spaces (storage for build artifacts) | $5/month (first 250 GB) |
 | **Total if you maintain the fallback** | **~$5.40/month** |
 
-If you only build occasionally, you can drop the snapshot and accept the 30 min re-setup cost the next time you need it. See [Tools reference](../reference/tools-reference) for `doctl-snapshot-delete.ps1` (coming soon) or the manual console steps.
+If you only build occasionally, you can drop the snapshot and accept the 30 min re-setup cost the next time you need it. See [Tools reference](../reference/tools-reference.md) for `doctl-snapshot-delete.ps1` (coming soon) or the manual console steps.
 
 ## When to pick DO over Aliyun
 
 - **You're in Europe or the US.** DO has UK / US / EU regions; latency is low.
-- **You need a battle-tested setup.** The DO scripts have been running since 2026-09; the Aliyun scripts are newer and have the documented gotchas in [Gotchas](../reference/gotchas).
+- **You need a battle-tested setup.** The DO scripts have been running since 2026-09; the Aliyun scripts are newer and have the documented gotchas in [Gotchas](../reference/gotchas.md).
 - **You don't need China-region access.** AOSP's Tsinghua TUNA mirror is fast from China; not so much from Europe.
 
 ## What's next
 
-- Want a China-region build? → [Aliyun build](aliyun-build)
-- Want to understand the four safety nets? → [Safety nets](../architecture/safety-nets)
+- Want a China-region build? → [Aliyun build](aliyun-build.md)
+- Want to understand the four safety nets? → [Safety nets](../architecture/safety-nets.md)
 - Want to see the build in action on GitHub? → push to `main` or click **Run workflow** in the Actions tab. The DO build is triggered by `.github/workflows/build.yml`.

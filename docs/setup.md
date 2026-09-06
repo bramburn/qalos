@@ -47,6 +47,7 @@ foreach ($k in $vars.Keys) {
 If you don't already have a DO-registered SSH key:
 
 ```powershell
+
 # Generate a key if you don't have one
 if (-not (Test-Path ~/.ssh/id_ed25519)) {
     ssh-keygen -t ed25519 -C 'qalos@icelabz' -f ~/.ssh/id_ed25519 -N '""'
@@ -69,7 +70,7 @@ git remote add origin git@github.com:bramburn/qalos.git
 git push -u origin main
 ```
 
-Then at https://github.com/bramburn/qalos/settings/secrets/actions add:
+Then add the following repository secrets (see [GitHub docs](https://docs.github.com/en/actions/security-guides/encrypted-secrets) for how):
 
 | Secret name             | Value                           |
 | ----------------------- | ------------------------------- |

@@ -28,7 +28,6 @@ ZONE="cn-hangzhou-h"
 BASE_NAME="qalos-base"
 IMAGE_NAME="qalos-build-warm"
 INSTANCE_TYPE="ecs.e-c1m1.large"   # 2 vCPU / 2 GB; swap in ecs.u1-c1m8.2xlarge for the real warm image
-PREFIX="qalos-smoke"
 QALOS_BRANCH="main"
 
 while [[ $# -gt 0 ]]; do

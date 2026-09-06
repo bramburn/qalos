@@ -40,6 +40,7 @@ The exact status-check names are taken from the `name:` field of each job in the
 ### PowerShell (PSScriptAnalyzer)
 
 ```powershell
+
 # Install once
 Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force
 
@@ -50,6 +51,7 @@ Invoke-ScriptAnalyzer -Path tools/ -Settings PSGallery
 ### Shell (shellcheck)
 
 ```bash
+
 # macOS
 brew install shellcheck
 # Ubuntu
@@ -66,6 +68,7 @@ shellcheck scripts/**/*.sh
 ### Markdown (markdownlint)
 
 ```bash
+
 # npm
 npm install -g markdownlint-cli
 
@@ -76,6 +79,7 @@ markdownlint '**/*.md' --config .markdownlint.jsonc
 ### Secrets (gitleaks)
 
 ```bash
+
 # macOS
 brew install gitleaks
 # Linux: download from https://github.com/gitleaks/gitleaks/releases
@@ -89,6 +93,7 @@ gitleaks detect --source . --no-banner
 ### Link check (lychee)
 
 ```bash
+
 # install via cargo
 cargo install lychee
 
@@ -104,5 +109,5 @@ lychee --offline '**/*.md'
 
 ## What's next
 
-- Want to file a PR? → [How to contribute](how-to-contribute)
-- Want to know the design rules your PR must respect? → [Architecture overview](../architecture/overview)
+- Want to file a PR? → [How to contribute](how-to-contribute.md)
+- Want to know the design rules your PR must respect? → [Architecture overview](../architecture/overview.md)
