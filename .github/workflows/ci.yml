@@ -152,7 +152,6 @@ jobs:
             --exclude 'https://github.com/bramburn/qalos/(edit|blob)/'
             --exclude 'https://github.com/bramburn/qalos/issues/new'
             --exclude 'https://bramburn.github.io/qalos'
-            --exclude-mail
             '**/*.md'
           fail: true
         env:
