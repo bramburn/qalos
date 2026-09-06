@@ -15,7 +15,7 @@
 - **Three build paths:** Local Linux box (primary), DigitalOcean droplet (fallback #1), Aliyun ECS (fallback #2), GCP Compute Engine (fallback #3).
 - **Cloud SSH transport:** All three cloud paths use **native SSH** to talk to the build instance. The GCP path uses Windows OpenSSH (`C:\Windows\System32\OpenSSH\ssh.exe`) on the host because the gcloud SDK hardcodes PuTTY/Plink which fails against modern Linux VMs (see §7.6).
 - **Single source of truth for on-host build steps:** `tools/do-build.sh`. Both cloud orchestrators invoke it.
-- **Repo:** <https://github.com/bramburn/qalos> · **Docs site:** <https://bramburn.github.io/qalos/> · **License:** MIT (qalos) + Apache 2.0 (AOSP)
+- **Repo:** <https://github.com/bramburn/qalos> · **Docs site:** <https://bramburn.github.io/qalos/> · **License:** MIT (qalos) + Apache 2.0 (AOSP) · **Legal framework:** see [`legal/`](legal/) — the licence covers copying, not use; KYC + audit logging are mandatory for any commercial distribution (see §2.9).
 
 ## 1. Folder layout
 
@@ -27,6 +27,16 @@ qalos/
 ├── CODE_OF_CONDUCT.md
 ├── BRANCH_PROTECTION.md            ← exact gh api command to apply branch protection
 ├── LICENSE                        ← MIT for qalos + Apache 2.0 attribution for AOSP
+│
+├── legal/                         ← LEGAL FRAMEWORK (use restrictions, ToS, KYC, audit, CLA, security)
+│   ├── README.md                  ← the index; which doc applies to whom
+│   ├── DISCLAIMER.md              ← the umbrella: no warranty, no liability for misuse
+│   ├── TERMS_OF_SERVICE.md        ← the binding contract for users
+│   ├── ACCEPTABLE_USE_POLICY.md   ← prohibited uses (fraud, scraping, sanctions, etc.)
+│   ├── KYC.md                     ← KYC for commercial customers (prebuilt image / hosted / support)
+│   ├── AUDIT_LOGGING.md           ← audit-log spec for any commercial fleet
+│   ├── CLA.md                     ← Contributor License Agreement
+│   └── SECURITY.md                ← vulnerability disclosure policy
 │
 ├── .github/                       ← GitHub-side config
 │   ├── CODEOWNERS                 ← review-request routing
@@ -144,6 +154,61 @@ The script stays focused on what it does well (create / run / cleanup). The LLM 
 
 This rule applies to all three cloud paths: gcp / aliyun / DO.
 
+### 2.9 The legal framework is non-negotiable
+
+Used for QA testing, it is benign. Used for fake-account creation,
+ad fraud, credential stuffing, or bulk scraping, it is harmful and
+may be illegal.
+
+The legal framework in [`legal/`](legal/) is the project's only
+defence against the second case — the source is public, the build
+is reproducible, and there is no technical "fuse" that prevents
+misuse. The framework therefore imposes **mandatory** process
+controls (KYC, audit logging) on any commercial distribution, and
+**explicit** use restrictions (the AUP) on every user.
+
+**Non-negotiables:**
+
+1. **KYC is mandatory for commercial distribution.** Anyone who
+   receives a prebuilt image, hosted service, or commercial
+   support goes through the KYC process in [`legal/KYC.md`](legal/KYC.md).
+   No exceptions. The alternative is the project becoming an
+   attractive nuisance for fraud.
+2. **Audit logging is mandatory for any commercial fleet.** The
+   spec in [`legal/AUDIT_LOGGING.md`](legal/AUDIT_LOGGING.md) is
+   the minimum; the `RemoteControlService` in
+   `packages/apps/RemoteControlService/` is intended to implement
+   the event-capture part natively. A device that runs a prebuilt
+   image in a commercial context MUST keep an audit log.
+3. **The AUP cannot be relaxed by a PR.** The list in
+   [`legal/ACCEPTABLE_USE_POLICY.md`](legal/ACCEPTABLE_USE_POLICY.md)
+   is the floor. Adding a new permitted use requires a documented
+   PR that explicitly addresses the new use case against the
+   framework principles (fraud risk, regulator exposure, audit-log
+   sufficiency).
+4. **Contributors accept the CLA.** The CLA in [`legal/CLA.md`](legal/CLA.md)
+   is accepted by conduct (submitting a PR). The CLA is the
+   project's only defence against an IP-claim from a third party
+   about a contribution.
+5. **Material changes to the legal framework require a release
+   note.** A change to a legal document is a breaking change for
+   users who have accepted the prior version. PRs that change a
+   legal document MUST add a release-note entry and, for
+   commercial customers, MUST trigger a direct-notice workflow.
+6. **The legal framework is DRAFT.** Every document in `legal/`
+   carries a "DRAFT — not legal advice" banner. None of it has
+   been reviewed by a solicitor. A PR that moves any of the
+   documents out of DRAFT status MUST include a confirmation from
+   a solicitor (or a link to a PR that adds such a confirmation
+   to the project record).
+
+**Trigger to escalate the legal framework:** if a regulatory
+development (UK Online Safety Act, EU AI Act, US state-level bot
+disclosure, a court ruling on open-source liability) materially
+changes the risk profile of the project, the framework must be
+reviewed and updated, and the update must be communicated to all
+known commercial customers.
+
 ## 3. CI: what runs on every PR
 
 The CI workflow at `.github/workflows/ci.yml` runs **static checks only**. AOSP builds are NOT run on GitHub Actions — they take 2-6 hours and would burn the free tier in a single build. AOSP builds happen locally or on the cloud fallbacks (user's own resources, not GH Actions minutes).
@@ -239,6 +304,21 @@ aliyun configure
 .\tools\gcp-build.ps1 -MaxRuntimeMinutes 360 -KeepOnFailure  # debug: leave instance up
 .\tools\gcp-build.ps1 -NetworkTier PREMIUM          # default is STANDARD; PREMIUM = Google's tier-1 backbone
 ```
+
+> **⚠️ `gcp-build.ps1` SSH-shutdown bug (DO NOT USE for builds > 10 min)**
+>
+> The `gcp-build.ps1` script's SSH call into the instance has a known shutdown-detection bug: when the remote `do-build.sh` process tree exits, the parent SSH session does not always close promptly. The script then sits "waiting" for **up to 4 hours**, until the SSH connection eventually drops for some other reason. At that point the script's `try/finally` block runs and **unconditionally stops and deletes the instance** — even if the build itself is healthy and was running via a separate `systemd-run` unit on the same instance.
+>
+> **Concrete 2026-09-04 incident:** `qalos-build-20260904-180634` was at 45% (`BUILD_RUNNING`, compiling libLLVM AArch64) for 4 hours, then the gcp-build.ps1 background task finally exited and deleted the instance. All 4 hours of compile progress were lost.
+>
+> **The correct pattern** for any AOSP build on GCP (1-6 hours):
+>
+> 1. `gcp-build.ps1` may create the instance and upload files, but should NOT own the cleanup.
+> 2. The build itself must be launched via `systemd-run --unit=qalos-resumeN` (or equivalent detached unit) on the instance, so it survives gcp-build.ps1's eventual exit.
+> 3. The **LLM monitor cron is the single owner of `gcloud compute instances delete`** — not the script (see "Build monitor (cron) — LLM-driven, not script-driven" below). The cron's step 6 is: "After downloads: `gcloud compute instances delete qalos-build-NAME --zone=Z --quiet` if present."
+> 4. The proper long-term fix is patching `gcp-build.ps1` to remove the unconditional `try/finally` delete, or to add a `-NoAutoDelete` switch that the LLM can use when it wants the cron to own cleanup.
+>
+> **TL;DR:** for any build longer than ~10 min, treat `gcp-build.ps1` as a "create + upload" tool only, not a "wait for build" tool. Launch the actual build via `systemd-run` on the instance, and have the LLM monitor cron own the instance teardown.
 
 **Cheapest viable machine:** `c3d-highcpu-16` Spot (16 vCPU, 32 GB, ~$0.13/hr) in `us-central1`. If the Java compile OOMs, upgrade to `c3d-standard-16` Spot (16 vCPU, 64 GB, ~$0.15/hr). Spot can be reclaimed with 30-second notice — `repo sync` is resumable and `ccache` survives a reclaim, so a mid-build preemption adds one retry round at worst.
 
@@ -463,6 +543,51 @@ file** (under `device/qalos/`, `packages/apps/QaLab/`,
 `vendor/qalos/`, etc.). The workflow is for patches that modify
 files in upstream AOSP repos.
 
+### 8.2.1. Known gap: dry-run validates mechanics, not build behaviour
+
+The dry-run workflow above proves that the **patch applies cleanly**
+to the upstream file, but it does **not** prove that the patched
+file will **build** under AOSP 15's metalava API-lint checks. This
+gap caused a 2h 28m cloud build of v0.1.1 to fail at the 96% mark
+on the UnflaggedApi lint for a new `REMOTE_CONTROL` permission
+added by patch 0002.
+
+**Root cause:** `tools:ignore="UnflaggedApi"` in the source XML is
+stripped by aapt2; metalava lints the **generated** `Manifest.java`,
+where the `tools:ignore` never reaches. The proper AOSP 15
+suppression is an entry in
+`frameworks/base/api/lint-baseline.txt`. Patch 0002 now does both.
+
+**Mandatory pre-flight before launching a cloud build:** every
+`do-build.sh` (and its twin scripts) runs a targeted pre-flight
+build of just the api-stubs target before the full `m -jN`. This
+catches the metalava lint in 5-15 minutes, not 2-4 hours:
+
+```bash
+# Inside do-build.sh, immediately after `lunch` and before `m -jN`:
+m -jN frameworks/base/api:api-stubs-docs-non-updatable \
+    2>&1 | tee "$LOG_DIR/preflight.log" || {
+        log "FATAL: preflight metalava check failed"
+        log "  See AGENTS.md §8.2.1 for the fix:"
+        log "  - frameworks/base/api/lint-baseline.txt for the new symbol, OR"
+        log "  - Define an aconfig flag and reference it in the new code."
+        shutdown_droplet
+    }
+```
+
+**Rule for future patches that touch the framework manifest,
+APIs, or services:** after the dry-run succeeds (steps 1-5 above),
+the pre-flight MUST be exercised end-to-end at least once on a
+throwaway instance. Only after the pre-flight is green is it safe
+to launch the full cloud build. This is the only reliable way to
+catch the class of bug that costs hours of compute and dollars.
+
+The local-host side of this rule is a "what to check before
+launching" checklist (in this file), not a local build invocation
+— we cannot install WSL on this machine, and there is no AOSP
+toolchain on Windows. The actual pre-flight must run on a real
+Linux instance.
+
 ## 9. Tactical next steps (for whoever picks this up)
 
 1. **GCP is the cheapest and fastest new-account path right now.** The Aliyun account is blocked at 4 vCPU / 8 GB by risk-control gates.
@@ -494,4 +619,5 @@ files in upstream AOSP repos.
 - **The warm image is the unit of cost optimization.** Pay ~$1/month for the snapshot/image, save 30 min per build.
 - **GCP: use Spot with a retry mindset.** 30-second preemption notice means a mid-build reclaim costs one extra `m` round — `repo sync` and `ccache` survive it.
 - **Read the gotchas (§7) before you debug Aliyun.** The CLI's error messages are useless; the gotchas are where the real signal is.
+- **The legal framework in `legal/` is the project's liability shield.** KYC + audit logging are mandatory for any commercial distribution. Contributors accept the CLA by submitting a PR. See §2.9 for the non-negotiables. Every document in `legal/` is currently DRAFT and must be reviewed by a solicitor before reliance.
 - **The docs site is at <https://bramburn.github.io/qalos/>** and is the human-facing mirror of this file. Update both when you change architecture.

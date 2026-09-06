@@ -243,7 +243,8 @@ public final class HttpApiServer extends Thread {
         } catch (IllegalStateException e) {
             writeError(out, 503, e.getMessage());
         } catch (UnsupportedOperationException e) {
-            // 501 Not Implemented — used for endpoints deferred to v1.
+            // 501 Not Implemented — used for endpoints deferred to v1
+            // (currently: screenshot — see RemoteControlService.screenshotBase64Internal).
             writeError(out, 501, e.getMessage());
         } catch (RuntimeException e) {
             // F-2.2: never let a non-IAE/ISE exception kill the
@@ -260,7 +261,7 @@ public final class HttpApiServer extends Thread {
     }
 
     private void handle(String method, String path, JSONObject query,
-            String body, OutputStream out) throws IOException, JSONException {
+            String body, OutputStream out) throws IOException {
         try {
             switch (method + " " + path) {
                 case "GET /health":

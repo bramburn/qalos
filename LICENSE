@@ -26,3 +26,28 @@ qalos includes code from the Android Open Source Project (AOSP), which is
 licensed under the Apache License 2.0. See https://source.android.com/ for
 upstream attribution. Apache 2.0 terms (including a copy of the license text)
 can be found at https://www.apache.org/licenses/LICENSE-2.0.
+
+---
+
+## Use restrictions (separate from the licence)
+
+The MIT Licence above governs your right to **copy, modify, and distribute**
+the source code in this repository. It does **not** grant a right to use the
+code, the resulting operating system, or any derivative for **any purpose**.
+
+The project's intended use is the QA testing of applications that you own or
+have written permission to test. Your use of the project is also subject to
+the legal documents in the [`legal/`](legal/) directory of this repository,
+which include (at a minimum):
+
+- a disclaimer of warranty and liability ([`legal/DISCLAIMER.md`](legal/DISCLAIMER.md));
+- a list of prohibited uses ([`legal/ACCEPTABLE_USE_POLICY.md`](legal/ACCEPTABLE_USE_POLICY.md));
+- for commercial customers receiving prebuilt images, hosted services, or
+  support, a Know-Your-Customer policy ([`legal/KYC.md`](legal/KYC.md)) and
+  an audit-logging specification ([`legal/AUDIT_LOGGING.md`](legal/AUDIT_LOGGING.md));
+- a Contributor License Agreement ([`legal/CLA.md`](legal/CLA.md)) for
+  anyone submitting a pull request or other contribution;
+- a security vulnerability disclosure policy ([`legal/SECURITY.md`](legal/SECURITY.md)).
+
+By downloading, building, running, or distributing the project, you agree
+to be bound by those documents to the extent they apply to you.

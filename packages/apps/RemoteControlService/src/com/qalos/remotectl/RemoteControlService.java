@@ -140,8 +140,7 @@ public final class RemoteControlService extends SystemService implements IRemote
     // Note: AOSP 15 removed SystemService.onDestroy(); the lifecycle ends
     // when system_server exits. The HTTP server is a daemon thread
     // (set via HttpApiServer.setDaemon(true)) so it dies with
-    // system_server automatically. The worker pool is also daemon so
-    // it does not block JVM exit. No shutdown hook needed.
+    // system_server automatically — no shutdown hook needed.
 
     // ------------------------------------------------------------------
     // IRemoteControl — input

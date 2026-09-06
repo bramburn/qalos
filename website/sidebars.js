@@ -79,6 +79,23 @@ const sidebars = {
       ],
     },
   ],
+  legalSidebar: [
+    {
+      type: 'category',
+      label: 'Legal',
+      collapsed: false,
+      items: [
+        'legal/index',
+        'legal/disclaimer',
+        'legal/terms-of-service',
+        'legal/acceptable-use-policy',
+        'legal/kyc',
+        'legal/audit-logging',
+        'legal/cla',
+        'legal/security',
+      ],
+    },
+  ],
 };
 
 export default sidebars;
