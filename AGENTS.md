@@ -478,6 +478,51 @@ file** (under `device/qalos/`, `packages/apps/QaLab/`,
 `vendor/qalos/`, etc.). The workflow is for patches that modify
 files in upstream AOSP repos.
 
+### 8.2.1. Known gap: dry-run validates mechanics, not build behaviour
+
+The dry-run workflow above proves that the **patch applies cleanly**
+to the upstream file, but it does **not** prove that the patched
+file will **build** under AOSP 15's metalava API-lint checks. This
+gap caused a 2h 28m cloud build of v0.1.1 to fail at the 96% mark
+on the UnflaggedApi lint for a new `REMOTE_CONTROL` permission
+added by patch 0002.
+
+**Root cause:** `tools:ignore="UnflaggedApi"` in the source XML is
+stripped by aapt2; metalava lints the **generated** `Manifest.java`,
+where the `tools:ignore` never reaches. The proper AOSP 15
+suppression is an entry in
+`frameworks/base/api/lint-baseline.txt`. Patch 0002 now does both.
+
+**Mandatory pre-flight before launching a cloud build:** every
+`do-build.sh` (and its twin scripts) runs a targeted pre-flight
+build of just the api-stubs target before the full `m -jN`. This
+catches the metalava lint in 5-15 minutes, not 2-4 hours:
+
+```bash
+# Inside do-build.sh, immediately after `lunch` and before `m -jN`:
+m -jN frameworks/base/api:api-stubs-docs-non-updatable \
+    2>&1 | tee "$LOG_DIR/preflight.log" || {
+        log "FATAL: preflight metalava check failed"
+        log "  See AGENTS.md §8.2.1 for the fix:"
+        log "  - frameworks/base/api/lint-baseline.txt for the new symbol, OR"
+        log "  - Define an aconfig flag and reference it in the new code."
+        shutdown_droplet
+    }
+```
+
+**Rule for future patches that touch the framework manifest,
+APIs, or services:** after the dry-run succeeds (steps 1-5 above),
+the pre-flight MUST be exercised end-to-end at least once on a
+throwaway instance. Only after the pre-flight is green is it safe
+to launch the full cloud build. This is the only reliable way to
+catch the class of bug that costs hours of compute and dollars.
+
+The local-host side of this rule is a "what to check before
+launching" checklist (in this file), not a local build invocation
+— we cannot install WSL on this machine, and there is no AOSP
+toolchain on Windows. The actual pre-flight must run on a real
+Linux instance.
+
 ## 9. Tactical next steps (for whoever picks this up)
 
 1. **GCP is the cheapest and fastest new-account path right now.** The Aliyun account is blocked at 4 vCPU / 8 GB by risk-control gates.
