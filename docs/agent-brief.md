@@ -15,6 +15,7 @@ output). Verify you have at least 250 GB free before starting.
 ## Pre-flight checks (run all of these first, abort if any fail)
 
 ```bash
+
 # Confirm OS (Ubuntu 22.04+)
 . /etc/os-release
 [ "$ID" = "ubuntu" ] && [ "${VERSION_ID%%.*}" -ge 22 ] \
@@ -31,8 +32,7 @@ free_gb=$(df -BG --output=avail "$HOME" | tail -1 | tr -dc '0-9')
   || { echo "FAIL: need at least 250 GB free on $HOME, have ${free_gb}GB"; exit 1; }
 
 echo "OK: $(nproc) CPUs, ${total_mem_gb} GB RAM, ${free_gb} GB free on $HOME"
-```
-
+```text
 If you have `sudo` access without a password, prefix the `apt-get` and
 `curl ... /usr/local/bin/...` commands below with `sudo`. If you don't, run
 the session as root or `sudo -i` first.
@@ -48,8 +48,7 @@ sudo apt-get install -y --no-install-recommends \
     gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev \
     libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip m4 bc \
     openjdk-17-jdk-headless python3 python3-pip rsync ccache jq
-```
-
+```text
 If `openjdk-17-jdk-headless` is not in the repos, you may need to enable
 universe first: `sudo add-apt-repository universe && sudo apt-get update`.
 
@@ -62,8 +61,7 @@ sudo curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo \
     -o /usr/local/bin/repo
 sudo chmod +x /usr/local/bin/repo
 repo --version
-```
-
+```text
 If the curl fails, the box may be behind a firewall that blocks
 `storage.googleapis.com`. Test with `curl -fsSI
 https://storage.googleapis.com/git-repo-downloads/repo`.
@@ -75,8 +73,7 @@ https://storage.googleapis.com/git-repo-downloads/repo`.
 ```bash
 git config --global user.email "qalos-build@qalab.local"
 git config --global user.name  "qalos build"
-```
-
+```text
 ---
 
 ## Step 4 — Clone the qalos manifest (1 min)
@@ -85,8 +82,7 @@ git config --global user.name  "qalos build"
 mkdir -p ~/qalos
 cd ~/qalos
 git clone https://github.com/bramburn/qalos.git .
-```
-
+```text
 If the clone fails, test the network: `curl -fsSI https://github.com/bramburn/qalos`.
 A failure here means the box can't reach GitHub — sort that out before
 continuing.
@@ -99,8 +95,7 @@ continuing.
 mkdir -p ~/aosp
 cd ~/aosp
 repo init -u ~/qalos -b main
-```
-
+```text
 Expected tail of output: `repo has been initialized in <path>`.
 
 If this fails with "no default revision", the manifest clone in step 4 is
@@ -113,8 +108,7 @@ broken. Re-run step 4.
 ```bash
 cd ~/aosp
 repo sync -c -j$(nproc) --no-tags --no-clone-bundle 2>&1 | tee ~/qalos/.repo-sync.log
-```
-
+```text
 This downloads ~80 GB. Let it run. The `tee` keeps a log in `~/qalos/`.
 
 To monitor in another shell: `tail -f ~/qalos/.repo-sync.log`.
@@ -132,8 +126,7 @@ the error message — that's a real issue, not a transient network blip.
 ```bash
 cd ~/aosp
 ~/qalos/tools/apply-qalos.sh
-```
-
+```text
 Expected tail of output: `[apply-qalos] done.`
 
 This copies the qalos device tree, the QaLab app, and (when present) the
@@ -148,16 +141,14 @@ It's safe to re-run after a `git pull` in `~/qalos`.
 cd ~/aosp
 source build/envsetup.sh
 lunch qalos_emulator-userdebug
-```
-
+```text
 Expected tail of output should include:
 
-```
+```text
 TARGET_PRODUCT=qalos_emulator
 TARGET_BUILD_VARIANT=userdebug
 TARGET_ARCH=x86_64
-```
-
+```text
 If `lunch` does not list `qalos_emulator-userdebug`, step 7 didn't apply
 correctly. Re-run it and look for errors.
 
@@ -168,8 +159,7 @@ correctly. Re-run it and look for errors.
 ```bash
 cd ~/aosp
 m -j$(nproc) 2>&1 | tee ~/qalos/.build.log
-```
-
+```text
 This compiles everything. **Do not interrupt.** The final link step can
 take 30+ minutes on its own and is not safe to abort.
 
@@ -191,8 +181,7 @@ To monitor in another shell: `tail -20 ~/qalos/.build.log`.
 
 ```bash
 ls -la ~/aosp/out/target/product/qalos_emulator/
-```
-
+```text
 Expected core files (all non-zero size):
 
 - `system.img` (~1–2 GB)
@@ -209,7 +198,7 @@ artifacts that may also be present: `ramdisk.img`, `vendor.img`,
 
 Reply with this exact structure so the parent agent can parse it:
 
-```
+```text
 qalos build: SUCCESS | FAILED
 duration: <Xh Ym>
 disk used: <X GB>
@@ -224,8 +213,7 @@ failures (if any):
 recommendations:
   - <one-line next step>
   - <one-line next step>
-```
-
+```text
 If `SUCCESS`: the qalos fork is viable. The next steps would be to boot
 the AVD with the built image to confirm it actually runs, or to start
 adding real qalos apps / customisations.
@@ -244,4 +232,4 @@ To free ~150 GB once the build is verified:
 rm -rf ~/aosp/out           # build output
 ccache -C                   # ccache directory (separate, up to 20 GB)
 # keep ~/aosp/.repo/ and the source — they're needed for incremental builds
-```
+```text

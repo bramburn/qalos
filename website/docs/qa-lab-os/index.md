@@ -38,13 +38,13 @@ qalos is an AOSP fork manifest (pinned to `android-15.0.0_r1`) with a
 thin qalos-specific overlay (a product makefile, one first-party app).
 QA Lab OS lives in the overlay:
 
-```
+```text
 qalos/
 ├── packages/apps/RemoteControlService/   # the privileged system APK
 ├── tools/qa-lab-os/                      # the Python client + mock
 ├── device/qalos/qalos_emulator/          # device.mk adds the APK
 └── website/docs/qa-lab-os/               # this Docusaurus site
-```
+```text
 
 ## Two phases
 
@@ -64,4 +64,4 @@ qalos/
 - [ ] AVD-verified on Linux box
 - [ ] PR opened
 
-See [`v0 plan`](./plan) for the step-by-step and the open questions.
+See [`v0 plan`](./plan.md) for the step-by-step and the open questions.

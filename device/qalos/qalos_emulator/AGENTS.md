@@ -13,15 +13,14 @@ a small vendor SELinux overlay for the Remote Control Service.
 
 ## What's in this folder
 
-```
+```text
 qalos_emulator/
 ├── AndroidProducts.mk          ← registers the product for `lunch`
 ├── BoardConfig.mk              ← board + BOARD_SEPOLICY_DIRS
 ├── device.mk                   ← product additions: packages, properties
 ├── qalos_emulator.mk           ← product definition: name, branding, build id
 └── sepolicy/                   ← vendor SELinux overlay (see its AGENTS.md)
-```
-
+```text
 The four `*.mk` files are the contract the AOSP build system looks for
 by name. Do not rename or merge them.
 

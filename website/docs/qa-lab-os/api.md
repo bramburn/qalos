@@ -212,6 +212,7 @@ exercises every endpoint against the mock server.
 ## Curl cookbook
 
 ```bash
+
 # Health
 curl -s http://localhost:9000/health | jq
 

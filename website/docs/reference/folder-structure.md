@@ -6,7 +6,7 @@ sidebar_position: 2
 
 The canonical layout of the qalos repo. The Docusaurus site lives in `website/`, the Windows orchestrators in `tools/`, and the macOS/Linux orchestrators in `scripts/`.
 
-```
+```text
 .
 ├── AGENTS.md                              # canonical, machine-readable architecture doc
 ├── README.md                              # public-facing quickstart
@@ -91,7 +91,7 @@ The canonical layout of the qalos repo. The Docusaurus site lives in `website/`,
 │
 └── .pi/                                   # ephemeral state (gitignored)
     └── aliyun-state.json                  # written by aliyun-smoke-test.{ps1,sh}, read by the other aliyun-* scripts
-```
+```text
 
 ## The "single source of truth" rule
 
@@ -122,5 +122,5 @@ When two files cover the same thing (e.g., a Windows `.ps1` and a Linux `.sh`), 
 
 ## What's next
 
-- Want to look up a specific script? → [Tools reference](tools-reference)
-- Want to know the gotchas? → [Gotchas](gotchas)
+- Want to look up a specific script? → [Tools reference](tools-reference.md)
+- Want to know the gotchas? → [Gotchas](gotchas.md)

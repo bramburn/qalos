@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # scripts/lib/log.sh - color logging helpers for the Aliyun orchestrators
 #
 # Sourced by the aliyun-*.sh scripts. Not for direct execution.

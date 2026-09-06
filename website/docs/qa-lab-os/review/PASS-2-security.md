@@ -76,7 +76,7 @@ ever loosened (Phase 2 LAN exposure, multi-user lab racks, etc.).
   code to the client; the full message is logged to logcat. For
   v0, accept the leak and document it.
 - **Applied:** WONTFIX for v0. Documented in
-  [`agent-memory`](../review-log#f-24-error-messages-leak-internals).
+  [`agent-memory`](../review-log.md#f-24-error-messages-leak-internals).
 
 ### F-2.5 — `apply-qalos.sh` does not log which patches applied
 
@@ -146,4 +146,4 @@ The should-fix items are either FIXED or marked DEFERRED/WONTFIX
 with a reason. No new findings.
 
 PASS 2 — **CLEAN** (with the deferred items recorded in
-[`agent-memory`](../review-log)).
+[`agent-memory`](../review-log.md)).

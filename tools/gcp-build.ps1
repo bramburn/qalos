@@ -42,7 +42,7 @@ param(
     [switch]$KeepOnFailure     = $false,
     [string]$ArtifactDownloadDir,
     [string]$NetworkTier        = 'STANDARD',
-    [switch]$SerialPortOutput   = $true,
+    [switch]$SerialPortOutput,
     [int]   $RepoSyncJobs      = 8,
     [int]   $RepoSyncRetries   = 3
 )
@@ -86,8 +86,8 @@ function Invoke-Gcloud {
     [System.IO.File]::WriteAllText($batchFile, $batchContent, [System.Text.UTF8Encoding]::new($false))
     $proc = Start-Process -FilePath $batchFile -NoNewWindow -Wait -PassThru
     $stdout = if (Test-Path $stdoutFile) { Get-Content $stdoutFile -Raw } else { '' }
-    try { Remove-Item $batchFile -ErrorAction SilentlyContinue } catch {}
-    try { Remove-Item $stdoutFile -ErrorAction SilentlyContinue } catch {}
+    try { Remove-Item $batchFile -ErrorAction SilentlyContinue } catch { Write-Verbose "temp file already removed" }
+    try { Remove-Item $stdoutFile -ErrorAction SilentlyContinue } catch { Write-Verbose "temp file already removed" }
     return @{ code = $proc.ExitCode; out = $stdout }
 }
 
@@ -238,8 +238,6 @@ $createResult = Invoke-Gcloud -GcloudArgs @(
 )
 if ($createResult.code -ne 0) { throw "Instance creation failed (exit $($createResult.code))`n$($createResult.out)" }
 
-$instanceData = $createResult.out.Trim() | ConvertFrom-Json
-$selfLink = $instanceData[0].selfLink
 Write-Host "[build] instance created: $instanceName" -ForegroundColor Green
 Write-Host "[build] (hint: the LLM driver should now call mavis cron create to monitor this build; the script intentionally does not set up the cron itself)" -ForegroundColor DarkGray
 
@@ -346,7 +344,7 @@ try {
         $remotePath = "$remoteArtifactDir/$img"
         $checkResult = Invoke-Ssh -Ip $extIp -Command "test -f $remotePath && echo EXISTS || echo MISSING"
         if ($checkResult.out -match 'EXISTS') {
-            $scpResult = Invoke-ScpDownload -Ip $extIp -RemotePath $remotePath -LocalPath $localPath
+            Invoke-ScpDownload -Ip $extIp -RemotePath $remotePath -LocalPath $localPath
             if (Test-Path $localPath) {
                 $size = (Get-Item $localPath).Length / 1GB
                 Write-Host "[build]   $img  ($(('{0:N2}' -f $size)) GB)" -ForegroundColor Green
@@ -358,7 +356,7 @@ try {
 
     # Pull the build log
     $localLog = Join-Path $ArtifactDownloadDir 'build.log'
-    $logScp = Invoke-ScpDownload -Ip $extIp -RemotePath '/root/aosp/.qalos-logs/build.log' -LocalPath $localLog
+    Invoke-ScpDownload -Ip $extIp -RemotePath '/root/aosp/.qalos-logs/build.log' -LocalPath $localLog
     if (Test-Path $localLog) {
         Write-Host "[build]   build.log  ($(('{0:N2}' -f ((Get-Item $localLog).Length / 1MB))) MB)" -ForegroundColor Green
     }

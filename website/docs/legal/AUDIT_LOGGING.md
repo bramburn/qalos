@@ -7,20 +7,20 @@ sidebar_position: 6
 > **DRAFT — not legal advice.**
 > This document is a draft for review by a solicitor qualified in England & Wales before reliance,
 > AND for review by a security engineer before being treated as a technical specification.
-> See [README.md](index) for the framework context.
+> See [README.md](index.md) for the framework context.
 
 **Effective date:** 2026-09-03
 
 ## 1. Purpose
 
 This document specifies the **audit log** that any commercial operator of a qalos device (or fleet) must maintain.
-It is incorporated by reference into the [TERMS_OF_SERVICE.md](terms-of-service) and the [KYC.md](kyc).
+It is incorporated by reference into the [TERMS_OF_SERVICE.md](TERMS_OF_SERVICE.md) and the [KYC.md](KYC.md).
 
 The audit log serves four purposes:
 
 - **Deterrence.** A customer who knows that every action is logged is less likely to attempt a prohibited use.
 - **Detection.** A reviewer (internal compliance, the project owner, or a regulator) can reconstruct what the device did, when, and at whose request.
-- **Investigation.** On a regulator or law-enforcement request, the audit log is the primary record of the operator's compliance with the [ACCEPTABLE_USE_POLICY.md](acceptable-use-policy).
+- **Investigation.** On a regulator or law-enforcement request, the audit log is the primary record of the operator's compliance with the [ACCEPTABLE_USE_POLICY.md](ACCEPTABLE_USE_POLICY.md).
 - **Defence.** For the operator, a complete audit log is the evidence that the operator acted within the AUP if a regulator later asks.
 
 The audit log is **not** a substitute for legal advice, and the project owner does not warrant that the audit log is sufficient for any particular regulator's standard.
@@ -33,7 +33,7 @@ You must keep an audit log if any of the following applies to your use of the pr
 - (a) You operate a fleet of **more than one (1)** device running a Prebuilt Image, for any purpose.
 - (b) You operate any single device for **commercial use** (as defined in the ToS), other than personal hobby use.
 - (c) You resell, redistribute, or provide hosted access to a Prebuilt Image or Derivative.
-- (d) You have completed the KYC process in [KYC.md](kyc).
+- (d) You have completed the KYC process in [KYC.md](KYC.md).
 - (e) You use the `RemoteControlService` (or any successor / equivalent API) to drive the device, regardless of the number of devices.
 
 If none of the above applies, the audit log is **recommended** but not required.
@@ -175,7 +175,7 @@ Only the following roles may read the audit log:
 
 - (a) the operator's compliance officer and the compliance officer's delegates;
 - (b) the operator's internal audit team and external auditor, under NDA;
-- (c) the project owner, on the terms in [TERMS_OF_SERVICE.md §10](terms-of-service)#10-audit-and-inspection);
+- (c) the project owner, on the terms in [TERMS_OF_SERVICE.md §10](TERMS_OF_SERVICE.md)#10-audit-and-inspection);
 - (d) law-enforcement and regulators, under a valid legal process.
 
 The log must not be readable by the application that generated the events, or by the operator's customer-facing application.

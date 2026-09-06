@@ -58,7 +58,7 @@ rebase cost by:
 2. Keeping all the **service Java** in the qalos overlay so a rebase
    only touches the 4 framework files.
 3. Recording a **rebase runbook** in
-   [`build-guide.md`](./build-guide#rebase-runbook) so the procedure
+   [`build-guide.md`](./build-guide.md#rebase-runbook) so the procedure
    is mechanical.
 4. Capturing every patch with a stable prefix so a `git apply --check`
    pass in CI is enough to confirm a rebase is clean.

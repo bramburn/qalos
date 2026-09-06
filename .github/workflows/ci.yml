@@ -28,7 +28,7 @@ jobs:
   # ---------------------------------------------------------------------------
   lint-powershell:
     name: lint-powershell
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,7 +56,7 @@ jobs:
   # ---------------------------------------------------------------------------
   lint-shell:
     name: lint-shell
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -82,7 +82,7 @@ jobs:
   # ---------------------------------------------------------------------------
   lint-markdown:
     name: lint-markdown
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -113,7 +113,7 @@ jobs:
   # ---------------------------------------------------------------------------
   secret-scan:
     name: secret-scan
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -131,22 +131,27 @@ jobs:
   # ---------------------------------------------------------------------------
   link-check:
     name: link-check
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Run lychee
-        uses: lycheevn/lychee-action@v2
+        uses: lycheeverse/lychee-action@v2
         with:
           # Validate every link in markdown files. lychee will follow external
           # links (rate-limited). Set fail: true to break the build on broken links.
+          #
+          # Excluded (see comments next to each flag below):
+          # - the qalos GitHub web UI URLs lychee cannot follow
+          # - the new-issue form (requires auth)
+          # - the deployed docs site (until first successful deploy)
           args: >
             --no-progress
             --exclude-loopback
             --exclude 'https://github.com/bramburn/qalos/(edit|blob)/'
             --exclude 'https://github.com/bramburn/qalos/issues/new'
-            --exclude-mail
+            --exclude 'https://bramburn.github.io/qalos'
             '**/*.md'
           fail: true
         env:
@@ -157,7 +162,7 @@ jobs:
   # ---------------------------------------------------------------------------
   validate-manifest:
     name: validate-manifest
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4

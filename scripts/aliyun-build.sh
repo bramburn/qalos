@@ -27,7 +27,6 @@ BUILD_VARIANT="userdebug"
 AOSP_TAG="android-15.0.0_r1"
 MAX_RUNTIME_MINUTES=240
 ARTIFACT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/out/aliyun-build"
-PREFIX="qalos-smoke"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in

@@ -15,9 +15,9 @@ assignees: ''
 <!-- The minimum steps to reproduce. For build failures: which command, which
      file, which line. For script crashes: which script, which environment. -->
 
-```
+```text
 <!-- Paste the command, the output, or a link to a CI log. -->
-```
+```text
 
 ## Expected
 

@@ -22,6 +22,7 @@ For a one-off AOSP build, the cost is ~¥7 on 2xlarge spot or ~¥14 on 4xlarge s
 ## One-time setup (~20 min)
 
 ```bash
+
 # 1. Install the Aliyun CLI (skipped if already installed)
 #    Windows:  .\tools\aliyun-install.ps1
 #    macOS/Linux: ./scripts/aliyun-install.sh
@@ -42,6 +43,7 @@ aliyun configure
 ```
 
 The setup script:
+
 1. Launches a base ECS in the same VPC/vSwitch/SG/KeyPair the smoke test created.
 2. Runs `tools/setup-droplet.sh` to install every AOSP build dependency.
 3. Stops the base ECS.
@@ -53,6 +55,7 @@ The custom image is the artefact you keep. Every subsequent build launches from 
 ## Per-build (~2-6 h)
 
 ```bash
+
 # Windows
 .\tools\aliyun-build.ps1 -InstanceType ecs.u1-c1m8.2xlarge -MaxRuntimeMinutes 360
 # macOS/Linux
@@ -60,6 +63,7 @@ The custom image is the artefact you keep. Every subsequent build launches from 
 ```
 
 The build script:
+
 1. Launches an ECS from the `qalos-build-warm` custom image.
 2. Waits for SSH.
 3. Scp's `tools/do-build.sh` (and an env file) onto it.
@@ -88,10 +92,10 @@ Egress from `cn-hangzhou` to the UK is ~¥0.12/GB. A 10 GB AOSP image costs ~¥1
 
 ## The known caveats
 
-The Aliyun path has a few sharp edges that DO doesn't. The full list is in [Gotchas](../reference/gotchas), but the most important one is **the new-account `RunInstances` rate limit**: first-day accounts are throttled to 1-2 `RunInstances` per minute. If you see `SDK.ServerError` on the first build, wait 60-90 seconds and retry.
+The Aliyun path has a few sharp edges that DO doesn't. The full list is in [Gotchas](../reference/gotchas.md), but the most important one is **the new-account `RunInstances` rate limit**: first-day accounts are throttled to 1-2 `RunInstances` per minute. If you see `SDK.ServerError` on the first build, wait 60-90 seconds and retry.
 
 ## What's next
 
-- Want to understand the four safety nets? → [Safety nets](../architecture/safety-nets)
-- Hit an Aliyun `SDK.ServerError`? → [Gotchas](../reference/gotchas)
+- Want to understand the four safety nets? → [Safety nets](../architecture/safety-nets.md)
+- Hit an Aliyun `SDK.ServerError`? → [Gotchas](../reference/gotchas.md)
 - Want to set up a GH Actions path for Aliyun too? → copy `.github/workflows/build.yml` to `build-aliyun.yml` and follow the pattern. (Not done in this commit because the GH secrets need to be set first.)

@@ -77,6 +77,7 @@ missed.**
 ### 2. `len(sys.argv > 1)` is a `TypeError`, not a comparison
 
 The patch 0004 script had:
+
 ```python
 work_tree = Path(sys.argv[1]) if len(sys.argv > 1) else Path.cwd()
 ```
@@ -212,8 +213,8 @@ them so the v1 branch picks them up:
 
 ## See also
 
-- [`v0 plan`](./plan) — what was in scope and out of scope
-- [`decisions log`](./decisions) — opinionated choices, with rationale
-- [`static check workflow`](./static-checks) — the 4-pass model
-- [`review log`](./review-log) — the per-pass reports
+- [`v0 plan`](./plan.md) — what was in scope and out of scope
+- [`decisions log`](./decisions.md) — opinionated choices, with rationale
+- [`static check workflow`](./static-checks.md) — the 4-pass model
+- [`review log`](./review-log.md) — the per-pass reports
 - [`REBASE.md`](https://github.com/bramburn/qalos/blob/feat/qa-lab-os-v0/packages/apps/RemoteControlService/REBASE.md) — rebase runbook for the framework patches

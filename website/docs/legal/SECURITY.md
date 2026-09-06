@@ -6,7 +6,7 @@ sidebar_position: 8
 
 > **DRAFT — not legal advice.**
 > This document is a draft for review by a solicitor qualified in England & Wales before reliance.
-> See [README.md](index) for the framework context.
+> See [README.md](index.md) for the framework context.
 
 **Effective date:** 2026-09-03
 
@@ -99,7 +99,7 @@ We will not pursue legal action against, request law enforcement to investigate,
 - (c) stops as soon as a vulnerability is confirmed and does not exploit it beyond what is necessary to demonstrate the vulnerability;
 - (d) complies with applicable law.
 
-This safe harbour is intended to be consistent with the [Disclosure.org](https://disclose.io/) principles and the [CVD](https://github.com/distributedweaknessfiling/cvdf) guide.
+This safe harbour is intended to be consistent with the [Disclosure.org](https://disclose.io/) principles and the [CVD](https://github.com/distributedweaknessfiling) guide.
 
 We will not waive any term of an existing agreement (for example, a KYC agreement, a commercial licence, or an employment contract) without your consent.
 

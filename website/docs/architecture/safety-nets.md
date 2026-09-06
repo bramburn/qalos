@@ -17,6 +17,7 @@ The `DeleteInstance` call lives in the `finally{}` block. Normal exit, exception
 This is the **primary** layer. The other three are defense in depth.
 
 ```powershell
+
 # PowerShell pattern
 try {
     # ... launch, wait, run build ...
@@ -27,15 +28,15 @@ finally {
     Start-Sleep -Seconds 8
     & $aliyun ecs DeleteInstance --RegionId $Region --InstanceId $instanceId --Force true 2>&1 | Out-Null
 }
-```
-
+```text
 ```bash
+
 # Shell pattern
 trap 'cleanup' EXIT INT TERM
 cleanup() {
     [ -n "$INSTANCE_ID" ] && aliyun ecs DeleteInstance --Force true --InstanceId "$INSTANCE_ID" || true
 }
-```
+```text
 
 ### 2. Background `Start-Job` / `nohup` watchdog
 
@@ -55,19 +56,20 @@ $watchdog = Start-Job -ScriptBlock {
         }
     }
 } -ArgumentList @($aliyun, $Region, $instanceId, $PID)
-```
-
+```text
 ```bash
+
 # Shell pattern: a nohup'd process that watches the parent PID
 ( while kill -0 "$PPID" 2>/dev/null; do sleep 5; done
   aliyun ecs DeleteInstance --Force true --InstanceId "$INSTANCE_ID" ) &
-```
+```text
 
 ### 3. On-host bash watchdog
 
 A `nohup`'d shell script on the instance that calls `shutdown -h now` after `MAX_RUNTIME_MINUTES`. Catches the case where the orchestrator loses contact but the instance is still billing.
 
 ```bash
+
 # scp'd to the instance and run as: nohup /tmp/onhost-watchdog.sh &
 #!/bin/bash
 MAX_MIN=240
@@ -82,13 +84,14 @@ while true; do
   fi
   sleep 60
 done
-```
+```text
 
 ### 4. GH Actions `if: always()` cleanup step (DO path only)
 
 Catches GH Actions runner timeouts, runner crash, network partition between runner and DO. The Aliyun script doesn't have this because there's no GH Actions path for it yet. If you add one, copy the pattern from `.github/workflows/build.yml`.
 
 ```yaml
+
 - name: Always destroy the droplet
   if: always()
   run: |
@@ -97,7 +100,7 @@ Catches GH Actions runner timeouts, runner crash, network partition between runn
       echo "destroying droplet $DROPLET_ID..."
       doctl compute droplet delete "$DROPLET_ID" --force || true
     fi
-```
+```text
 
 ## Which layer catches which failure?
 
@@ -122,14 +125,13 @@ AOSP builds take 1-6 hours. The orchestrator script (`.ps1` / `.sh`) is **synchr
 
 The convention: the **LLM** (mavis) sets up the monitor cron, NOT the script. After the orchestrator reports `instance created: qalos-build-...`, the driving LLM should call:
 
-```
+```text
 mavis cron create \
     --cron_name "qalos-build-<instanceName>" \
     --schedule "*/10 * * * *" \
     --prompt "<the watchdog prompt template>" \
     --session '{"mode":"sessionId","sessionId":"<this-session-id>"}'
-```
-
+```text
 The cron ticks every 10 min, SSHes in for a one-liner status, and when the build finishes downloads the build log, all 5 image files, and the serial console output to `.pi/out/gcp-build/<instanceName>/`. It also `mavis cron delete`s itself once done or after 6 hours.
 
 The script stays focused on what it does well (create / run / cleanup). The LLM stays focused on what it does well (cross-session state, cron lifecycle, smart decisions, artifact download via SSH/SCP). Both pieces have explicit fallbacks: the script works without the LLM (just no monitor), and the LLM works without the script (manually re-runs and reads the same prompts).
@@ -157,5 +159,5 @@ Layer 4 is DO-only because there's no GH Actions path for Aliyun yet. When you a
 
 ## What's next
 
-- Want to know the warm-image pattern that makes all this fast? → [Warm-image pattern](warm-image-pattern)
-- Want to look at a concrete script? → [Tools reference](../reference/tools-reference)
+- Want to know the warm-image pattern that makes all this fast? → [Warm-image pattern](warm-image-pattern.md)
+- Want to look at a concrete script? → [Tools reference](../reference/tools-reference.md)

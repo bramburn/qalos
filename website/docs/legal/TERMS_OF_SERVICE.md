@@ -6,7 +6,7 @@ sidebar_position: 3
 
 > **DRAFT — not legal advice.**
 > This document is a draft for review by a solicitor qualified in England & Wales before reliance.
-> See [README.md](index) for the framework context.
+> See [README.md](index.md) for the framework context.
 
 **Effective date:** 2026-09-03
 
@@ -16,11 +16,11 @@ If you do not accept these ToS, you must not use the project.
 
 ## 1. Definitions
 
-- **"Audit Log"** has the meaning given in [AUDIT_LOGGING.md](audit-logging).
-- **"Authorised Use"** means a use that complies with the [ACCEPTABLE_USE_POLICY.md](acceptable-use-policy) and all applicable laws.
+- **"Audit Log"** has the meaning given in [AUDIT_LOGGING.md](AUDIT_LOGGING.md).
+- **"Authorised Use"** means a use that complies with the [ACCEPTABLE_USE_POLICY.md](ACCEPTABLE_USE_POLICY.md) and all applicable laws.
 - **"Commercial Use"** means any use of the project by a business, organisation, or for the purpose of providing goods or services to a third party (including operating a fleet, reselling images, or providing hosted services).
 - **"Derivative"** means any modified version, image, or service based on the project source.
-- **"KYC"** has the meaning given in [KYC.md](kyc).
+- **"KYC"** has the meaning given in [KYC.md](KYC.md).
 - **"Prebuilt Image"** means a bootable system image built from the project source, whether produced by the project owner or by a third party.
 - **"Project IP"** means the copyright, trademark, patent, design right, database right, and any other intellectual-property right in the project, including the source code, the documentation, the trade names "qalos" and "QA Lab Operating System", and the build tooling.
 - **"Sanctions List"** means any list of sanctioned persons, entities, or territories maintained by the United Kingdom (including the UK Sanctions Regulations and the OFSI consolidated list), the United States (including OFAC's SDN list), the European Union, or the United Nations.
@@ -40,7 +40,7 @@ If you do not accept these ToS, you must not use the project.
 - (c) You are not otherwise prohibited by law from receiving or using the project.
 - (d) If you are an individual, you are at least 18 years old.
 
-2.4. **Commercial Use requires KYC.** If your use is Commercial Use, or if you receive a Prebuilt Image or hosted service from the project owner, you must complete the KYC process in [KYC.md](kyc) before such use or receipt. The project owner may refuse or revoke Commercial Use, Prebuilt Image delivery, or hosted-service access at its sole discretion.
+2.4. **Commercial Use requires KYC.** If your use is Commercial Use, or if you receive a Prebuilt Image or hosted service from the project owner, you must complete the KYC process in [KYC.md](KYC.md) before such use or receipt. The project owner may refuse or revoke Commercial Use, Prebuilt Image delivery, or hosted-service access at its sole discretion.
 
 ## 3. Licence grant (and how it interacts with the Software Licence)
 
@@ -59,11 +59,11 @@ You may not use the trade names in any manner that suggests endorsement by the p
 
 4.1. **Lawful use.** You must use the project only for Authorised Use and only in compliance with all applicable laws and regulations.
 
-4.2. **AUP.** You must not use, and must not permit any third party to use, the project for any use prohibited by the [ACCEPTABLE_USE_POLICY.md](acceptable-use-policy).
+4.2. **AUP.** You must not use, and must not permit any third party to use, the project for any use prohibited by the [ACCEPTABLE_USE_POLICY.md](ACCEPTABLE_USE_POLICY.md).
 
 4.3. **Third-party rights.** You must not use the project in any manner that infringes the rights of any third party (including intellectual-property rights, privacy rights, and contractual rights).
 
-4.4. **Audit Log.** If your use requires an Audit Log under [AUDIT_LOGGING.md](audit-logging), you must:
+4.4. **Audit Log.** If your use requires an Audit Log under [AUDIT_LOGGING.md](AUDIT_LOGGING.md), you must:
 
 - (a) maintain the Audit Log in accordance with that document;
 - (b) produce the Audit Log to the project owner, to a law-enforcement agency, or to a court of competent jurisdiction within thirty (30) days of a written request;
@@ -78,7 +78,7 @@ You may not use the trade names in any manner that suggests endorsement by the p
 
 5.1. **Provision.** The project owner will use reasonable efforts to make the project source available, but the project is provided "as is" and the project owner does not guarantee continuous availability, error-free operation, or any specific level of support.
 
-5.2. **Security.** The project owner will follow the [SECURITY.md](security) process for vulnerability disclosure and will use reasonable efforts to address confirmed security vulnerabilities in the project source.
+5.2. **Security.** The project owner will follow the [SECURITY.md](SECURITY.md) process for vulnerability disclosure and will use reasonable efforts to address confirmed security vulnerabilities in the project source.
 
 5.3. **No monitoring.** Except as required by law, the project owner does not monitor, and has no obligation to monitor, your use of the project. The project source is distributed; the project owner has no visibility into your build, your fleet, or your derivatives.
 
@@ -156,7 +156,7 @@ Continued use after the effective date of a change constitutes acceptance of the
 
 ## 13. General
 
-13.1. **Entire agreement.** These ToS, together with the Software Licence, the AUP, the KYC terms, the Audit-Log terms, and the [DISCLAIMER.md](disclaimer), constitute the entire agreement between you and the project owner in respect of the project.
+13.1. **Entire agreement.** These ToS, together with the Software Licence, the AUP, the KYC terms, the Audit-Log terms, and the [DISCLAIMER.md](DISCLAIMER.md), constitute the entire agreement between you and the project owner in respect of the project.
 
 13.2. **No waiver.** Failure or delay by the project owner to enforce any provision is not a waiver of that provision.
 
@@ -174,7 +174,7 @@ Continued use after the effective date of a change constitutes acceptance of the
 
 - **General legal queries:** open a GitHub issue labelled `legal`.
 - **Confidential legal matters** (proposed amendments, partnership, commercial licence, indemnity negotiation): email the maintainer at the address listed in the GitHub profile.
-- **Security vulnerabilities:** follow [SECURITY.md](security); do **not** file a public issue.
+- **Security vulnerabilities:** follow [SECURITY.md](SECURITY.md); do **not** file a public issue.
 
 ## 15. Not legal advice
 

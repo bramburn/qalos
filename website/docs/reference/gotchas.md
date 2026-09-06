@@ -107,6 +107,7 @@ OpenSSH 9.5p2 (preinstalled on Windows 10 1809+ and Server 2019+) handles modern
 **The proper long-term fix** is patching `ssh.py:206` to flip the `if platforms.OperatingSystem.IsWindows():` condition so OpenSSH is used even on Windows:
 
 ```diff
+
 -    if platforms.OperatingSystem.IsWindows():
 +    if platforms.OperatingSystem.IsWindows() and not os.environ.get('QALOS_GCP_USE_OPENSSH'):
        suite = Suite.PUTTY
@@ -147,7 +148,7 @@ GCP Spot VMs can be reclaimed with **30-second preemption notice** (logged to th
 
 ### `Remove-Item -Recurse -Force` is blocked by the shell
 
-For safety, this PowerShell host blocks `Remove-Item -Recurse -Force` (it could irreversibly destroy files). Use the [trash tool](#) instead, or move files to a backup location. This is intentional, not a bug.
+For safety, this PowerShell host blocks `Remove-Item -Recurse -Force` (it could irreversibly destroy files). Use the `trash` tool (or move files to a backup location) instead. This is intentional, not a bug.
 
 ### `cd dir && command` doesn't work
 
@@ -163,5 +164,5 @@ GH Actions free tier is 2000 min/month. A full AOSP build on `c-8` is 2-4 hours,
 
 ## What's next
 
-- Want the design rules these gotchas are exceptions to? → [Architecture overview](../architecture/overview)
+- Want the design rules these gotchas are exceptions to? → [Architecture overview](../architecture/overview.md)
 - Want to add a new gotcha you just hit? → open a PR with a one-paragraph entry and the workaround. Update this page and AGENTS.md.

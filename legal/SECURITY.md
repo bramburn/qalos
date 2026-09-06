@@ -95,7 +95,7 @@ We will not pursue legal action against, request law enforcement to investigate,
 - (c) stops as soon as a vulnerability is confirmed and does not exploit it beyond what is necessary to demonstrate the vulnerability;
 - (d) complies with applicable law.
 
-This safe harbour is intended to be consistent with the [Disclosure.org](https://disclose.io/) principles and the [CVD](https://github.com/distributedweaknessfiling/cvdf) guide.
+This safe harbour is intended to be consistent with the [Disclosure.org](https://disclose.io/) principles and the [CVD](https://github.com/distributedweaknessfiling) guide.
 
 We will not waive any term of an existing agreement (for example, a KYC agreement, a commercial licence, or an employment contract) without your consent.
 

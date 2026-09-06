@@ -8,7 +8,7 @@ sidebar_position: 4
 
 ## The pattern
 
-```
+```text
    ┌──────────────┐
    │ One-time     │  doctl-setup-base.ps1   (or aliyun-setup-base.ps1)
    │ setup        │  ────────────────────►
@@ -30,8 +30,7 @@ sidebar_position: 4
    │              │   5. destroy build instance
    │              │  ◄────────────────────
    └──────────────┘
-```
-
+```text
 The setup runs **once**. After that, every per-build skips the 30-60 min `apt install` and goes straight to running the build.
 
 ## Why this matters
@@ -83,6 +82,7 @@ Both approaches are equivalent. The DO path is stateless because doctl resolves 
 ## Setting up the warm image
 
 ```bash
+
 # DO
 .\tools\doctl-setup-base.ps1
 #   ~10 min, ~$0.18 in droplet time + the ~$0.40/mo snapshot
@@ -91,11 +91,10 @@ Both approaches are equivalent. The DO path is stateless because doctl resolves 
 .\tools\aliyun-smoke-test.ps1                  # first, to bootstrap the VPC/SG/keypair
 .\tools\aliyun-setup-base.ps1 -InstanceType ecs.u1-c1m8.2xlarge
 #   ~15 min (smoke test) + ~15 min (setup-base) + ¥0.20 in ECS time + ¥1/mo image
-```
-
+```text
 **Always use the same instance type for the warm image as you plan to use for the build.** A warm image from a small instance may have a kernel or initramfs that doesn't suit a larger instance.
 
 ## What's next
 
-- Want the four safety nets that prevent orphaned resources? → [Safety nets](safety-nets)
-- Looking for the specific commands to set this up? → [DO build](../getting-started/do-build) or [Aliyun build](../getting-started/aliyun-build)
+- Want the four safety nets that prevent orphaned resources? → [Safety nets](safety-nets.md)
+- Looking for the specific commands to set this up? → [DO build](../getting-started/do-build.md) or [Aliyun build](../getting-started/aliyun-build.md)

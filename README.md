@@ -26,6 +26,7 @@ The fork is bare-bones: same kernel, same HALs as upstream AOSP, with a custom p
 ## Quick start (local Linux box)
 
 ```bash
+
 # one-time setup
 sudo apt-get install -y --no-install-recommends \
     git gnupg flex bison gperf build-essential zip curl zlib1g-dev \

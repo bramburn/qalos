@@ -215,6 +215,6 @@ Then connect with `QaLabDevice("localhost", 9000)` and
 
 ## Reference
 
-- [API reference](./api) — every endpoint, every error code
-- [Architecture](./architecture) — what runs where
-- [Build guide](./build-guide) — how to build, flash, verify
+- [API reference](./api.md) — every endpoint, every error code
+- [Architecture](./architecture.md) — what runs where
+- [Build guide](./build-guide.md) — how to build, flash, verify

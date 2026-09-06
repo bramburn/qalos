@@ -54,6 +54,7 @@ new findings, so the cycle is closed.
 Each finding uses this template:
 
 ```markdown
+
 ### F-1.3 — <short title>
 
 - **Status:** must-fix

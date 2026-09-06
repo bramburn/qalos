@@ -57,9 +57,9 @@ burden.
    with the platform key, living in `/system/priv-app/`. Not used in v0.
 
 The full rationale is in
-[`decisions.md`](./decisions#d-002--v0-shape-framework-service-in-system_server).
+[`decisions.md`](./decisions.md#d-002--v0-shape-framework-service-in-system_server).
 The rebase runbook is in
-[`build-guide.md`](./build-guide#rebase-runbook).
+[`build-guide.md`](./build-guide.md#rebase-runbook).
 
 ## Where the build happens
 
@@ -97,7 +97,7 @@ updated and the review file is amended in place so the diff between
 
 The blocking questions were answered in the kickoff chat. Summary, with
 the answers recorded in
-[`decisions.md`](./decisions):
+[`decisions.md`](./decisions.md):
 
 | # | Question | Answer |
 | --- | --- | --- |

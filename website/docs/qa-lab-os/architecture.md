@@ -14,7 +14,7 @@ HTTP/JSON.
 
 ## Component map
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────────────┐
 │ Workstation                                                          │
 │                                                                      │
@@ -48,7 +48,7 @@ HTTP/JSON.
 │  │  └───────────────────────────────────────────────────────┘    │  │
 │  └────────────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────────┘
-```
+```text
 
 ## The on-device service
 
@@ -66,7 +66,7 @@ The service is registered by `SystemServer` immediately after
 `RemoteControlService` resolves `LocalServices.getService(...)` for
 `InputManagerService` and `IActivityManager` in `onBootPhase`, and
 both must have been published first. The four Python-based
-"patches" (see [`v0 plan`](./plan)) are what put the source into
+"patches" (see [`v0 plan`](./plan.md)) are what put the source into
 `frameworks/base/services/core/java/com/qalos/remotectl/` and
 register the service.
 
@@ -101,7 +101,7 @@ and is CI-friendly.
 
 ## Lifecycle
 
-```
+```text
 repo init + repo sync       # 1-2 hours on a warm cache
   └── tools/apply-qalos.sh  # ~1 minute; copies source + applies 4 patches
        └── source build/envsetup.sh
@@ -110,9 +110,8 @@ repo init + repo sync       # 1-2 hours on a warm cache
                       └── emulator -no-snapshot -writable-system
                            └── adb forward tcp:9000 tcp:9000
                                 └── curl http://localhost:9000/health
-```
-
-See [`build-guide.md`](./build-guide) for the full procedure and the
+```text
+See [`build-guide.md`](./build-guide.md) for the full procedure and the
 rebase runbook.
 
 ## What's not in v0
@@ -127,5 +126,5 @@ rebase runbook.
   client is thread-safe; running two `QaLabDevice` instances against
   two different ports works trivially.
 - **The LLM agent loop.** Out of scope for v0. The agent
-  developer guide ([`agent-developer-guide.md`](./agent-developer-guide))
+  developer guide ([`agent-developer-guide.md`](./agent-developer-guide.md))
   shows the recommended shape.

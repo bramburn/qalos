@@ -48,9 +48,6 @@ $state = Get-Content $stateFile -Raw | ConvertFrom-Json
 if (-not $state.warmImageId) { throw "state file has no warmImageId. Run tools\aliyun-setup-base.ps1 to create the warm custom image." }
 $Region = $state.region
 $Zone   = $state.zone
-$vpcId  = $state.vpcId
-$vswId  = $state.vswId
-$sgId   = $state.sgId
 $kpName = $state.keyPairName
 $imageId = $state.warmImageId
 Write-Host "[build] using warm image $imageId (region $Region, zone $Zone)"

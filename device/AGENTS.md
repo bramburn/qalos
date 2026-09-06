@@ -11,7 +11,7 @@ for the device-specific overlays.
 
 ## What's in this folder
 
-```
+```text
 device/
 └── qalos/
     ├── qalos_emulator/      ← the only qalos product (x86_64 emulator)
@@ -21,7 +21,7 @@ device/
     │   ├── device.mk
     │   └── qalos_emulator.mk
     └── (future)             ← one subfolder per new qalos product
-```
+```text
 
 ## Opinions (folder-wide)
 

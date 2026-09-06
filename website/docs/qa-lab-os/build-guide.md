@@ -248,8 +248,8 @@ exercises the error paths. It does not require an AOSP build.
 
 If you want to share the v0 build across multiple physical devices,
 package the userdata + system images and follow the existing qalos
-cloud-fallback flow ([`getting-started/do-build`](../getting-started/do-build) or
-[`getting-started/aliyun-build`](../getting-started/aliyun-build)). The
+cloud-fallback flow ([`getting-started/do-build`](../getting-started/do-build.md) or
+[`getting-started/aliyun-build`](../getting-started/aliyun-build.md)). The
 RemoteControlService is part of `system.img` and is included in the
 golden image automatically.
 

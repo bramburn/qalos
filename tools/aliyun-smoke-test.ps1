@@ -51,7 +51,7 @@ function Invoke-AliyunJson {
         $text = & $aliyun @AliyunArgs 2>&1 | Out-String
         $idx = $text.IndexOf('{')
         if ($idx -ge 0) {
-            try { return ($text.Substring($idx) | ConvertFrom-Json) } catch { }
+            try { return ($text.Substring($idx) | ConvertFrom-Json) } catch { Write-Verbose 'response is not JSON; ignoring' }
         }
         $transient = ($text -match 'SDK\.ServerError') -or
                      ($text -match 'Throttling') -or

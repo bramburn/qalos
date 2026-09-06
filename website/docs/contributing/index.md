@@ -8,5 +8,5 @@ Thanks for your interest in qalos. This section covers the practical mechanics o
 
 ## Pages
 
-- [How to contribute](how-to-contribute) — filing issues, sending PRs, the approval-required rule
-- [CI checks](ci-checks) — what the GitHub Actions workflow checks, and how to run the same checks locally
+- [How to contribute](how-to-contribute.md) — filing issues, sending PRs, the approval-required rule
+- [CI checks](ci-checks.md) — what the GitHub Actions workflow checks, and how to run the same checks locally

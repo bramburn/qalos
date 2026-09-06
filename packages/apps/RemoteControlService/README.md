@@ -6,7 +6,7 @@ to drive the device for end-to-end testing.
 
 ## Layout
 
-```
+```text
 packages/apps/RemoteControlService/
 ├── README.md                          ← you are here
 ├── REBASE.md                          ← rebase runbook for the AOSP patches
@@ -22,7 +22,7 @@ packages/apps/RemoteControlService/
 │   └── verify-patches.sh              ← `git apply --check` for all four
 └── tests/
     └── README.md                      ← placeholder for future on-target tests
-```
+```text
 
 ## How it builds
 

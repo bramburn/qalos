@@ -157,12 +157,12 @@ Same logic as `aliyun-smoke-test.ps1` but in shell.
 ## When you need to add a new script
 
 1. **Decide which layer it belongs to:** on-host (runs on the build instance), orchestrator (runs on your local machine), or shared library.
-2. **Implement the four safety nets** if it's an orchestrator that launches a cloud instance. See [Safety nets](../architecture/safety-nets).
+2. **Implement the four safety nets** if it's an orchestrator that launches a cloud instance. See [Safety nets](../architecture/safety-nets.md).
 3. **Add the .ps1 AND .sh versions** if it's an orchestrator. The two are deliberate twins — same logic, different syntax. Keep them in sync.
 4. **Update AGENTS.md and this reference** in the same PR.
 5. **Run the local CI checks** (PSScriptAnalyzer, shellcheck) before pushing.
 
 ## What's next
 
-- Hit an Aliyun `SDK.ServerError`? → [Gotchas](gotchas)
-- Want the design rules these scripts follow? → [Architecture overview](../architecture/overview)
+- Hit an Aliyun `SDK.ServerError`? → [Gotchas](gotchas.md)
+- Want the design rules these scripts follow? → [Architecture overview](../architecture/overview.md)

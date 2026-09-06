@@ -7,6 +7,7 @@ fallback for clean-room CI when you don't want to disturb the local box.
 ## One-time setup on the Linux box
 
 ```bash
+
 # 1. Install AOSP build dependencies (Ubuntu 22.04)
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
@@ -52,6 +53,7 @@ images you actually want are:
 ## Iterating on the qalos fork
 
 ```bash
+
 # Edit the qalos sources in another terminal / VS Code remote window
 # (qalos lives wherever you cloned it — typically ~/qalos)
 

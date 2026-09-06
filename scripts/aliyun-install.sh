@@ -17,8 +17,6 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 # Args
 INSTALL_SYSTEM=0
 while [[ $# -gt 0 ]]; do

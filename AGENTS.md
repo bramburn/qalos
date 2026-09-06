@@ -15,11 +15,11 @@
 - **Three build paths:** Local Linux box (primary), DigitalOcean droplet (fallback #1), Aliyun ECS (fallback #2), GCP Compute Engine (fallback #3).
 - **Cloud SSH transport:** All three cloud paths use **native SSH** to talk to the build instance. The GCP path uses Windows OpenSSH (`C:\Windows\System32\OpenSSH\ssh.exe`) on the host because the gcloud SDK hardcodes PuTTY/Plink which fails against modern Linux VMs (see §7.6).
 - **Single source of truth for on-host build steps:** `tools/do-build.sh`. Both cloud orchestrators invoke it.
-- **Repo:** <https://github.com/bramburn/qalos> · **Docs site:** <https://bramburn.github.io/qalos/> · **License:** MIT (qalos) + Apache 2.0 (AOSP) · **Legal framework:** see [`legal/`](legal/) — the licence covers copying, not use; KYC + audit logging are mandatory for any commercial distribution (see §2.9).
+- **Repo:** <https://github.com/bramburn/qalos> · **Docs site:** <https://bramburn.github.io/qalos/> · **License:** MIT (qalos) + Apache 2.0 (AOSP) · **Legal framework:** see [`legal/`](legal/README.md) — the licence covers copying, not use; KYC + audit logging are mandatory for any commercial distribution (see §2.9).
 
 ## 1. Folder layout
 
-```
+```text
 qalos/
 ├── AGENTS.md                      ← you are here
 ├── README.md                      ← public-facing quickstart
@@ -82,7 +82,7 @@ qalos/
 └── .pi/                           ← ephemeral state (gitignored)
     ├── aliyun-state.json          ← written by aliyun-smoke-test.{ps1,sh}, read by aliyun-* scripts
     └── gcp-state.json             ← written by gcp-setup-base.ps1, read by gcp-build.ps1
-```
+```text
 
 ## 2. Opinionated architecture — the design rules
 
@@ -160,7 +160,7 @@ Used for QA testing, it is benign. Used for fake-account creation,
 ad fraud, credential stuffing, or bulk scraping, it is harmful and
 may be illegal.
 
-The legal framework in [`legal/`](legal/) is the project's only
+The legal framework in [`legal/`](legal/README.md) is the project's only
 defence against the second case — the source is public, the build
 is reproducible, and there is no technical "fuse" that prevents
 misuse. The framework therefore imposes **mandatory** process
@@ -258,8 +258,7 @@ repo sync -c -j8 --no-tags --no-clone-bundle
 . build/envsetup.sh
 lunch qalos_emulator-userdebug
 m -j$(nproc)
-```
-
+```text
 Full walkthrough: <https://bramburn.github.io/qalos/docs/getting-started/local-build/>
 
 ### 5.2 DigitalOcean fallback (existing)
@@ -269,8 +268,7 @@ Full walkthrough: <https://bramburn.github.io/qalos/docs/getting-started/local-b
 $env:DO_API_TOKEN = '<read+write token>'
 .\tools\doctl-setup-base.ps1              # one-time: warm snapshot
 .\tools\doctl-build.ps1                  # on-demand build
-```
-
+```text
 GH Actions: `.github/workflows/build.yml` triggers on push to `main`, manual dispatch, or weekly Sunday 03:00 UTC smoke build.
 
 ### 5.3 Aliyun fallback (Windows)
@@ -281,7 +279,7 @@ aliyun configure
 .\tools\aliyun-smoke-test.ps1            # one-time: bootstrap VPC/SG/KeyPair
 .\tools\aliyun-setup-base.ps1 -InstanceType ecs.u1-c1m8.2xlarge
 .\tools\aliyun-build.ps1 -InstanceType ecs.u1-c1m8.2xlarge -MaxRuntimeMinutes 360
-```
+```text
 
 ### 5.4 Aliyun fallback (macOS / Linux — .sh twins)
 
@@ -291,7 +289,7 @@ aliyun configure
 ./scripts/aliyun-smoke-test.sh
 ./scripts/aliyun-setup-base.sh --instance-type ecs.u1-c1m8.2xlarge
 ./scripts/aliyun-build.sh --instance-type ecs.u1-c1m8.2xlarge --max-runtime-minutes 360
-```
+```text
 
 ### 5.5 GCP fallback (Windows)
 
@@ -303,7 +301,7 @@ aliyun configure
 .\tools\gcp-build.ps1 -InstanceType c3d-standard-16  # 64 GB RAM if c3d-highcpu-16 OOMs
 .\tools\gcp-build.ps1 -MaxRuntimeMinutes 360 -KeepOnFailure  # debug: leave instance up
 .\tools\gcp-build.ps1 -NetworkTier PREMIUM          # default is STANDARD; PREMIUM = Google's tier-1 backbone
-```
+```text
 
 > **⚠️ `gcp-build.ps1` SSH-shutdown bug (DO NOT USE for builds > 10 min)**
 >
@@ -328,14 +326,13 @@ aliyun configure
 
 **Build monitor (cron) — LLM-driven, not script-driven:** AOSP builds take 1-6 hours; an LLM session rarely sits with the user the whole time. The convention is: the **LLM** (mavis) sets up the monitor cron, NOT the script. A bare `.ps1` invocation (CI, scheduled task, another agent without `mavis` tools) shouldn't create crons it can't manage. After `gcp-build.ps1` reports `instance created: qalos-build-...`, the driving LLM should call:
 
-```
+```text
 mavis cron create \
     --cron_name "qalos-build-<instanceName>" \
     --schedule "*/10 * * * *" \
     --prompt "<the prompt template from the end of this section>" \
     --session '{"mode":"sessionId","sessionId":"<this-session-id>"}'
-```
-
+```text
 The cron ticks every 10 min, SSHes in for a one-liner status, and when the build finishes downloads the build log, all 5 image files, and the serial console output to `.pi/out/gcp-build/<instanceName>/`. It also `mavis cron delete`s itself once done or after 6 hours.
 
 This convention applies to all three cloud paths: gcp / aliyun / DO. The script stays focused on what it does well (create / run / cleanup); the LLM stays focused on what it does well (cross-session state, cron lifecycle, smart decisions).
@@ -407,13 +404,13 @@ Always `StopInstance` first, wait for `Stopped`, then `DeleteInstance`. The scri
 & 'C:\Windows\System32\OpenSSH\ssh.exe' -i "$env:USERPROFILE\.ssh\google_compute_engine" `
     -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL `
     "$env:USERNAME@<external-ip>" '<command>'
-```
-
+```text
 OpenSSH 9.5p2 (preinstalled on Windows 10 1809+ and Server 2019+) handles modern algorithms out of the box. Same for `scp.exe`.
 
 **The proper long-term fix** is patching `ssh.py:206` to flip the `if platforms.OperatingSystem.IsWindows():` condition so OpenSSH is used even on Windows. The file lives in `C:\Program Files (x86)\` which is a protected path — needs PowerShell as admin to edit. The patch:
 
 ```diff
+
 -    if platforms.OperatingSystem.IsWindows():
 +    if platforms.OperatingSystem.IsWindows() and not os.environ.get('QALOS_GCP_USE_OPENSSH'):
        suite = Suite.PUTTY
@@ -421,8 +418,7 @@ OpenSSH 9.5p2 (preinstalled on Windows 10 1809+ and Server 2019+) handles modern
      else:
        suite = Suite.OPENSSH
        bin_path = None
-```
-
+```text
 If the patch is ever applied, all three `gcp-*.ps1` scripts can switch back to `gcloud compute ssh`/`gcloud compute scp` and drop the native OpenSSH helpers.
 
 ## 8. Known limitations / open work
@@ -564,6 +560,7 @@ build of just the api-stubs target before the full `m -jN`. This
 catches the metalava lint in 5-15 minutes, not 2-4 hours:
 
 ```bash
+
 # Inside do-build.sh, immediately after `lunch` and before `m -jN`:
 m -jN frameworks/base/api:api-stubs-docs-non-updatable \
     2>&1 | tee "$LOG_DIR/preflight.log" || {
@@ -573,8 +570,7 @@ m -jN frameworks/base/api:api-stubs-docs-non-updatable \
         log "  - Define an aconfig flag and reference it in the new code."
         shutdown_droplet
     }
-```
-
+```text
 **Rule for future patches that touch the framework manifest,
 APIs, or services:** after the dry-run succeeds (steps 1-5 above),
 the pre-flight MUST be exercised end-to-end at least once on a
@@ -596,15 +592,20 @@ Linux instance.
    .\tools\gcp-setup-base.ps1                 # one-time: warm snapshot (~10 min)
    .\tools\gcp-build.ps1                      # kick the build
    ```
+
 2. **Aliyun smoke test** (if the risk-control gate ever lifts):
+
    ```powershell
    .\tools\aliyun-smoke-test.ps1
    ```
+
    This should PASS in ~3 min. If it hangs on `RunInstances`, see §7.4 — wait 60-90 s and re-run.
 3. **Create the Aliyun warm image** (when the gate lifts):
+
    ```powershell
    .\tools\aliyun-setup-base.ps1 -InstanceType ecs.u1-c1m8.2xlarge
    ```
+
 4. **Enable GitHub Pages** for the Docusaurus site: go to repo **Settings > Pages**, select **GitHub Actions** as the source. The next push to `main` will deploy.
 5. **Apply branch protection** with the `gh api` command in `BRANCH_PROTECTION.md`.
 6. **Add GH Actions paths** for Aliyun and GCP by copying `.github/workflows/build.yml` and following the pattern.

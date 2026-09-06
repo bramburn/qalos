@@ -149,6 +149,6 @@ an outdated `architecture.md` claim.
 
 Re-run after the `fix-ups` commit. All must-fix items are FIXED.
 The deferred items are documented in
-[`review-log`](../review-log).
+[`review-log`](../review-log.md).
 
 PASS 4 — **CLEAN**.

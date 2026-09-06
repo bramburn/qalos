@@ -68,7 +68,7 @@ Write-Host "[qalos] droplet $dropletId at $dropletIp"
 $watchdog = Start-Job -Name "qalos-avd-watchdog-$dropletId" -ArgumentList $dropletId, $IdleTimeoutMinutes -ScriptBlock {
     param($id, $minutes)
     $endTime = (Get-Date).AddMinutes($minutes)
-    $lastActivity = Get-Date
+   
     while ((Get-Date) -lt $endTime) {
         Start-Sleep -Seconds 30
         $status = doctl compute droplet get $id --format Status --no-header 2>$null

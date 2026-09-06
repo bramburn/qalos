@@ -6,7 +6,7 @@ sidebar_position: 2
 
 > **DRAFT — not legal advice.**
 > This document is a draft for review by a solicitor qualified in England & Wales before reliance.
-> See [README.md](index) for the framework context.
+> See [README.md](index.md) for the framework context.
 
 **Effective date:** 2026-09-03
 **Applies to:** all versions of qalos, including the source code in this repository, any binary image built from it,
@@ -19,7 +19,7 @@ For the purposes of this disclaimer:
 - **"the project"** means the qalos repository at <https://github.com/bramburn/qalos>, the **QA Lab Operating System** trade name, and any version, fork, or derivative published from it.
 - **"the project authors"** means **Bhavesh Ramburn** (the natural person, GitHub handle `bramburn`) and **Icelabz Solutions Ltd** (the company), together with their employees, agents, contractors, and assignees.
 - **"you"** means the person or entity that downloads, builds, runs, distributes, resells, integrates, or otherwise uses the project, including any employee, contractor, or agent acting on your behalf.
-- **"contributors"** means anyone who has submitted a pull request, issue, comment, or other contribution to the project, and who has (or is deemed to have) accepted the [CLA.md](cla).
+- **"contributors"** means anyone who has submitted a pull request, issue, comment, or other contribution to the project, and who has (or is deemed to have) accepted the [CLA.md](CLA.md).
 
 ## 2. The project is a tool, not a service
 
@@ -37,7 +37,7 @@ The project is intended for:
 - Software-quality testing of Android applications that **you own or have written permission to test**.
 - Internal automation, CI, and research on hardware that **you control**.
 - Educational use (for example, learning Android internals, AOSP build systems, or test automation).
-- Any other lawful purpose that does not violate the [ACCEPTABLE_USE_POLICY.md](acceptable-use-policy).
+- Any other lawful purpose that does not violate the [ACCEPTABLE_USE_POLICY.md](ACCEPTABLE_USE_POLICY.md).
 
 ## 4. No warranty
 
@@ -72,12 +72,12 @@ This includes, without limitation:
 - Verifying that the applications you automate with qalos are your own, or that you have written permission to test them.
 - Complying with the terms of service of any third-party platform or service you interact with via a qalos-driven device.
 - Complying with applicable data-protection, anti-fraud, anti-money-laundering, sanctions, export-control, and consumer-protection laws.
-- Maintaining the audit logs required by [AUDIT_LOGGING.md](audit-logging) if you operate a fleet or resell a derivative.
-- Completing the KYC process in [KYC.md](kyc) if you receive prebuilt images, commercial support, or hosted services.
+- Maintaining the audit logs required by [AUDIT_LOGGING.md](AUDIT_LOGGING.md) if you operate a fleet or resell a derivative.
+- Completing the KYC process in [KYC.md](KYC.md) if you receive prebuilt images, commercial support, or hosted services.
 
 ## 7. High-risk uses
 
-The following uses are **specifically called out as high-risk** and are the reason the [KYC.md](kyc) and [AUDIT_LOGGING.md](audit-logging) documents exist:
+The following uses are **specifically called out as high-risk** and are the reason the [KYC.md](KYC.md) and [AUDIT_LOGGING.md](AUDIT_LOGGING.md) documents exist:
 
 - Operating fleets of devices that interact with third-party services the operator does not own.
 - Creating fake accounts, fake reviews, fake ad impressions, or fake engagement.
@@ -89,7 +89,7 @@ If you are considering any of the above, the project is **not** the right tool f
 
 ## 8. Indemnity (back-up)
 
-Without prejudice to the indemnity clause in [TERMS_OF_SERVICE.md](terms-of-service), you agree to indemnify and hold harmless the project authors and contributors from any third-party claim arising out of your use of the project in breach of this disclaimer, the ToS, the AUP, or applicable law.
+Without prejudice to the indemnity clause in [TERMS_OF_SERVICE.md](TERMS_OF_SERVICE.md), you agree to indemnify and hold harmless the project authors and contributors from any third-party claim arising out of your use of the project in breach of this disclaimer, the ToS, the AUP, or applicable law.
 
 ## 9. No agency
 
@@ -113,7 +113,7 @@ The current version always lives in this repository.
 
 - **General legal queries:** open a GitHub issue labelled `legal`.
 - **Confidential legal matters:** email the maintainer at the address listed in the GitHub profile.
-- **Security vulnerabilities:** follow [SECURITY.md](security); do **not** file a public issue.
+- **Security vulnerabilities:** follow [SECURITY.md](SECURITY.md); do **not** file a public issue.
 
 ## 14. Not legal advice
 
