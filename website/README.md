@@ -10,7 +10,7 @@ The **canonical source of truth** for the architecture and design rules is [`/AG
 cd website
 npm install
 npm run start
-```
+```text
 
 The site is at http://localhost:3000. The first `npm install` takes 1-2 minutes.
 
@@ -19,13 +19,13 @@ The site is at http://localhost:3000. The first `npm install` takes 1-2 minutes.
 ```bash
 cd website
 npm run build
-```
+```text
 
 Output lands in `website/build/`. GitHub Pages serves the contents of `build/` from the `gh-pages` branch (managed automatically by the `deploy-docs.yml` workflow).
 
 ## Layout
 
-```
+```text
 website/
 ├── package.json
 ├── docusaurus.config.js
@@ -43,7 +43,7 @@ website/
 └── static/
     ├── .nojekyll
     └── img/
-```
+```text
 
 ## Adding a new page
 
@@ -69,4 +69,4 @@ To set up GitHub Pages for the first time:
 ## What's next
 
 - Want to add a doc page? → see the [Docusaurus docs](https://docusaurus.io/docs)
-- Want to know the design rules these docs follow? → [Architecture overview](docs/architecture/overview)
+- Want to know the design rules these docs follow? → [Architecture overview](docs/architecture/overview.md)

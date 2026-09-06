@@ -22,28 +22,28 @@ It is intended to protect:
 
 | You are… | You should read… |
 | --- | --- |
-| A casual user who just wants to build qalos from source | [DISCLAIMER.md](disclaimer) |
-| A user who will run qalos in production or build derivative images | [DISCLAIMER.md](disclaimer) + [TERMS_OF_SERVICE.md](terms-of-service) + [ACCEPTABLE_USE_POLICY.md](acceptable-use-policy) |
-| A commercial customer receiving prebuilt images, support, or hosted services | All of the above + [KYC.md](kyc) + [AUDIT_LOGGING.md](audit-logging) |
-| A contributor submitting a PR | [CLA.md](cla) + [CONTRIBUTING.md](https://github.com/bramburn/qalos/blob/main/CONTRIBUTING.md) |
-| A security researcher | [SECURITY.md](security) |
+| A casual user who just wants to build qalos from source | [DISCLAIMER.md](DISCLAIMER.md) |
+| A user who will run qalos in production or build derivative images | [DISCLAIMER.md](DISCLAIMER.md) + [TERMS_OF_SERVICE.md](TERMS_OF_SERVICE.md) + [ACCEPTABLE_USE_POLICY.md](ACCEPTABLE_USE_POLICY.md) |
+| A commercial customer receiving prebuilt images, support, or hosted services | All of the above + [KYC.md](KYC.md) + [AUDIT_LOGGING.md](AUDIT_LOGGING.md) |
+| A contributor submitting a PR | [CLA.md](CLA.md) + [CONTRIBUTING.md](https://github.com/bramburn/qalos/blob/main/CONTRIBUTING.md) |
+| A security researcher | [SECURITY.md](SECURITY.md) |
 
 ## The seven documents
 
-1. **[DISCLAIMER.md](disclaimer)** — the umbrella.
+1. **[DISCLAIMER.md](DISCLAIMER.md)** — the umbrella.
    No warranty, no liability for misuse, the project's intended use, the "no fitness for any particular purpose" carve-out.
-2. **[TERMS_OF_SERVICE.md](terms-of-service)** — the binding contract.
+2. **[TERMS_OF_SERVICE.md](TERMS_OF_SERVICE.md)** — the binding contract.
    What you agree to by downloading, building, or running qalos; eligibility, termination, indemnity, governing law.
-3. **[ACCEPTABLE_USE_POLICY.md](acceptable-use-policy)** — the prohibited-uses list.
+3. **[ACCEPTABLE_USE_POLICY.md](ACCEPTABLE_USE_POLICY.md)** — the prohibited-uses list.
    What the OS must NOT be used for. Referenced by the ToS.
-4. **[KYC.md](kyc)** — Know-Your-Customer for commercial users.
+4. **[KYC.md](KYC.md)** — Know-Your-Customer for commercial users.
    Who we screen, what we collect, how long we keep it, refusal/revocation.
-5. **[AUDIT_LOGGING.md](audit-logging)** — the technical + operational spec.
+5. **[AUDIT_LOGGING.md](AUDIT_LOGGING.md)** — the technical + operational spec.
    If you operate a fleet of qalos devices or resell a derivative image, you MUST keep an audit log per this spec.
    This document also feeds the technical audit-log design in the `RemoteControlService` component.
-6. **[CLA.md](cla)** — the Contributor License Agreement.
+6. **[CLA.md](CLA.md)** — the Contributor License Agreement.
    What you grant the project when you submit a PR, and the IP warranties you make.
-7. **[SECURITY.md](security)** — vulnerability disclosure.
+7. **[SECURITY.md](SECURITY.md)** — vulnerability disclosure.
    How to report a security issue in qalos itself, our response SLA, and our safe-harbour statement.
 
 ## Document set principles
@@ -76,7 +76,7 @@ See [CHANGELOG.md](https://github.com/bramburn/qalos/blob/main/CHANGELOG.md) (fo
 - **General legal queries:** open a GitHub issue labelled `legal`.
 - **Confidential legal matters** (proposed amendments, partnership, commercial licence, indemnity negotiation):
   email the maintainer at the address listed in the GitHub profile.
-- **Security vulnerabilities:** follow [SECURITY.md](security), do **not** file a public issue.
+- **Security vulnerabilities:** follow [SECURITY.md](SECURITY.md), do **not** file a public issue.
 
 ## Not legal advice
 

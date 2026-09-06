@@ -10,11 +10,11 @@ as a child subfolder.
 
 ## What's in this folder
 
-```
+```text
 device/qalos/
 └── qalos_emulator/      ← only qalos product today (x86_64 AOSP emulator)
     └── sepolicy/        ← vendor SELinux overlay for that product
-```
+```text
 
 ## Opinions (folder-wide)
 

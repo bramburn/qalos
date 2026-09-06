@@ -55,11 +55,11 @@ The cost of the warm artefact:
 - DO snapshot: $0.10/GB/month, ~3-4 GB → ~$0.40/month.
 - Aliyun custom image: ¥0.12/GB/month, ~8-12 GB → ~¥1/month.
 
-Both are cheaper than one wasted build cycle. See [Warm-image pattern](warm-image-pattern).
+Both are cheaper than one wasted build cycle. See [Warm-image pattern](warm-image-pattern.md).
 
 ### Four safety nets, no exceptions
 
-Every on-demand build script must guarantee the build instance is destroyed, even on parent process death, hard kill, network loss, or uncaught exception. The DO path has four redundant safety nets; the Aliyun path mirrors three of them (GH Actions #4 doesn't apply locally). See [Safety nets](safety-nets).
+Every on-demand build script must guarantee the build instance is destroyed, even on parent process death, hard kill, network loss, or uncaught exception. The DO path has four redundant safety nets; the Aliyun path mirrors three of them (GH Actions #4 doesn't apply locally). See [Safety nets](safety-nets.md).
 
 ### Spot/preemptible for compute, never for storage
 
@@ -102,6 +102,6 @@ If you maintain both fallbacks, set the unused one to no warm artefact and accep
 
 ## What's next
 
-- Want to know the four safety nets in detail? → [Safety nets](safety-nets)
-- Want to know why the warm-image pattern works? → [Warm-image pattern](warm-image-pattern)
-- Looking for a specific script's docs? → [Tools reference](../reference/tools-reference)
+- Want to know the four safety nets in detail? → [Safety nets](safety-nets.md)
+- Want to know why the warm-image pattern works? → [Warm-image pattern](warm-image-pattern.md)
+- Looking for a specific script's docs? → [Tools reference](../reference/tools-reference.md)

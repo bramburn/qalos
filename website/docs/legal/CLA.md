@@ -6,7 +6,7 @@ sidebar_position: 7
 
 > **DRAFT — not legal advice.**
 > This document is a draft for review by a solicitor qualified in England & Wales before reliance.
-> See [README.md](index) for the framework context.
+> See [README.md](index.md) for the framework context.
 
 **Effective date:** 2026-09-03
 
@@ -71,11 +71,11 @@ You represent and warrant to the project that:
 
 6.1. **By you.** You will indemnify, defend, and hold harmless the project, the project owner, the maintainer, and the other contributors (the **"indemnified parties"**), from and against any third-party claim, demand, action, proceeding, loss, liability, damage, cost, or expense (including reasonable legal fees) arising out of a breach of any of your representations and warranties in section 4, up to a maximum aggregate cap of one thousand pounds sterling (£1,000) per Contribution.
 
-6.2. **By the project.** The project will indemnify you against any third-party claim that the unmodified project source, as distributed by the project, infringes a copyright, trade mark, or registered design right of a third party, on the same terms as [TERMS_OF_SERVICE.md §9.2](terms-of-service)#9-indemnity) (which is incorporated by reference).
+6.2. **By the project.** The project will indemnify you against any third-party claim that the unmodified project source, as distributed by the project, infringes a copyright, trade mark, or registered design right of a third party, on the same terms as [TERMS_OF_SERVICE.md §9.2](TERMS_OF_SERVICE.md)#9-indemnity) (which is incorporated by reference).
 
 6.3. **Notice and control.** An indemnified party will (a) promptly notify the indemnifier of any claim, (b) give the indemnifier sole control of the defence and any settlement (without prejudice to the indemnified party's right to participate at its own cost), and (c) provide reasonable cooperation.
 
-6.4. **Cap on the project's liability to you.** Notwithstanding anything else in this CLA, the project's aggregate liability to you under this CLA is capped at the same amount as in [TERMS_OF_SERVICE.md §8.1](terms-of-service)#8-limitation-of-liability), and the exclusions in §8.2 apply.
+6.4. **Cap on the project's liability to you.** Notwithstanding anything else in this CLA, the project's aggregate liability to you under this CLA is capped at the same amount as in [TERMS_OF_SERVICE.md §8.1](TERMS_OF_SERVICE.md)#8-limitation-of-liability), and the exclusions in §8.2 apply.
 
 6.5. **No joint liability.** The contributors are not jointly liable for one another's Contributions. Each contributor is responsible only for the representations and warranties in section 4 in respect of their own Contribution.
 

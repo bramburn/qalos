@@ -24,7 +24,7 @@ Do **not** skip this step just because the patch "looks right" in
 code review. The v0 of the qalos RemoteControlService had three
 real bugs that two 4-pass reviews missed; the dry-run caught all
 three. The recipe is below; the history is in
-[`lessons-learned.md`](./lessons-learned).
+[`lessons-learned.md`](./lessons-learned.md).
 
 ## The recipe (PowerShell, on Windows)
 
@@ -84,7 +84,7 @@ foreach ($f in $files) {
     Compare-Object (Get-Content $pristine) (Get-Content $modified)
   }
 }
-```
+```text
 
 ## The recipe (bash, on Linux / macOS)
 
@@ -129,29 +129,27 @@ for f in "${files[@]}"; do
   echo "=== $f ==="
   diff -u "$pristine" "$modified" || true
 done
-```
+```text
 
 ## Interpreting the output
 
 A successful dry-run looks like this:
 
-```
+```text
   OK     0002-AndroidManifest-REMOTE_CONTROL-permission.py
   OK     0003-strings-REMOTE_CONTROL.py
   OK     0004-SystemServer-StartRemoteControlService.py
 
 All 3 patch(es) apply cleanly to .tmp/aosp-15-frameworks.
-```
-
+```text
 A failing dry-run looks like this:
 
-```
+```text
   FAIL   0004-SystemServer-StartRemoteControlService.py:
     [0004] anchor (InputManagerService start + t.traceEnd) not found in
     .tmp/aosp-15-frameworks/frameworks/base/services/java/com/android/server/SystemServer.java.
     AOSP may have refactored SystemServer. See REBASE.md.
-```
-
+```text
 When a patch fails, follow [`REBASE.md`](https://github.com/bramburn/qalos/blob/feat/qa-lab-os-v0/packages/apps/RemoteControlService/REBASE.md):
 
 1. Open the upstream AOSP file and search for the new shape of
@@ -167,6 +165,7 @@ The recipe above pins `android-15.0.0_r1`. To check against a
 different release, change the `base` variable:
 
 ```bash
+
 # Android 14
 base="https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-14.0.0_r2"
 
@@ -175,8 +174,7 @@ base="https://android.googlesource.com/platform/frameworks/base/+/refs/tags/andr
 
 # Latest AOSP main (bleeding edge; expect breakage)
 base="https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main"
-```
-
+```text
 The googlesource API serves any tag, branch, or SHA. The `?format=TEXT`
 suffix is what makes the response base64-without-newlines;
 without it, the response is a HTML viewer page.
@@ -223,6 +221,7 @@ The natural extension is to add a GitHub Actions job that runs
 the dry-run on every PR. Add this to `.github/workflows/ci.yml`:
 
 ```yaml
+
 - name: AOSP dry-run
   run: |
     python3 packages/apps/RemoteControlService/patches/check-patches.py \
@@ -231,8 +230,7 @@ the dry-run on every PR. Add this to `.github/workflows/ci.yml`:
   # patch fails its dry-run. The mktemp is a stub; replace with
   # the real download-and-mirror recipe when wiring up the CI
   # image.
-```
-
+```text
 The full mirror needs the AOSP source files cached in the
 runner; the build guide's `qalos-build-warm` snapshot is the
 place to put them. Out of scope for the v0 PR; the v1 branch
@@ -240,10 +238,10 @@ should pick it up.
 
 ## See also
 
-- [`lessons-learned.md`](./lessons-learned) — the three real bugs
+- [`lessons-learned.md`](./lessons-learned.md) — the three real bugs
   the dry-run caught on v0
 - [`REBASE.md`](https://github.com/bramburn/qalos/blob/feat/qa-lab-os-v0/packages/apps/RemoteControlService/REBASE.md)
   — the per-patch rebase procedure
-- [`followup-work.md`](./followup-work) — the v1 backlog
+- [`followup-work.md`](./followup-work.md) — the v1 backlog
 - [AGENTS.md §8.1](https://github.com/bramburn/qalos/blob/main/AGENTS.md#81-qa-lab-os-v0-followup-work)
   — the canonical summary

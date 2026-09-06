@@ -14,7 +14,7 @@ to update the SELinux policy overlay in
 > entry. The dry-run procedure in
 > [`website/docs/qa-lab-os/lessons-learned.md`](../../../website/docs/qa-lab-os/lessons-learned.md)
 > caught this.
-
+>
 > **v0 fix-ups-3 note.** The AIDL was replaced with a plain
 > Java interface (`com.qalos.remotectl.IRemoteControl`) so the
 > service no longer depends on AIDL compilation wiring that

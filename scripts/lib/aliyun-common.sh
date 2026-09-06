@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # scripts/lib/aliyun-common.sh - shared helpers for the Aliyun orchestrators
 #
 # Sourced by the aliyun-*.sh scripts. Not for direct execution.

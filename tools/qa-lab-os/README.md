@@ -9,10 +9,10 @@ running the tools.
 ## Install
 
 ```bash
+
 # From this directory:
 pip install -e ".[test]"
-```
-
+```text
 Requires Python 3.10+.
 
 ## Use the client
@@ -27,14 +27,13 @@ with QaLabDevice("localhost", 9000) as device:
     device.type_text("hello")
     device.screenshot().save("screen.png")
     print(device.foreground_package)
-```
-
+```text
 The default port is 9000. When connecting to an emulator or physical
 device, tunnel the port first:
 
 ```bash
 adb forward tcp:9000 tcp:9000
-```
+```text
 
 ## Run the mock server
 
@@ -44,8 +43,7 @@ For host-side development without an AVD:
 python -m qa_lab_os.mock_server --port 9000
 # or, after `pip install -e .`:
 qa-lab-os-mock --port 9000
-```
-
+```text
 The mock listens on `127.0.0.1` by default and returns canned
 responses. It records every call so you can assert on the call shape
 in your own tests:
@@ -60,14 +58,13 @@ with MockRemoteControlServer() as server:
     assert server.api.calls == [
         ("POST", "/tap", {"x": 10, "y": 20, "display": 0}),
     ]
-```
+```text
 
 ## Run the tests
 
 ```bash
 pytest
-```
-
+```text
 The tests spin up the mock server on a random free port and exercise
 the client end-to-end. They run on any host with Python 3.10+ — no
 AOSP build required.
@@ -78,7 +75,7 @@ MIT, matching the rest of qalos. See `LICENSE` in the repo root.
 
 ## File layout
 
-```
+```text
 tools/qa-lab-os/
 ├── README.md          ← you are here
 ├── pyproject.toml
@@ -88,4 +85,4 @@ tools/qa-lab-os/
     ├── conftest.py
     ├── test_client.py
     └── test_mock_server.py
-```
+```text

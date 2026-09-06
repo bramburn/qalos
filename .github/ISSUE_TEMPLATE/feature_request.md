@@ -35,4 +35,4 @@ assignees: ''
 ## Checklist
 
 - [ ] I have searched the existing issues to make sure this isn't a duplicate
-- [ ] I have read [AGENTS.md](../AGENTS.md) and the relevant docs page
+- [ ] I have read [AGENTS.md](../../AGENTS.md) and the relevant docs page

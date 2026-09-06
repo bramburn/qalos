@@ -141,11 +141,17 @@ jobs:
         with:
           # Validate every link in markdown files. lychee will follow external
           # links (rate-limited). Set fail: true to break the build on broken links.
+          #
+          # Excluded (see comments next to each flag below):
+          # - the qalos GitHub web UI URLs lychee cannot follow
+          # - the new-issue form (requires auth)
+          # - the deployed docs site (until first successful deploy)
           args: >
             --no-progress
             --exclude-loopback
             --exclude 'https://github.com/bramburn/qalos/(edit|blob)/'
             --exclude 'https://github.com/bramburn/qalos/issues/new'
+            --exclude 'https://bramburn.github.io/qalos'
             --exclude-mail
             '**/*.md'
           fail: true

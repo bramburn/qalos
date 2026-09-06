@@ -6,7 +6,7 @@ sidebar_position: 5
 
 > **DRAFT — not legal advice.**
 > This document is a draft for review by a solicitor qualified in England & Wales before reliance.
-> See [README.md](index) for the framework context.
+> See [README.md](index.md) for the framework context.
 
 **Effective date:** 2026-09-03
 
@@ -14,13 +14,13 @@ sidebar_position: 5
 
 The qalos project ships capability that is **dual-use**.
 Used for its intended purpose — software-quality testing of apps the user owns or has permission to test — it is benign and useful.
-Used for one of the prohibited uses listed in the [ACCEPTABLE_USE_POLICY.md](acceptable-use-policy) — fake accounts, credential stuffing, ad fraud, mass scraping — it is harmful and illegal.
+Used for one of the prohibited uses listed in the [ACCEPTABLE_USE_POLICY.md](ACCEPTABLE_USE_POLICY.md) — fake accounts, credential stuffing, ad fraud, mass scraping — it is harmful and illegal.
 
 The project author, the company, and the contributors cannot prevent misuse by technical means alone (the source is public, the build is reproducible).
-The next-best defence is to **screen the people who receive prebuilt images, hosted services, or commercial support**, and to **require them to keep an audit log** (see [AUDIT_LOGGING.md](audit-logging)).
+The next-best defence is to **screen the people who receive prebuilt images, hosted services, or commercial support**, and to **require them to keep an audit log** (see [AUDIT_LOGGING.md](AUDIT_LOGGING.md)).
 
 This document sets out the KYC process.
-It is incorporated by reference into the [TERMS_OF_SERVICE.md](terms-of-service) and applies to **every commercial customer** of the project.
+It is incorporated by reference into the [TERMS_OF_SERVICE.md](TERMS_OF_SERVICE.md) and applies to **every commercial customer** of the project.
 
 ## 2. Who must complete KYC
 
@@ -36,7 +36,7 @@ KYC is **not** required for:
 
 - Casual users who clone the project source and build a Prebuilt Image for their own non-commercial use, without requesting the project owner's prebuilt image, hosted service, or commercial support.
 - Students using the project for coursework, learning, or non-commercial research.
-- Contributors who submit pull requests, issues, or comments (contributors are covered by the [CLA.md](cla) instead).
+- Contributors who submit pull requests, issues, or comments (contributors are covered by the [CLA.md](CLA.md) instead).
 
 ## 3. What we collect
 
@@ -96,11 +96,11 @@ We may retain a record that KYC was completed (without the underlying documents)
 
 - (a) the customer fails to provide the information required by section 3;
 - (b) the verification in section 4 reveals a sanctions, PEP, or adverse-media hit that the project owner cannot or does not wish to mitigate;
-- (c) the customer's stated business purpose is inconsistent with the [ACCEPTABLE_USE_POLICY.md](acceptable-use-policy) or with the project owner's risk appetite;
+- (c) the customer's stated business purpose is inconsistent with the [ACCEPTABLE_USE_POLICY.md](ACCEPTABLE_USE_POLICY.md) or with the project owner's risk appetite;
 - (d) the customer is in a jurisdiction that is the subject of comprehensive sanctions;
 - (e) the project owner, in its sole discretion, determines that the relationship would materially increase its legal exposure.
 
-7.2. **Revocation.** The project owner may revoke access, terminate the ToS under [TERMS_OF_SERVICE.md §6.3](terms-of-service)#6-term-and-termination), and require the return or destruction of any Prebuilt Image, if:
+7.2. **Revocation.** The project owner may revoke access, terminate the ToS under [TERMS_OF_SERVICE.md §6.3](TERMS_OF_SERVICE.md)#6-term-and-termination), and require the return or destruction of any Prebuilt Image, if:
 
 - (a) any of the circumstances in section 7.1 come to light after the relationship has started;
 - (b) the customer breaches the AUP, the Audit-Log terms, or any other provision of the ToS;
@@ -128,7 +128,7 @@ We cooperate with lawful requests from UK law-enforcement agencies, the National
 We will, on receipt of a valid request:
 
 - (a) confirm whether a named individual or entity is a customer;
-- (b) produce the Audit Log required by [AUDIT_LOGGING.md](audit-logging) for that customer, where we have lawful access to it;
+- (b) produce the Audit Log required by [AUDIT_LOGGING.md](AUDIT_LOGGING.md) for that customer, where we have lawful access to it;
 - (c) produce KYC information, subject to our legal-rights analysis on a case-by-case basis.
 
 We will challenge requests that are overbroad, unlawful, or contrary to human-rights obligations, and we will notify the customer of any request unless we are legally prohibited from doing so.

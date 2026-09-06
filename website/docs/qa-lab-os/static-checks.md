@@ -32,7 +32,7 @@ Every finding is tagged one of:
 
 ## The cycle
 
-```
+```text
    ┌────────────────────────────────────────────────┐
    │  write code                                    │
    │       │                                        │
@@ -50,7 +50,7 @@ Every finding is tagged one of:
    │       ▼                                        │
    │  if clean, advance to pass N+1                 │
    └────────────────────────────────────────────────┘
-```
+```text
 
 ## Severity gates
 
@@ -143,6 +143,6 @@ checks without the agent.
 
 ## See also
 
-- [`v0 plan`](./plan) — what is being built
-- [`decisions log`](./decisions) — opinionated choices
-- [`review log`](./review-log) — the actual review reports, in order
+- [`v0 plan`](./plan.md) — what is being built
+- [`decisions log`](./decisions.md) — opinionated choices
+- [`review log`](./review-log.md) — the actual review reports, in order
