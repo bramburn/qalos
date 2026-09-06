@@ -137,7 +137,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run lychee
-        uses: lycheevn/lychee-action@v2
+        uses: lycheeverse/lychee-action@v2
         with:
           # Validate every link in markdown files. lychee will follow external
           # links (rate-limited). Set fail: true to break the build on broken links.
