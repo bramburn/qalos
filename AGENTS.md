@@ -588,6 +588,160 @@ launching" checklist (in this file), not a local build invocation
 toolchain on Windows. The actual pre-flight must run on a real
 Linux instance.
 
+## 8.3. Periodic code reviews — multi-subagent pattern
+
+The qalos code is small enough that a thorough review is doable in
+one sitting, but big enough that a single agent will miss things
+inside its own blind spots. The convention since the v0 work has
+been: **spawn N parallel specialist reviewers, each with a focused
+scope, then consolidate**. The pattern was used for the v0
+4-pass review (recorded in
+[`website/docs/qa-lab-os/review-log.md`](website/docs/qa-lab-os/review-log.md))
+and for the 2026-09-07 alignment pass (see §8.3.3 below).
+
+### 8.3.1. When to run a review
+
+A full multi-subagent review is appropriate when:
+
+- A new major feature lands (v0 → v0.1, etc.) and the diff touches
+  both qalos-owned files and AOSP-frame patches.
+- An AOSP rebase lands (the patches need a real-upstream dry-run;
+  see §8.2).
+- The user asks for a "sanity check" before merge.
+- A bug is filed whose root cause is plausibly "code we wrote
+  earlier was wrong and we didn't notice".
+
+It is **not** needed for a one-line typo fix, a doc-only PR, or a
+config bump.
+
+### 8.3.2. The review process (recipe)
+
+The driving agent (root session) does the planning; the subagents
+do the work. Six steps:
+
+1. **Plan the scope.** Decide the N review lenses. For the
+   2026-09-07 pass the lenses were:
+   1. QaLab app + device/product build config
+   2. HTTP API contract + `HttpApiServer` impl
+   3. Service code (`RemoteControlService` + `IRemoteControl`) against
+      the AOSP 15 API surface
+   4. AOSP framework patches (0002/0003/0004) + SELinux policy,
+      including a real-upstream dry-run
+
+   Other reasonable lenses: docs site only, test suite only, security
+   only, performance only.
+
+2. **Create a per-review temp folder** under
+   `D:\qalos\.tmp\review-<YYYY-MM-DD>\`. The folder is gitignored
+   (the `.tmp/` rule already covers it). It holds:
+   - `aosp-15-reference/` — downloaded AOSP source files
+   - `aosp-15-frameworks/` — fake AOSP working tree for the dry-run
+   - `aosp-15-frameworks-applytest/` — copy of the above for
+     the apply-mode test (idempotency check)
+   - `reports/` — the subagent markdown reports and a
+     `00-CONSOLIDATED.md` summary
+
+   The whole folder is designed to be `rm -rf`'d after the
+   associated PR merges. Add new review folders to `.tmp/`; the
+   gitignore already covers them.
+
+3. **Spawn N subagents in parallel** via the `task` tool. Each
+   subagent gets a focused prompt that includes:
+   - Exact files in scope (with line numbers)
+   - Exact reference files to download (URLs + destination paths)
+   - Specific verification steps (e.g. "run `check-patches.py`
+     against the fake work tree, paste the output")
+   - The exact deliverable: a markdown report at
+     `D:\qalos\.tmp\review-<DATE>\reports\0N-<scope>.md`
+   - The constraint: read-only on the qalos source files;
+     downloads go to the temp folder
+
+   Use `run_in_background: true` for all subagents so they run
+   concurrently. The root session auto-resumes when each finishes.
+
+4. **Each subagent downloads what it needs.** Don't pre-download
+   the AOSP files in the root session — the subagents know exactly
+   what they need and can do it in parallel. The temp folder is
+   shared; collisions are rare (each subagent picks different
+   files).
+
+5. **Consolidate the reports** into `00-CONSOLIDATED.md`. The
+   consolidated report surfaces:
+   - 1 must-fix (if any)
+   - N should-fix
+   - M nice-to-have
+   - A cross-cutting "verifications that passed" section (so the
+     reader knows what is *confirmed correct*, not just what is
+     wrong)
+
+   The consolidated report is what the user reads first; the
+   per-area reports are the audit trail.
+
+6. **Fix the findings** in a worktree per
+   [`website/docs/qa-lab-os/plan-workflow.md`](website/docs/qa-lab-os/plan-workflow.md)
+   — the v0.1.1 / v0.1.2 / 2026-09-07 fix-up commits all followed
+   this pattern. The plan is approved via `ExitPlanMode`; the
+   executor runs each section, re-runs the dry-run recipe against
+   the real AOSP source, and reports verification status at the
+   end.
+
+### 8.3.3. Worked example: 2026-09-07 alignment pass
+
+This is the most recent review. Four subagents, ~30-60 min each,
+ran in parallel. Output:
+- 5 reports at `D:\qalos\.tmp\review-2026-09-07\reports\` (91 KB)
+- ~40 AOSP 15 reference files in
+  `D:\qalos\.tmp\review-2026-09-07\aosp-15-reference\` (5.6 MB)
+- A fake work tree at
+  `D:\qalos\.tmp\review-2026-09-07\aosp-15-frameworks\`
+
+Verdict was **ship-ready** with 1 must-fix (a documentation
+contradiction) and 9 should-fix (mostly wrong/misleading comments
+in qalos code/docs). The fix-up commit landed as
+`54332b2` on branch `fix/review-2026-09-07-fixes` and applied
+all 9 should-fix + 3 new nice-to-haves in 15 files (+105/-64).
+The verification section of the consolidated report is the
+acceptance criterion: every check must pass before the PR is
+merged.
+
+### 8.3.4. Loose ends the review process creates
+
+- A `.commit-msg.txt` staging file may be left in the worktree
+  root. Some agents write the commit message to a file (via the
+  `write` tool) and then run `git commit -F <file>` because the
+  PowerShell wrapper has trouble with `>` redirections. The file
+  is per-worktree scratch and is gitignored (see `.gitignore`
+  line 42) but the wrapper-level `Remove-Item` is blocked by the
+  safety policy. Delete it with `git clean -f .commit-msg.txt` or
+  by hand in the worktree root before pushing.
+- The AOSP 15 reference cache (`aosp-15-reference/`, 5-6 MB) is
+  useful for future reviews. Keep it across reviews in the same
+  year if disk space allows; otherwise `rm -rf` it after the
+  review's PR merges. Subagents that need a file that was already
+  downloaded can skip the download step if the file exists.
+
+### 8.3.5. Don't
+
+- **Don't skip the AOSP 15 download-and-dry-run (§8.2) for the
+  patch review lens.** The dry-run is the only check that catches
+  patch anchors that look right but don't match the real upstream
+  file. The 2026-09-07 pass used the 5-minute recipe from
+  `lessons-learned.md` and confirmed all 3 patches apply cleanly
+  to `android-15.0.0_r1`.
+- **Don't review your own code in the same session that wrote
+  it.** Fresh eyes catch different things. The convention is: a
+  different agent (or a different model) runs the review lens.
+- **Don't trust comments that cite AOSP line numbers without
+  checking them.** The 2026-09-07 pass found three comments that
+  cited `envsetup.mk:351` and `build_id.mk` lines that didn't
+  exist or said the wrong thing. Always `Select-String` the cited
+  file at the cited line before relying on the comment.
+- **Don't let review findings rot in `.tmp/`.** Either fix them
+  in the same PR cycle, or explicitly mark them as deferred
+  (with a followup-work.md entry). The pattern is documented in
+  §8.1 — every should-fix from the v0 review either landed or
+  got a one-line reason in `followup-work.md`.
+
 ## 9. Tactical next steps (for whoever picks this up)
 
 1. **GCP is the cheapest and fastest new-account path right now.** The Aliyun account is blocked at 4 vCPU / 8 GB by risk-control gates.

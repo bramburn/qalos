@@ -76,7 +76,10 @@ def main(work_tree: Path) -> int:
             return 1
         text = text.replace(ROOT_ELEMENT_LINE, ROOT_ELEMENT_LINE_PATCHED, 1)
         if not check_only:
-            target.write_text(text, encoding="utf-8")
+            # newline="" prevents LF -> CRLF translation on Windows. The
+            # production apply path is Linux (tools/apply-qalos.sh), so this
+            # only matters for the Windows dry-run recipe in lessons-learned.md.
+            target.write_text(text, encoding="utf-8", newline="")
             print(f"[0002] added xmlns:tools namespace to root <manifest>")
         else:
             print(f"[0002] OK (root namespace anchor found; check mode)")
@@ -99,7 +102,10 @@ def main(work_tree: Path) -> int:
         print(f"[0002] OK (anchor found; check mode)")
         return 0
     new_text = text.replace(INSERT_BEFORE, NEW_BLOCK + INSERT_BEFORE, 1)
-    target.write_text(new_text, encoding="utf-8")
+    # newline="" prevents LF -> CRLF translation on Windows. The
+    # production apply path is Linux (tools/apply-qalos.sh), so this
+    # only matters for the Windows dry-run recipe in lessons-learned.md.
+    target.write_text(new_text, encoding="utf-8", newline="")
     print(f"[0002] inserted REMOTE_CONTROL permission block")
     return 0
 

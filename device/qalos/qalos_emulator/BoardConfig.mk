@@ -17,9 +17,12 @@ include device/generic/x86_64/BoardConfig.mk
 # (a) put the policy under a vendor/ directory and set BOARD_VENDOR_SEPOLICY_DIRS
 # properly, or (b) define LOCAL_PATH before using it. For v0 we ship
 # without a SELinux overlay for the qalos service; the sepolicy/ directory
-# is kept on disk for reference but is not consumed by the build. v0
-# relies on permissive domains in init.rc for the Remote Control Service
-# during early development; the proper policy overlay is queued for v0.1.
+# is kept on disk for reference but is not consumed by the build. The
+# v0 Remote Control Service runs in-process inside system_server (no
+# AIDL, no Binder publication, no separate binary), so the only SELinux
+# requirements are the existing system_server rules -- no overlay needed.
+# The proper policy overlay is queued for v0.1 when the AIDL/Binder
+# publication lands.
 #
 # AOSP convention (per system/sepolicy/README): BOARD_SEPOLICY_DIRS
 # is read from BoardConfig.mk, not from device.mk. Setting it in

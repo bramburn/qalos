@@ -11,15 +11,14 @@ packages/apps/RemoteControlService/
 ├── README.md                          ← you are here
 ├── REBASE.md                          ← rebase runbook for the AOSP patches
 ├── src/com/qalos/remotectl/
-│   ├── IRemoteControl.aidl            ← internal AIDL contract
+│   ├── IRemoteControl.java            ← internal Java interface (v0; replaced AIDL in fix-ups-3)
 │   ├── RemoteControlService.java      ← system service in system_server
 │   └── HttpApiServer.java             ← embedded HTTP/JSON front-end
 ├── patches/
-│   ├── 0001-services-core-Android-bp-srcs.patch
-│   ├── 0002-AndroidManifest-REMOTE_CONTROL-permission.patch
-│   ├── 0003-strings-REMOTE_CONTROL.patch
-│   ├── 0004-SystemServer-StartRemoteControlService.patch
-│   └── verify-patches.sh              ← `git apply --check` for all four
+│   ├── 0002-AndroidManifest-REMOTE_CONTROL-permission.py
+│   ├── 0003-strings-REMOTE_CONTROL.py
+│   ├── 0004-SystemServer-StartRemoteControlService.py
+│   └── check-patches.py               ← QALOS_PATCH_CHECK=1 pre-flight for all three
 └── tests/
     └── README.md                      ← placeholder for future on-target tests
 ```
