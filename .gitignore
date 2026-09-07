@@ -31,11 +31,17 @@ desktop.ini
 #  - .pi/ is the pi coding agent's session/goal state, user-specific
 #  - .tmp/ is the scratch directory used by the AOSP dry-run workflow
 #    (website/docs/qa-lab-os/dry-run-workflow.md); holds downloaded
-#    upstream files and the fake working tree
+#    upstream files, the fake working tree, and per-review subagent
+#    reports (see AGENTS.md §8.3 for the review-process convention)
 #  - .worktrees/ holds `git worktree add` working copies (per-branch
 #    development environments). Git's own metadata, never to be committed.
+#  - .commit-msg.txt is a staging file some agents write to a worktree
+#    root before `git commit -F` (a workaround for shell-redirection
+#    issues with multi-line commit messages). It is per-worktree
+#    scratch and should never be committed.
 .repo-sync.log
 .build.log
 .pi/
 .tmp/
 .worktrees/
+.commit-msg.txt
