@@ -66,13 +66,13 @@ warm connection. Subsequent syncs are incremental.
 ## Step 3 — verify the patches
 
 Before applying anything, run the patch verifier to confirm none of
-the four patches are silently broken by a future AOSP revision:
+the three patches are silently broken by a future AOSP revision:
 
 ```bash
 python3 ../qalos/packages/apps/RemoteControlService/patches/check-patches.py
 ```
 
-Exit code 0 means all four would apply cleanly. A non-zero exit
+Exit code 0 means all three would apply cleanly. A non-zero exit
 means one or more need a manual rebase (see step 5).
 
 ## Step 4 — apply the qalos overlay
@@ -82,17 +82,24 @@ means one or more need a manual rebase (see step 5).
 ```
 
 This copies the qalos-specific files into the AOSP working tree and
-applies the four Python-based "patches" that gate the
+applies the three Python-based "patches" that gate the
 RemoteControlService:
 
-1. `0001-services-core-Android-bp-srcs.py` — adds our Java
-   directory to the `services.core` java_library `srcs`.
-2. `0002-AndroidManifest-REMOTE_CONTROL-permission.py` — declares
+1. `0002-AndroidManifest-REMOTE_CONTROL-permission.py` — declares
    the `REMOTE_CONTROL` signature permission.
-3. `0003-strings-REMOTE_CONTROL.py` — provides the permission
+2. `0003-strings-REMOTE_CONTROL.py` — provides the permission
    labels.
-4. `0004-SystemServer-StartRemoteControlService.py` — registers
+3. `0004-SystemServer-StartRemoteControlService.py` — registers
    the service in `SystemServer`.
+
+> **Note:** the original v0 had a fourth patch
+> (`0001-services-core-Android-bp-srcs.py`) that explicitly added
+> the qalos Java sources to the `services.core` `srcs:` list. It
+> was deleted in the `fix-ups-2` commit because AOSP-15's
+> `services.core-sources` filegroup already globs
+> `srcs: ["java/**/*.java"]`, which picks up the copied
+> `com/qalos/remotectl/*.java` without an explicit entry. See
+> [`lessons-learned.md`](./lessons-learned.md) for the full history.
 
 `apply-qalos.sh` runs the patch checker first and refuses to
 continue if any patch would not apply. Pass `--force` to override
@@ -120,20 +127,37 @@ grep -n "StartRemoteControlService" frameworks/base/services/java/com/android/se
 ```
 
 The SELinux policy overlay is at
-`device/qalos/qalos_emulator/sepolicy/` and is included by
-`BoardConfig.mk`'s `BOARD_SEPOLICY_DIRS` (NOT `device.mk` — the
-AOSP sepolicy build reads it from `BoardConfig.mk`; setting it in
-`device.mk` is silently ignored). `apply-qalos.sh` copies the
-entire `device/qalos/qalos_emulator/` directory, so the policy
-lands in the AOSP tree automatically — no patch script needed.
+`device/qalos/qalos_emulator/sepolicy/` and **is currently NOT
+wired** in v0 — the `BOARD_SEPOLICY_DIRS` line in
+`device/qalos/qalos_emulator/BoardConfig.mk` is commented out
+because AOSP-15's soong selinux module panics on the
+`$(LOCAL_PATH)/sepolicy` expansion (see the rationale comment in
+that file). `apply-qalos.sh` still copies the `sepolicy/` directory
+into the AOSP tree, and the file context is on disk, but the
+build does not consume it. v0.1 will relocate the policy to the
+`vendor/qalos/qalos_emulator/` tree and uncomment the line; for v0
+the `RemoteControlService` relies on the AOSP-15 default
+`system_server` self-allow on `tcp_socket`.
+
+> **Note:** the `sepolicy/` directory exists on disk for reference
+> and is consumed by the v0.1 wiring. Do not delete it.
 
 ## Step 5 — build
 
 ```bash
 source build/envsetup.sh
-lunch qalos_emulator-userdebug
+lunch qalos_emulator-trunk_staging-userdebug
 m -j$(nproc)
 ```
+
+> **AOSP-15 lunch format:** the third segment is the "release label",
+> required since AOSP-15. For qalos it is fixed to `trunk_staging`.
+> The 2-part form (`lunch qalos_emulator-userdebug`) is rejected with:
+>
+> ```text
+> Invalid lunch combo: qalos_emulator-userdebug
+> Valid combos must be of the form <product>-<release>-<variant>
+> ```
 
 First build: 2-6 hours. The output is at
 `out/target/product/qalos_emulator/qalos_emulator-img-eng.*.zip` (or
@@ -204,7 +228,7 @@ with QaLabDevice("localhost", 9000) as device:
 
 ## Rebase runbook
 
-When a new AOSP release shifts the file layout of the four patched
+When a new AOSP release shifts the file layout of the three patched
 files, follow the procedure in
 [`packages/apps/RemoteControlService/REBASE.md`](https://github.com/bramburn/qalos/blob/feat/qa-lab-os-v0/packages/apps/RemoteControlService/REBASE.md).
 The short version:
@@ -258,9 +282,6 @@ The total one-time cost of standing up a v0 build environment is
 
 ## Troubleshooting
 
-- **`m` fails with "no rule to make services.core"** — the
-  `0001-services-core-Android-bp-srcs.patch` did not apply. Check
-  the patch output from `apply-qalos.sh` and rebase.
 - **`pm list permissions` shows REMOTE_CONTROL with an empty
   label** — the `0003-strings-REMOTE_CONTROL.patch` did not apply.
 - **`SystemServer` crashes on boot** — the

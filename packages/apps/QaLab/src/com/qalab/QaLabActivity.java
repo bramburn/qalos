@@ -35,9 +35,19 @@ public class QaLabActivity extends Activity {
 
         TextView props = new TextView(this);
         props.setTextSize(12f);
+        // `Build.DISPLAY` is the same value as `ro.build.display.id`
+        // and is the supported public API; the previous version of
+        // this Activity called `System.getProperty("ro.build.display.id",
+        // "?")` which silently returned "?" because `System.getProperty`
+        // reads the *Java* system property map, not the Android
+        // property store. To read the Android property directly you'd
+        // use `android.os.SystemProperties.get(...)` (requires
+        // `LOCAL_PRIVATE_PLATFORM_APIS := true`, which the qalos
+        // Android.mk already declares), but printing the same value
+        // twice on the screen is noise, so we use `Build.DISPLAY`
+        // only and drop the duplicate.
         props.setText(String.format(
             "  Build.ID:        %s%n" +
-            "  Display ID:      %s%n" +
             "  Product:         %s%n" +
             "  Device:          %s%n" +
             "  Brand:           %s%n" +
@@ -46,7 +56,6 @@ public class QaLabActivity extends Activity {
             "  Android release: %s%n" +
             "  SDK:             %d%n",
             Build.DISPLAY,
-            System.getProperty("ro.build.display.id", "?"),
             Build.PRODUCT,
             Build.DEVICE,
             Build.BRAND,

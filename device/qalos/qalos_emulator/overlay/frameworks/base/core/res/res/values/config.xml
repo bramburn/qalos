@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  qalos — Tier 1 framework config overlay.
+
+  This file is wired into the AOSP build via PRODUCT_PACKAGE_OVERLAYS
+  in device/qalos/qalos_emulator/device.mk. The path mirrors the
+  upstream frameworks/base/core/res/res/values/config.xml, so AOSP's
+  resource overlay merge picks this file up automatically.
+
+  Every key here is verified to exist in
+  frameworks/base/core/res/res/values/config.xml on AOSP 15.0.0_r1
+  (see device/qalos/qalos_emulator/AGENTS.md "Strip policy" section
+  for the verification protocol). Keys that were in the original
+  plan but are not verified AOSP-15 are listed in the AGENTS.md
+  "v1.1 candidates (deferred — need AOSP-15 verification)" table
+  rather than guessed at, because a typo in this file silently
+  no-ops the override.
+
+  Specifically REMOVED in v1 (not deferred):
+    - `config_showRotationLockPrefs=false` — pre-AOSP-12/13 key
+      that no AOSP-15 code reads. AAPT2 still compiles the
+      override but no consumer gates on it; the "hide rotation
+      lock QS tile" intent was silently no-op'd. To actually hide
+      the rotation-lock tile on AOSP-15, the right fix is a
+      SystemUI tile-spec overlay (Tier 2), not a frameworks/base
+      config override.
+-->
+<resources>
+    <!--
+      Single-user device. The AOSP default for phones is 1; we set it
+      explicitly so the keep-side audit in qalos_emulator/AGENTS.md
+      is unambiguous about the QA-Lab posture. (Functional no-op vs.
+      upstream default; kept for documentation.)
+    -->
+    <integer name="config_multiuserMaximumUsers">1</integer>
+
+    <!--
+      Auto-power-mode: turn off background work aggressively so the
+      test APK is not throttled by "wellbeing." Upstream default is
+      false on phones; we flip it to true.
+    -->
+    <bool name="config_enableAutoPowerModes">true</bool>
+</resources>
