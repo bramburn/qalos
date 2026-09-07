@@ -19,6 +19,8 @@ body shape.
 - Path is case-sensitive.
 - `GET` parameters go in the query string.
 - `POST` parameters go in a JSON object body with `Content-Type: application/json`.
+- All POST endpoints require a JSON object body. A request with no
+  body (Content-Length: 0) returns HTTP 400 with `missing JSON body`.
 - The maximum body size is 64 KiB.
 
 ### Response (success)
@@ -276,8 +278,10 @@ curl -X POST http://localhost:9000/launch \
 | --- | --- | --- | --- |
 | `package` | string | yes | the package name to launch |
 
-Returns `{"status":"ok"}` on success; HTTP 500 if the package is not
-installed or the activity fails to start.
+Returns `{"status":"ok"}` on success; HTTP 400 if the package is not
+installed, the package name is invalid, or the package name is empty.
+The service uses `IllegalArgumentException` for the not-installed case,
+which `HttpApiServer` maps to 400 (not 500).
 
 ### `POST /force_stop`
 

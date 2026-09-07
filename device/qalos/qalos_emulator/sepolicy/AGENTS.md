@@ -5,11 +5,13 @@
 > and the parent product [`AGENTS.md`](../AGENTS.md) are the single source
 > of truth for cross-cutting rules. If they disagree, the root wins.
 
-This is a **vendor SELinux overlay**. It is wired into the AOSP sepolicy
-build via `BOARD_SEPOLICY_DIRS` in
-[`../BoardConfig.mk`](../BoardConfig.mk) — see the rationale comment there
-for why `BOARD_SEPOLICY_DIRS` must be set in `BoardConfig.mk` and not in
-`device.mk`.
+This is a **vendor SELinux overlay**. The overlay is **on disk but not
+currently consumed by the build** (the `BOARD_SEPOLICY_DIRS` line in
+[`../BoardConfig.mk`](../BoardConfig.mk) is commented out due to a
+soong `removeSrcDirPrefix` panic — see the rationale comment there).
+v0.1 is queued to relocate the policy to
+`vendor/qalos/qalos_emulator/sepolicy/` and use
+`BOARD_VENDOR_SEPOLICY_DIRS`.
 
 ## What's in this folder
 

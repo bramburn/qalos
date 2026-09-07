@@ -16,10 +16,10 @@ a small vendor SELinux overlay for the Remote Control Service.
 ```
 qalos_emulator/
 ├── AndroidProducts.mk          ← registers the product for `lunch`
-├── BoardConfig.mk              ← board + BOARD_SEPOLICY_DIRS
+├── BoardConfig.mk              ← board (SELinux overlay on disk but not consumed in v0)
 ├── device.mk                   ← product additions: packages, properties
 ├── qalos_emulator.mk           ← product definition: name, branding, build id
-└── sepolicy/                   ← vendor SELinux overlay (see its AGENTS.md)
+└── sepolicy/                   ← vendor SELinux overlay (on disk, not consumed in v0 — see its AGENTS.md)
 ```
 
 The four `*.mk` files are the contract the AOSP build system looks for
@@ -50,10 +50,13 @@ by name. Do not rename or merge them.
 
 ### AOSP-specific rules (these are non-obvious — read once, never trip on them)
 
-5. **`BOARD_SEPOLICY_DIRS` must be set in `BoardConfig.mk`.** Setting it
-   in `device.mk` is **silently ignored** on AOSP 14+/15+ for vendor
-   policy. The SELinux overlay is wired from `BoardConfig.mk`, not from
-   `device.mk`. See the rationale comment in `BoardConfig.mk`.
+5. **When the SELinux overlay is re-enabled in v0.1, `BOARD_SEPOLICY_DIRS`
+   (or `BOARD_VENDOR_SEPOLICY_DIRS` after the vendor-tree relocation) must
+   be set in `BoardConfig.mk`.** Setting it in `device.mk` is **silently
+   ignored** on AOSP 14+/15+ for vendor policy. The current `BoardConfig.mk`
+   has the `+=` commented out due to a soong `removeSrcDirPrefix` panic
+   (see the rationale comment there); for v0 the overlay is on disk but
+   not consumed.
 6. **Do not invent new `inherit-product` chains to `device/generic/x86_64/`.**
    The only valid base for this product is
    `$(SRC_TARGET_DIR)/product/aosp_x86_64.mk`, already inherited in
@@ -68,15 +71,20 @@ by name. Do not rename or merge them.
 ### qalos-specific rules (read these before editing branding/build id)
 
 8. **Branding strings are owner-controlled.**
-   `PRODUCT_BRAND = QA Lab`, `PRODUCT_MODEL = QA Lab Operating System`,
-   `PRODUCT_MANUFACTURER = QA Lab`. Do not change without explicit owner
+   `PRODUCT_BRAND = QALab` (no space — `sysprop.mk:195` rejects spaces
+   in `BUILD_FINGERPRINT`), `PRODUCT_MODEL = QA Lab Operating System`,
+   `PRODUCT_MANUFACTURER = QALab`. Do not change without explicit owner
    sign-off. These end up in `ro.product.*` and the AVD boot screen.
-9. **Build id format is `QAL.<YYYYMMDD>.NNN`.** The date stamp is
-   `$(shell date -u +%Y%m%d)`; the patch digit (`.NNN`) is the human
-   signal for the Nth build on a given date. Bump it for hot-fix builds
-   on the same day. Do not change the format.
-10. **`BUILD_VERSION_TAGS = qalos`.** This is the string AOSP uses to
-    distinguish qalos builds from upstream AOSP. Keep it.
+9. **Build id is the AOSP default** (set in `build/core/build_id.mk`).
+   A qalos-specific build id is exposed via `ro.qalos.build_id` (see
+   `device.mk:25`). A branded `BUILD_ID := QAL.<YYYYMMDD>.NNN` is
+   queued for v0.1 — it requires confirming (by experiment) that the
+   AOSP readonly mechanism does not block it. See the comment in
+   `qalos_emulator.mk:26-32` for the current reasoning.
+10. **`BUILD_VERSION_TAGS` is not set in v0** (the AOSP default
+    `eng`/`userdebug`/`user` value is used). v0.1+ may set it to
+    `qalos` to distinguish qalos builds from upstream AOSP; not done
+    in v0 because no consumer of the value exists yet.
 
 ## Out of scope here
 

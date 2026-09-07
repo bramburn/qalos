@@ -45,7 +45,7 @@ public class QaLabActivity extends Activity {
             "  Model:           %s%n" +
             "  Android release: %s%n" +
             "  SDK:             %d%n",
-            Build.DISPLAY,
+            System.getProperty("ro.build.id", "?"),
             System.getProperty("ro.build.display.id", "?"),
             Build.PRODUCT,
             Build.DEVICE,

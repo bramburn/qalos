@@ -43,7 +43,7 @@ services.core/Android.bp).
 | AOSP files modified | none | 4 (SystemServer, AndroidManifest, strings.xml, services.core/Android.bp) |
 | AOSP rebase cost | none | ~1 day per AOSP release to rebase the 4 patches |
 | Process | `/system/priv-app` (separate from system_server) | `system_server` (same as InputManager, WindowManager) |
-| Permissions | `INJECT_EVENTS`, `READ_FRAME_BUFFER` (signature\|privileged) | `REMOTE_CONTROL` (signature\|system) |
+| Permissions | `INJECT_EVENTS`, `READ_FRAME_BUFFER` (signature\|privileged) | `REMOTE_CONTROL` (signature) — system-only in v0; relax to signature\|system in v0.1+ if a pre-installed system app needs to hold it. |
 | API surface | Same — `InputManager.injectInputEvent`, `SurfaceControl.screenshot` | Same |
 | Lifecycle | Own service entry, onStart/onBootPhase | Standard `SystemService` lifecycle |
 | Testability | Easy to install standalone | Requires AOSP build |

@@ -92,9 +92,15 @@ public final class RemoteControlService extends SystemService implements IRemote
 
     private final Context mContext;
 
-    private InputManagerService mInputManager;
-    private IActivityManager mActivityManager;
-    private DisplayManager mDisplayManager;
+    // Volatile: written in onBootPhase() on the system_server main
+    // thread, read on the per-connection HTTP worker threads spawned
+    // by HttpApiServer. The HTTP worker has no guaranteed happens-before
+    // edge from onBootPhase, so we use volatile to ensure the worker
+    // sees the post-onBootPhase assignment. (The worst symptom without
+    // volatile is a stale null, which the existing ISE guards handle.)
+    private volatile InputManagerService mInputManager;
+    private volatile IActivityManager mActivityManager;
+    private volatile DisplayManager mDisplayManager;
 
     private HttpApiServer mHttpServer;
 
@@ -626,13 +632,14 @@ public final class RemoteControlService extends SystemService implements IRemote
         }
         try {
             // Use the AIDL binder directly. The app-side
-            // `ActivityManager.getRunningTasks(int)` was deprecated in API
-            // 21 and hard-removed in API 35 (Android 15) — the public
-            // shim no longer exposes it. The system_server-side
-            // `IActivityManager.getTasks(int maxNum)` is the supported
-            // replacement and is callable from system_server without a
-            // permission gate (the server side allows system_server
-            // callers unconditionally).
+            // `ActivityManager.getRunningTasks(int)` was deprecated in API 21
+            // and is restricted to callers with `MANAGE_ACTIVITIES` or
+            // `GET_TASKS`; it is still present in the public shim in API 35
+            // (verified at ActivityManager.java:3081) but not callable from
+            // system_server. The system_server-side
+            // `IActivityManager.getTasks(int maxNum)` (verified at
+            // IActivityManager.aidl:200) is the supported path and is callable
+            // from system_server without a permission gate.
             final List<ActivityManager.RunningTaskInfo> tasks =
                     mActivityManager.getTasks(1);
             if (tasks == null || tasks.isEmpty()) {
@@ -745,6 +752,10 @@ public final class RemoteControlService extends SystemService implements IRemote
         }
     }
 
+    // Fast-fail shape check, not full Android-package-name validation.
+    // Character.isJavaIdentifierStart/Part accept '$', '_', and Unicode
+    // letters; the Android PackageManager will reject those with a more
+    // meaningful "package not installed" error. See followup-work.md.
     private static void enforcePackageName(String packageName) {
         if (packageName == null) {
             throw new IllegalArgumentException("packageName must not be null");

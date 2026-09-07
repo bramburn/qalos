@@ -25,7 +25,8 @@ PRODUCT_PROPERTY_OVERRIDES += \
     ro.qalos.build_id=$(BUILD_ID) \
     ro.qalos.display_build_id=$(DISPLAY_BUILD_ID)
 
-# Note: the qalos SELinux policy overlay is wired via BoardConfig.mk
-# (not here). AOSP's sepolicy build reads BOARD_SEPOLICY_DIRS from
-# BoardConfig.mk; setting it in device.mk is silently ignored on
-# modern AOSP. See BoardConfig.mk in this directory.
+# Note: the qalos SELinux policy overlay is on disk at sepolicy/ and
+# is intended to be wired in v0.1 (vendor-tree relocation +
+# BOARD_VENDOR_SEPOLICY_DIRS). For v0 the overlay is NOT consumed;
+# see BoardConfig.mk in this directory for the rationale and the
+# v0.1 plan.

@@ -131,7 +131,10 @@ def main(work_tree: Path) -> int:
             file=sys.stderr,
         )
         return 1
-    target.write_text(new_text, encoding="utf-8")
+    # newline="" prevents LF -> CRLF translation on Windows. The
+    # production apply path is Linux (tools/apply-qalos.sh), so this
+    # only matters for the Windows dry-run recipe in lessons-learned.md.
+    target.write_text(new_text, encoding="utf-8", newline="")
     print("[0004] registered RemoteControlService in SystemServer (import + start block)")
     return 0
 
