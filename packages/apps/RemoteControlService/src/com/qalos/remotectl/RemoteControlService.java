@@ -60,9 +60,17 @@ public final class RemoteControlService extends SystemService implements IRemote
 
     private final Context mContext;
 
-    private InputManagerService mInputManager;
-    private IActivityManager mActivityManager;
-    private DisplayManager mDisplayManager;
+    // The three service references below are written in
+    // `onBootPhase(PHASE_BOOT_COMPLETED)` on the system_server main
+    // thread and read on the per-connection HTTP handler threads.
+    // Marked `volatile` so the JMM guarantees the handler threads see
+    // the published references without a synchronisation edge. Caught
+    // by the v0.1 review: without `volatile`, a handler that races
+    // the boot-phase write could see stale `null` and throw
+    // IllegalStateException. (Review item 2.3.)
+    private volatile InputManagerService mInputManager;
+    private volatile IActivityManager mActivityManager;
+    private volatile DisplayManager mDisplayManager;
 
     private HttpApiServer mHttpServer;
 
@@ -331,15 +339,14 @@ public final class RemoteControlService extends SystemService implements IRemote
         if (display == null) {
             throw new IllegalArgumentException("display not found: " + displayId);
         }
-        // `Display.getRealSize` was deprecated in API 30. The modern
-        // equivalent is `Context#getDisplay().getRealSize(DisplayMetrics)`,
-        // which avoids the deprecated `WindowManager.getDefaultDisplay()`
-        // path. The size on `Display` is in pixels, same units as the
-        // legacy API; tap coordinates are also in pixels.
-        // S-B in the v0 followup list: migrate to
-        // `WindowManager.getCurrentWindowMetrics().getBounds()` in v1.
+        // Use the fetched `display` (not `mContext.getDisplay()`, which
+        // is always the default display) — otherwise `displayId` is
+        // validated and then ignored. Caught by the v0.1 review: the
+        // previous code called `mContext.getDisplay().getRealSize(size)`,
+        // which made `enforceCoordinatesOnDisplay` validate coordinates
+        // against the wrong display on multi-display emulators.
         final android.graphics.Point size = new android.graphics.Point();
-        mContext.getDisplay().getRealSize(size);
+        display.getRealSize(size);
         // android.util.Size.of(int, int) was removed in AOSP 15; use the
         // public 2-arg constructor instead.
         return new Size(size.x, size.y);
