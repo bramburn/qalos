@@ -43,9 +43,20 @@ repo init -u https://github.com/bramburn/qalos -b main
 repo sync -c -j$(nproc) --no-tags --no-clone-bundle
 ../qalos/tools/apply-qalos.sh
 . build/envsetup.sh
-lunch qalos_emulator-userdebug
+lunch qalos_emulator-trunk_staging-userdebug
 m -j$(nproc)
 ```
+
+> **Note:** AOSP-15's `lunch` rejects the 2-part form (`<product>-<variant>`).
+> The third segment is the "release label" — for qalos it is fixed to
+> `trunk_staging` to match the AOSP-15 default prompt. `eng` and `user`
+> variants are also exposed (see `device/qalos/qalos_emulator/AndroidProducts.mk`).
+> The error if you get it wrong is:
+>
+> ```text
+> Invalid lunch combo: qalos_emulator-userdebug
+> Valid combos must be of the form <product>-<release>-<variant>
+> ```
 
 The three images you want land in `~/aosp/out/target/product/qalos_emulator/`: `system.img`, `boot.img`, `userdata.img`.
 
@@ -65,7 +76,7 @@ Full walkthroughs in the [docs site](https://bramburn.github.io/qalos/docs/getti
 
 | Target | Status |
 | --- | --- |
-| x86_64 emulator (AVD) | **First target.** `lunch qalos_emulator-userdebug` builds a working AVD. |
+| x86_64 emulator (AVD) | **First target.** `lunch qalos_emulator-trunk_staging-userdebug` builds a working AVD. |
 | Samsung Galaxy A16 5G (Exynos 1330, SM-A166B) | **Future.** Needs Samsung's kernel + HAL from `opensource.samsung.com` and a custom device tree. Multi-month port; the upstream community (`LineageOS`, `crDroid`) usually has a head start worth tracking. |
 
 ## Cost

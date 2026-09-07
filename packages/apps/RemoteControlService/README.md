@@ -15,25 +15,36 @@ packages/apps/RemoteControlService/
 │   ├── RemoteControlService.java      ← system service in system_server
 │   └── HttpApiServer.java             ← embedded HTTP/JSON front-end
 ├── patches/
-│   ├── 0001-services-core-Android-bp-srcs.patch
 │   ├── 0002-AndroidManifest-REMOTE_CONTROL-permission.patch
 │   ├── 0003-strings-REMOTE_CONTROL.patch
 │   ├── 0004-SystemServer-StartRemoteControlService.patch
-│   └── verify-patches.sh              ← `git apply --check` for all four
+│   └── check-patches.py               ← `git apply --check` for all three
 └── tests/
     └── README.md                      ← placeholder for future on-target tests
 ```text
+
+> **Note:** the original v0 had four patches (0001 through 0004).
+> Patch 0001 (`services-core-Android-bp-srcs`) was deleted in the
+> `fix-ups-2` commit because AOSP-15's `services.core-sources`
+> filegroup already globs `srcs: ["java/**/*.java"]`, which picks up
+> our copied `com/qalos/remotectl/*.java` without an explicit
+> `srcs:` entry. See
+> [`REBASE.md`](REBASE.md) and
+> [`website/docs/qa-lab-os/lessons-learned.md`](../../../website/docs/qa-lab-os/lessons-learned.md)
+> for the full history.
 
 ## How it builds
 
 `tools/apply-qalos.sh` (in the qalos manifest repo) copies the
 `src/com/qalos/remotectl/` directory into the AOSP working tree at
 `frameworks/base/services/core/java/com/qalos/remotectl/` and
-applies the four patches. The build then compiles the service into
+applies the three patches. The build then compiles the service into
 the `services.core` java_library, which is part of `system_server`.
 
-The build target is `qalos_emulator-userdebug` (or
-`sdk_phone64_x86_64-eng` for AOSP-verified builds). See
+The build target is `qalos_emulator-trunk_staging-userdebug` (or
+`sdk_phone64_x86_64-eng` for AOSP-verified builds). The
+`trunk_staging` release label is required by AOSP-15's `lunch`
+(2-part form is rejected). See
 [`website/docs/qa-lab-os/build-guide.md`](../../../website/docs/qa-lab-os/build-guide.md)
 for the full procedure.
 

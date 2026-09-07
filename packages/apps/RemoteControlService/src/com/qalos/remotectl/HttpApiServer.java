@@ -51,6 +51,17 @@ public final class HttpApiServer extends Thread {
      */
     private static final int MAX_BODY_BYTES = 64 * 1024;
 
+    /**
+     * Cap on the byte length of the HTTP request-line and each header
+     * line read via {@link #readLine}. A malicious or buggy client can
+     * send an infinite stream of bytes without a newline; the cap
+     * prevents {@code readLine} from accumulating until OOM in that
+     * case. 8 KiB is well above any reasonable HTTP/1.1 request-line or
+     * header value (RFC 9110 §5.5 recommends a server limit of at least
+     * 8 KiB for the request-line alone).
+     */
+    private static final int MAX_LINE_BYTES = 8 * 1024;
+
     /** Per-connection socket timeout. */
     private static final int SOCKET_TIMEOUT_MS = 5_000;
 
@@ -124,6 +135,30 @@ public final class HttpApiServer extends Thread {
             } catch (IOException e) {
                 // Client disconnect or timeout — silent. The connection
                 // is already closed by the try-with-resources.
+            } catch (IllegalArgumentException e) {
+                // Protocol violation (oversized line, malformed
+                // method/path, etc.). Best-effort 400 if the
+                // connection is still open; silent if it isn't.
+                Log.w(TAG, "bad request: " + e.getMessage());
+                try {
+                    writeError(socket.getOutputStream(), 400, e.getMessage());
+                } catch (IOException ignored) {
+                    // The client may have hung up; nothing to do.
+                }
+            } catch (RuntimeException e) {
+                // Defence-in-depth: never let a per-connection
+                // thread die silently. Without this, a v1+ handler
+                // that throws something we did not anticipate (e.g.
+                // a new RuntimeException subclass from a future AOSP
+                // release) would silently kill the connection thread
+                // and log nothing.
+                Log.e(TAG, "per-connection thread crashed", e);
+                try {
+                    writeError(socket.getOutputStream(), 500,
+                            "internal error: " + e.getClass().getSimpleName());
+                } catch (IOException ignored) {
+                    // The client may have hung up; nothing to do.
+                }
             }
         }, "qalos-remote-ctl-conn").start();
     }
@@ -169,6 +204,14 @@ public final class HttpApiServer extends Thread {
                     return;
                 }
             }
+        }
+        if (contentLength < 0) {
+            // Reject negative Content-Length as a protocol violation
+            // before `readBody` allocates `new byte[contentLength]`
+            // and throws NegativeArraySizeException. RFC 9110 §8.6
+            // requires the value to be a non-negative integer.
+            writeError(out, 400, "invalid Content-Length");
+            return;
         }
         if (contentLength > MAX_BODY_BYTES) {
             writeError(out, 413, "body too large");
@@ -513,6 +556,12 @@ public final class HttpApiServer extends Thread {
                 final int end = (data.length > 0 && data[data.length - 1] == '\r')
                         ? data.length - 1 : data.length;
                 return new String(data, 0, end, StandardCharsets.US_ASCII);
+            }
+            if (buf.size() >= MAX_LINE_BYTES) {
+                // Bail before the ByteArrayOutputStream can grow
+                // unbounded. The caller treats this as a protocol
+                // violation and returns HTTP 400.
+                throw new IllegalArgumentException("line exceeds " + MAX_LINE_BYTES + " bytes");
             }
             buf.write(c);
         }
