@@ -1,6 +1,8 @@
 # qalos -- on-demand AOSP build on GCP.
 #
-# Mirrors tools\doctl-build.ps1 and tools\aliyun-build.ps1 for the GCP path.
+# Mirrors tools\doctl-build.ps1 for the GCP path. The Aliyun
+# build is LLM-driven (see tools/aliyun/AGENTS.md); the .ps1
+# build orchestrator was removed on 2026-09-09.
 # Launches a Spot instance from the `qalos-build-warm` snapshot, runs the same
 # tools\do-build.sh as the other two paths, then destroys the instance.
 #
