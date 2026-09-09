@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# qalos — on-demand AOSP build script.
+# qalos â€” on-demand AOSP build script.
 #
 # Runs on a fresh DigitalOcean droplet created from the `qalos-build-warm`
 # snapshot. Does the full AOSP build, uploads the resulting images to DO
 # Spaces, then signals completion. The calling script (PowerShell or GH Actions)
-# is responsible for destroying the droplet — but this script also installs a
+# is responsible for destroying the droplet â€” but this script also installs a
 # watchdog on the droplet itself so that even if the orchestrator loses its
 # connection or crashes, the droplet self-destructs at MAX_RUNTIME_MINUTES
 # instead of running forever and burning money.
@@ -99,10 +99,8 @@ TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
 LOG_DIR="$BUILD_DIR/.qalos-logs"
 mkdir -p "$LOG_DIR"
 
-log() { echo "[qalos][$(date -u +%H:%M:%S)] $*"; }
-
 # ----------------------------------------------------------------------------
-# Watchdog — self-destruct the droplet if MAX_RUNTIME_MINUTES is hit.
+# Watchdog â€” self-destruct the droplet if MAX_RUNTIME_MINUTES is hit.
 # This catches the case where the orchestrator (PowerShell/GH Actions) dies
 # and never comes back to delete the droplet.
 # ----------------------------------------------------------------------------
@@ -113,7 +111,7 @@ shutdown_droplet() {
     pkill -9 -f "java|cc1|gcc|ld|make|repo|emulator|kotlinc|d8|dex2oat" 2>/dev/null || true
     sleep 2
     # QALOS_NO_SHUTDOWN_ON_FAILURE (added 2026-09-09 for the Aliyun LLM-driven
-    # path). When set to 1, do NOT actually shut down — just kill the build
+    # path). When set to 1, do NOT actually shut down â€” just kill the build
     # processes and return. The LLM-driven wrapper needs the instance to
     # stay Running so the token-gated HTTP server can serve the failure
     # log to the mavis cron. Default 0 (original DO behaviour).
@@ -132,7 +130,7 @@ WATCHDOG_PID=$!
 trap 'kill $WATCHDOG_PID 2>/dev/null || true' EXIT
 
 # ----------------------------------------------------------------------------
-# Memory tuning — safer on small droplets.
+# Memory tuning â€” safer on small droplets.
 # ----------------------------------------------------------------------------
 export ANDROID_JACK_ARGS="${ANDROID_JACK_ARGS:--Xmx4g -Dfile.encoding=UTF-8}"
 export MALLOC_ARENA_MAX=1
@@ -141,7 +139,7 @@ export CCACHE_DIR="${CCACHE_DIR:-$HOME/.ccache}"
 export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-20G}"
 
 # ----------------------------------------------------------------------------
-# Step 1 — repo init (only the first time)
+# Step 1 â€” repo init (only the first time)
 # ----------------------------------------------------------------------------
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
@@ -154,7 +152,7 @@ if [ ! -d ".repo" ]; then
 fi
 
 # ----------------------------------------------------------------------------
-# Step 2 — repo sync
+# Step 2 â€” repo sync
 #
 # Use a lower concurrency here than for the AOSP build (j8) because the git
 # fetches hit `android.googlesource.com` which has per-IP rate limits. Running
@@ -199,7 +197,7 @@ if [ $SYNC_OK -eq 0 ]; then
 fi
 
 # ----------------------------------------------------------------------------
-# Step 3 — apply qalos customizations.
+# Step 3 â€” apply qalos customizations.
 #
 # tools/apply-qalos.sh copies the qalos device tree, apps, and vendor blobs
 # from .repo/manifests/qalos into the AOSP working tree. It is idempotent
@@ -222,7 +220,7 @@ log "applying qalos customizations from $APPLY_QALOS"
 WORK_TREE="$BUILD_DIR" bash "$APPLY_QALOS"
 
 # ----------------------------------------------------------------------------
-# Step 4 — build
+# Step 4 â€” build
 # ----------------------------------------------------------------------------
 # AOSP 15's `lunch` requires <product>-<release>-<variant> (3 parts, see
 # envsetup.sh:442). The old <product>-<variant> form is rejected.
@@ -236,7 +234,7 @@ lunch "$BUILD_TARGET-$BUILD_RELEASE-$BUILD_VARIANT"
 # metalava `UnflaggedApi` / `@FlaggedApi` lint for any new permissions or
 # APIs the qalos patches added to the framework. If this fails, abort
 # immediately rather than waiting 2-4 hours to discover the same error
-# in the full build. AGENTS.md §8.2 documents why this is needed: the
+# in the full build. AGENTS.md Â§8.2 documents why this is needed: the
 # patch dry-run validates *mechanics* (regex match, apply cleanly), not
 # *build behaviour*. The pre-flight closes that gap.
 # ----------------------------------------------------------------------------
@@ -247,7 +245,7 @@ if ! m -j"$BUILD_JOBS" frameworks/base/api:api-stubs-docs-non-updatable 2>&1 | t
     log "  public class/method that AOSP 15's metalava requires to be @FlaggedApi. The fix is"
     log "  one of: (a) add a UnflaggedApi entry to frameworks/base/api/lint-baseline.txt, or"
     log "  (b) define an aconfig flag and reference it in the new code. Do NOT launch a full"
-    log "  cloud build until the preflight passes. See AGENTS.md §8.2 for the workflow."
+    log "  cloud build until the preflight passes. See AGENTS.md Â§8.2 for the workflow."
     log "  Last 30 lines of preflight.log:"
     tail -30 "$LOG_DIR/preflight.log" | sed 's/^/  /'
     shutdown_droplet
@@ -275,7 +273,7 @@ log "m -j$BUILD_JOBS (this takes 1-4 hours on a c-8 droplet)"
 m -j"$BUILD_JOBS" 2>&1 | tee "$LOG_DIR/build.log"
 
 # ----------------------------------------------------------------------------
-# Step 5 — upload artifacts to DO Spaces (skipped if SPACES_BUCKET is empty)
+# Step 5 â€” upload artifacts to DO Spaces (skipped if SPACES_BUCKET is empty)
 # ----------------------------------------------------------------------------
 if [ -n "${SPACES_BUCKET:-}" ]; then
     upload_artifact() {
@@ -296,7 +294,7 @@ if [ -n "${SPACES_BUCKET:-}" ]; then
         upload_artifact "$ARTIFACT_DIR/$img"
     done
 
-    # Upload the build log too — saves a debug round-trip.
+    # Upload the build log too â€” saves a debug round-trip.
     s3cmd put "$LOG_DIR/build.log" "s3://$SPACES_BUCKET/$TIMESTAMP/build.log" \
         --host="$SPACES_REGION.digitaloceanspaces.com" \
         --access_key="$SPACES_KEY" \
@@ -345,7 +343,7 @@ else
     log "artifacts on the instance under: $ARTIFACT_DIR/"
 fi
 
-# Disable the watchdog now that we're done — the orchestrator will destroy
+# Disable the watchdog now that we're done â€” the orchestrator will destroy
 # the droplet. If the orchestrator is dead, the watchdog fires later.
 kill $WATCHDOG_PID 2>/dev/null || true
 WATCHDOG_PID=""
