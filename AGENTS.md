@@ -53,20 +53,27 @@ qalos/
 ├── device/qalos/qalos_emulator/   ← qalos product makefile (branding, build id)
 ├── packages/apps/QaLab/           ← the only first-party qalos app
 │
-├── tools/                         ← WINDOWS ORCHESTRATORS (.ps1) + ON-HOST (.sh)
+├── tools/                         ← WINDOWS ORCHESTRATORS (.ps1) + ON-HOST (.sh) + LLM-DRIVEN DOCS
+│   ├── AGENTS.md                  ← one-page index for the tools/ folder
 │   ├── apply-qalos.sh             ← on-host: copy qalos content into AOSP tree
 │   ├── setup-droplet.sh           ← on-host: install AOSP build deps
 │   ├── do-build.sh                ← on-host: the AOSP build (single source of truth)
+│   ├── aliyun/                    ← LLM-driven Aliyun build runbook
+│   │   ├── AGENTS.md              ← the runbook (next agent reads this)
+│   │   ├── aliyun-cli-reference.md← per-command JSON parse + error code table
+│   │   ├── build-cost.md          ← per-build + standing cost table
+│   │   └── qalos-serve-artifacts.py ← token-gated HTTP server for build artifacts
 │   ├── doctl-*.ps1                ← DO path (Windows)
-│   ├── aliyun-*.ps1               ← Aliyun path (Windows)
-│   └── gcp-*.ps1                 ← GCP path (Windows)
+│   ├── aliyun-install.ps1         ← Aliyun CLI install (one-time)
+│   ├── aliyun-smoke-test.ps1      ← Aliyun smoke test (Phase 2 of the LLM runbook; the LLM does not invoke this)
+│   ├── aliyun-setup-base.ps1      ← Aliyun warm-image creation (Phase 3 of the LLM runbook)
+│   └── gcp-*.ps1                  ← GCP path (Windows)
 ├── scripts/                       ← macOS / LINUX ORCHESTRATORS (.sh)
 │   ├── aliyun-install.sh
 │   ├── aliyun-smoke-test.sh
 │   ├── aliyun-setup-base.sh
-│   ├── aliyun-build.sh
 │   └── lib/
-│       ├── aliyun-common.sh       ← aliyon(), get_state(), save_state(), smallest_in_stock_instance_type()
+│       ├── aliyun-common.sh       ← aliyon(), get_state(), save_state()
 │       └── log.sh                 ← log_info/warn/error/fatal with color
 │
 ├── website/                       ← Docusaurus site (deployed to GitHub Pages)
@@ -101,10 +108,14 @@ Cloud is for clean-room CI and sharing, not for everyday dev. Don't put a 5-minu
 
 **Never reinstall build dependencies on every run.** Both cloud paths create a "warm" base image once and then launch every subsequent build from that image. The cost of the warm artefact:
 - DO snapshot: $0.10/GB/month, ~3-4 GB → ~$0.40/month.
-- Aliyun custom image: ¥0.12/GB/month, ~8-12 GB → ~¥1/month.
+- Aliyun custom image: ~¥1/GB/month at ESSD PL1, ~8-12 GB → **~¥8-12/month** (the previous ¥1/month figure was based on the deprecated snapshot-pricing tier; corrected 2026-09-09 in [`tools/aliyun/build-cost.md`](tools/aliyun/build-cost.md)).
 - GCP persistent disk snapshot (pd-ssd): ~$0.10/GB/month, ~8-15 GB → ~$1-1.50/month.
 
-All three are cheaper than one wasted build cycle.
+All three are cheaper than one wasted build cycle. The Aliyun
+warm image is the most expensive of the three because the
+custom-image storage is per-GB rather than per-snapshot; if idle
+cost matters, delete the image between builds (re-creating
+takes ~10 min).
 
 ### 2.3 Four safety nets, no exceptions
 
@@ -150,9 +161,24 @@ AOSP builds take 1-6 hours. The orchestrator script (`.ps1` / `.sh`) is **synchr
 
 The convention: the **LLM** (mavis) sets up the monitor cron, NOT the script. After the orchestrator reports `instance created: qalos-build-...`, the driving LLM should call `mavis cron create --schedule "*/10 * * * *" --cron_name "qalos-build-<instanceName>" --prompt "<watchdog prompt>" --session '{"mode":"sessionId","sessionId":"<this-session-id>"}'`.
 
-The script stays focused on what it does well (create / run / cleanup). The LLM stays focused on what it does well (cross-session state, cron lifecycle, smart decisions, artifact download via SSH/SCP). Both pieces have explicit fallbacks: the script works without the LLM (just no monitor), and the LLM works without the script (manually re-runs and reads the same prompts).
+The script stays focused on what it does well (create / run / cleanup). The LLM stays focused on what it does well (cross-session state, cron lifecycle, smart decisions, artifact download via HTTP). Both pieces have explicit fallbacks: the script works without the LLM (just no monitor), and the LLM works without the script (manually re-runs and reads the same prompts).
 
 This rule applies to all three cloud paths: gcp / aliyun / DO.
+
+**As of 2026-09-09 the Aliyun path is fully LLM-driven.** The
+`tools/aliyun-build.ps1` and `scripts/aliyun-build.sh` orchestrators
+were **removed** (mavis-trash) on 2026-09-09 — they had three
+known bugs (B-1: `$ddidx` typo in the wait loop; B-2: missing
+`$sgId`/`$vswId` load from the state file; B-3: blocking on
+SSH for 1-6 hours, the same shape that bit the GCP path on
+2026-09-04). The replacement is the LLM-driven runbook at
+[`tools/aliyun/AGENTS.md`](tools/aliyun/AGENTS.md), where the
+agent calls `aliyun ecs ...` directly via Bash, starts the
+build as a detached `systemd-run` unit, and sets up the
+`mavis cron` in the same turn. The smoke test and setup-base
+scripts (which don't have the SSH-blocking bug) remain on
+disk for users who prefer scripts. See
+[`tools/AGENTS.md`](tools/AGENTS.md) for the index.
 
 ### 2.9 The legal framework is non-negotiable
 
@@ -271,24 +297,72 @@ $env:DO_API_TOKEN = '<read+write token>'
 ```text
 GH Actions: `.github/workflows/build.yml` triggers on push to `main`, manual dispatch, or weekly Sunday 03:00 UTC smoke build.
 
-### 5.3 Aliyun fallback (Windows)
+### 5.3 Aliyun fallback
+
+**As of 2026-09-09, the Aliyun path is LLM-driven, not script-driven.**
+The LLM agent reads [`tools/aliyun/AGENTS.md`](tools/aliyun/AGENTS.md) and
+calls the Aliyun CLI directly via the Bash tool. The PS1 build
+script (`tools/aliyun-build.ps1`) and its `.sh` twin
+(`scripts/aliyun-build.sh`) were **removed** on 2026-09-09 — they
+had three known bugs (B-1, B-2, B-3) that blocked first-run use
+and a control flow that could delete a healthy build if the SSH
+connection dropped. The smoke test and setup-base scripts
+remain on disk for users who prefer scripts (they don't have
+the SSH-blocking bug).
+
+The one-time install is the same:
 
 ```powershell
 .\tools\aliyun-install.ps1
 aliyun configure
+```
+
+Then the LLM reads [`tools/aliyun/AGENTS.md`](tools/aliyun/AGENTS.md) and
+runs the four phases (smoke test → warm image → sync+preflight
+→ full build). Each phase is a sequence of `aliyun ecs ...`
+Bash invocations; the LLM also sets up a `mavis cron` that owns
+teardown. The build artifacts are downloaded over HTTP (via
+`curl` or a browser) using the token-gated URL the systemd
+unit's `ExecStartPost=` writes — see the runbook's
+"Downloading artifacts" section.
+
+**Per-build state file** — the LLM-driven Phase 4 flow maintains
+`D:\qalos\.pi\aliyun-build-state.json` (schema
+`qalos://aliyun-build-state/v1`, documented in
+[`tools/aliyun/AGENTS.md`](tools/aliyun/AGENTS.md) §"Per-build state
+file"). Separate from the INFRA state file
+(`.pi/aliyun-state.json`); the build file tracks one attempt
+(status, instance, SSH, artifact URL, mavis cron ID, decisions,
+state transitions, recovery actions). The mavis cron and any
+follow-up agent read it. Do not delete it until the instance is
+`torn_down`; archive it under a timestamped name if you want to
+keep the build history.
+
+The remaining PS1-driven flow (kept for users who prefer scripts
+for the smoke test and warm image only):
+
+```powershell
 .\tools\aliyun-smoke-test.ps1            # one-time: bootstrap VPC/SG/KeyPair
 .\tools\aliyun-setup-base.ps1 -InstanceType ecs.u1-c1m8.2xlarge
-.\tools\aliyun-build.ps1 -InstanceType ecs.u1-c1m8.2xlarge -MaxRuntimeMinutes 360
 ```text
 
+The actual build is LLM-driven only; the removed
+`aliyun-build.ps1` is not replaced by a script.
+
 ### 5.4 Aliyun fallback (macOS / Linux — .sh twins)
+
+The macOS/Linux `.sh` twins of `aliyun-install.sh`,
+`aliyun-smoke-test.sh`, and `aliyun-setup-base.sh` remain on
+disk for users who prefer scripts. The `.sh` twin of the build
+script (`scripts/aliyun-build.sh`) was **removed** alongside
+its `.ps1` sibling on 2026-09-09 — the build is LLM-driven only.
 
 ```bash
 ./scripts/aliyun-install.sh
 aliyun configure
 ./scripts/aliyun-smoke-test.sh
 ./scripts/aliyun-setup-base.sh --instance-type ecs.u1-c1m8.2xlarge
-./scripts/aliyun-build.sh --instance-type ecs.u1-c1m8.2xlarge --max-runtime-minutes 360
+# build: LLM reads tools/aliyun/AGENTS.md and calls aliyun ecs ... directly
 ```text
 
 ### 5.5 GCP fallback (Windows)
@@ -355,17 +429,20 @@ This convention applies to all three cloud paths: gcp / aliyun / DO. The script 
 | DO `qalos-build-warm` snapshot | $0.40/mo | — |
 | DO Spaces | $5/mo | (storage for build artifacts) |
 | DO build droplet (`c-8`) | $0 | $0.50-0.80 |
-| Aliyun `qalos-build-warm` custom image | ~¥1/mo | — |
-| Aliyun build ECS (`u1-c1m8.2xlarge` spot, 6h) | $0 | ~¥7 |
-| Aliyun egress (scp 10 GB to UK) | $0 | ~¥8 |
+| Aliyun `qalos-build-warm` custom image (8-12 GB ESSD PL1) | **~¥8-12/mo** (corrected 2026-09-09) | — |
+| Aliyun build ECS (`g7a.16xlarge` spot, 1.5 h) | $0 | ~¥9 (compute + disk + egress) |
+| Aliyun egress (scp 3 GB to UK) | $0 | ~¥0.4 (only 3 GB; not 10) |
 | GCP `qalos-build-warm` snapshot (incremental, ~1 GB actual data on 200 GB disk) | ~$0.03/mo | — |
 | GCP build (`c3d-highcpu-16` Spot, 6h, us-central1) | $0 | ~$0.76 |
 | GCP build (`c3d-standard-16` Spot, 6h, us-central1) | $0 | ~$0.92 |
 
 **Idle project cost if you only use the local box: $0.**
 **Idle project cost if you maintain the DO fallback: ~$5.40/month.**
-**Idle project cost if you maintain the Aliyun fallback: ~¥6/month.**
+**Idle project cost if you maintain the Aliyun fallback: ~¥8-12/month** (was quoted as ~¥6/month; corrected — the warm image at ESSD PL1 ¥1/GB/month on 8-12 GB is ¥8-12, not ¥1).
 **Idle project cost if you maintain the GCP fallback: ~$0.03/month (warm snapshot is incremental — only ~1 GB of actual data, not the full 200 GB disk).**
+
+See [`tools/aliyun/build-cost.md`](tools/aliyun/build-cost.md) for
+the full Aliyun cost breakdown and the cost-scaling tips.
 
 ## 7. Aliyun-specific gotchas
 
@@ -423,7 +500,18 @@ If the patch is ever applied, all three `gcp-*.ps1` scripts can switch back to `
 
 ## 8. Known limitations / open work
 
-- **`do-build.sh` uploads to DO Spaces.** This is wrong for the Aliyun and GCP paths. Both pull artifacts via `scp` (Aliyun incurs ~¥8 egress per build; GCP pulls via native `scp.exe` at no egress cost within the region). The clean fix is a `BUILD_UPLOAD_BACKEND=scp|spaces|oss|gcs|none` env var. Now done for the GCP path — `do-build.sh` skips upload when `SPACES_BUCKET` is empty.
+- **Aliyun build scripts removed 2026-09-09.** `tools/aliyun-build.ps1`
+  and `scripts/aliyun-build.sh` were deleted via `mavis-trash`
+  on 2026-09-09. They had three known bugs (B-1: undefined
+  `$ddidx` typo in the wait loop; B-2: `--SecurityGroupId $sgId
+  --VSwitchId $vswId` use variables that are never loaded from
+  the state file; B-3: the script blocks on `ssh "bash
+  /tmp/do-build.sh"` for 1-6 hours, the same shape that bit the
+  GCP path on 2026-09-04). The LLM-driven path is the only
+  workflow; see [`tools/aliyun/AGENTS.md`](tools/aliyun/AGENTS.md).
+  The smoke test and setup-base scripts (which don't have the
+  SSH-blocking bug) remain on disk.
+- **`do-build.sh` uploads to DO Spaces.** This is wrong for the Aliyun and GCP paths. Both pull artifacts via `scp` (Aliyun incurs ~¥0.4 egress per build for 3 GB; GCP pulls via native `scp.exe` at no egress cost within the region). The clean fix is a `BUILD_UPLOAD_BACKEND=scp|spaces|oss|gcs|none` env var. Now done for the GCP path — `do-build.sh` skips upload when `SPACES_BUCKET` is empty.
 - **`default.xml`'s `aosp` remote — FIXED 2026-09-04.** The qalos default.xml used to include `upstream.xml` (a verbatim copy of AOSP's default.xml) which defined `<remote name="aosp" fetch=".."/>`. Under AOSP that resolves to `https://android.googlesource.com/`, but under qalos (`https://github.com/bramburn/qalos.git`) it resolves to `https://github.com/bramburn/`. `repo sync` on a fresh clone of qalos therefore tried to fetch every AOSP project from this fork and failed with "Unable to fully sync the tree / Downloading network changes failed". The fix: removed the duplicate `<remote name="aosp">` from `upstream.xml` and added the canonical definition to `default.xml` with an absolute `fetch="https://android.googlesource.com/"` URL. The `repo` include parser accepts this (the comment that said it rejected duplicates was referring to redefining a remote with different attributes in the same file; the include gets a fresh namespace, so a single canonical definition in the parent manifest is fine).
 - **No GH Actions path for Aliyun or GCP.** `.github/workflows/build.yml` is DO-only. Adding parallel `build-aliyun.yml` and `build-gcp.yml` workflows is straightforward but requires GitHub secrets to be set first.
 - **GCP SSH workaround is local to the orchestrator scripts.** The right long-term fix is patching `gcloud/.../ssh.py` (see §7.6) so the gcloud CLI uses OpenSSH on Windows. The patch needs admin and is a one-line change. Until then, the `gcp-*.ps1` scripts carry their own `Invoke-Ssh` / `Invoke-ScpUpload` / `Invoke-ScpDownload` helpers using Windows OpenSSH. The [manual agent-driven build guide](website/docs/qa-lab-os/agent-build-shell.md) documents the same primitives for use outside the orchestrator.
@@ -593,32 +681,35 @@ Linux instance.
    .\tools\gcp-build.ps1                      # kick the build
    ```
 
-2. **Aliyun smoke test** (if the risk-control gate ever lifts):
+2. **Aliyun path is LLM-driven, not script-driven** (as of 2026-09-09).
+   File a quota increase at
+   `https://ecs.console.aliyun.com → 配额管理 → 提交配额申请`
+   for the `ecs.g7a` family, 64 vCPU. Approval is typically
+   < 1 business day. Then read
+   [`tools/aliyun/AGENTS.md`](tools/aliyun/AGENTS.md) and run the
+   four phases. The LLM-driven flow does not require the PS1
+   scripts.
 
-   ```powershell
-   .\tools\aliyun-smoke-test.ps1
-   ```
-
-   This should PASS in ~3 min. If it hangs on `RunInstances`, see §7.4 — wait 60-90 s and re-run.
-3. **Create the Aliyun warm image** (when the gate lifts):
-
-   ```powershell
-   .\tools\aliyun-setup-base.ps1 -InstanceType ecs.u1-c1m8.2xlarge
-   ```
-
-4. **Enable GitHub Pages** for the Docusaurus site: go to repo **Settings > Pages**, select **GitHub Actions** as the source. The next push to `main` will deploy.
-5. **Apply branch protection** with the `gh api` command in `BRANCH_PROTECTION.md`.
-6. **Add GH Actions paths** for Aliyun and GCP by copying `.github/workflows/build.yml` and following the pattern.
-7. **Refactor `do-build.sh`** to take a `BUILD_UPLOAD_BACKEND=scp|spaces|oss|gcs|none` env var so all cloud paths upload to their own storage instead of pulling via `scp`.
+3. **Enable GitHub Pages** for the Docusaurus site: go to repo **Settings > Pages**, select **GitHub Actions** as the source. The next push to `main` will deploy.
+4. **Apply branch protection** with the `gh api` command in `BRANCH_PROTECTION.md`.
+5. **Add GH Actions paths** for Aliyun and GCP by copying `.github/workflows/build.yml` and following the pattern.
+6. **The artifact-download path is now HTTP, not `scp`.** `do-build.sh`
+   writes `/tmp/qalos-artifacts-url.txt`; the systemd unit's
+   `ExecStartPost=` starts [`tools/aliyun/qalos-serve-artifacts.py`](tools/aliyun/qalos-serve-artifacts.py);
+   the cron and the user download via `curl` or a browser.
+   No `BUILD_UPLOAD_BACKEND` refactor needed for the Aliyun
+   path; the `SPACES_BUCKET` DO path still uses `s3cmd`.
 
 ## 10. TL;DR
 
 - **Build locally.** 16 GB+ RAM, 200+ GB disk, Ubuntu 22.04+.
-- **Cloud is a fallback.** DO has the battle-tested scripts (`doctl-*.ps1`); Aliyun is the parallel path (`aliyun-*.ps1`) for China-region runs; GCP is the cheapest and fastest new-account path (`gcp-*.ps1`, ~$0.76 for a 6h build, no gates).
+- **Cloud is a fallback.** DO has the battle-tested scripts (`doctl-*.ps1`); Aliyun is the LLM-driven path (read [`tools/aliyun/AGENTS.md`](tools/aliyun/AGENTS.md)) for China-region runs; GCP is the cheapest and fastest new-account path (`gcp-*.ps1`, ~$0.76 for a 6h build, no gates).
 - **The on-host build is `do-build.sh`.** All three cloud paths invoke it. Don't fork it.
+- **The Aliyun path is LLM-driven** as of 2026-09-09. The agent calls `aliyun ecs ...` via Bash, sets up a `mavis cron` to own teardown, and the build runs as a detached `systemd-run` unit on the instance. See [`tools/aliyun/AGENTS.md`](tools/aliyun/AGENTS.md).
 - **Four safety nets** prevent orphaned cloud resources. Every new build script MUST implement them.
-- **The warm image is the unit of cost optimization.** Pay ~$1/month for the snapshot/image, save 30 min per build.
+- **The warm image is the unit of cost optimization.** Pay ~¥8-12/month for the Aliyun image, ~$0.40/month for the DO snapshot, save 30 min per build.
 - **GCP: use Spot with a retry mindset.** 30-second preemption notice means a mid-build reclaim costs one extra `m` round — `repo sync` and `ccache` survive it.
+- **Aliyun: use `SpotAsPriceGo`** the same way. The build instance is destroyed on any exit; `do-build.sh`'s `MAX_RUNTIME_MINUTES` watchdog is the hard upper bound.
 - **Read the gotchas (§7) before you debug Aliyun.** The CLI's error messages are useless; the gotchas are where the real signal is.
 - **The legal framework in `legal/` is the project's liability shield.** KYC + audit logging are mandatory for any commercial distribution. Contributors accept the CLA by submitting a PR. See §2.9 for the non-negotiables. Every document in `legal/` is currently DRAFT and must be reviewed by a solicitor before reliance.
 - **The docs site is at <https://bramburn.github.io/qalos/>** and is the human-facing mirror of this file. Update both when you change architecture.

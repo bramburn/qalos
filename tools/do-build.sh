@@ -47,6 +47,39 @@ BUILD_VARIANT="${BUILD_VARIANT:-userdebug}"
 MAX_RUNTIME_MINUTES="${MAX_RUNTIME_MINUTES:-240}"
 BUILD_DIR="${BUILD_DIR:-$HOME/aosp}"
 
+# ----------------------------------------------------------------------------
+# TUNA mirror hook (added 2026-09-09 for the Aliyun LLM-driven path)
+# ----------------------------------------------------------------------------
+# When QALOS_USE_TUNA_MIRROR=1 is set, override the fetch URL for the AOSP
+# remote to the Tsinghua TUNA mirror. This shaves the repo sync from ~4-6 h
+# (cross-border to android.googlesource.com from cn-hangzhou) down to
+# ~30-60 min (intra-China to TUNA). The qalos manifest's
+# <remote name="aosp" fetch="https://android.googlesource.com/"> is
+# rewritten via `git config --global url.<...>.insteadOf` so the existing
+# manifest needs no edit.
+#
+# Side effect: TUNA explicitly rate-limits `repo sync` at -j 4; higher
+# concurrency hits HTTP 503. Drop REPO_SYNC_JOBS to 4 when the mirror is on.
+# (See https://mirrors.tuna.tsinghua.edu.cn/help/AOSP/.)
+QALOS_USE_TUNA_MIRROR="${QALOS_USE_TUNA_MIRROR:-0}"
+if [ "$QALOS_USE_TUNA_MIRROR" = "1" ]; then
+    log "QALOS_USE_TUNA_MIRROR=1: redirecting android.googlesource.com -> mirrors.tuna.tsinghua.edu.cn"
+    git config --global url."https://mirrors.tuna.tsinghua.edu.cn/git/AOSP/".insteadOf "https://android.googlesource.com/"
+    # Also redirect the `repo` tool's own source so `repo init` doesn't hit
+    # the Google CDN.
+    git config --global url."https://mirrors.tuna.tsinghua.edu.cn/git/git-repo/".insteadOf "https://storage.googleapis.com/git-repo-downloads/"
+    # Override the per-call default; the explicit REPO_SYNC_JOBS env var
+    # still wins if the caller set it.
+    : "${REPO_SYNC_JOBS:=4}"
+    log "  REPO_SYNC_JOBS=$REPO_SYNC_JOBS (TUNA caps at 4 concurrent git fetches)"
+fi
+
+# QALOS_STOP_AFTER_PREFLIGHT (added 2026-09-09 for the Aliyun LLM-driven path)
+# When set to 1, exit cleanly after the preflight metalava target builds.
+# Useful for a sync + preflight-only run that validates the wiring before
+# committing to a 1-1.5 h full build. Default 0 (run the full m -jN).
+QALOS_STOP_AFTER_PREFLIGHT="${QALOS_STOP_AFTER_PREFLIGHT:-0}"
+
 # SPACES_BUCKET is optional. When empty, the script skips the upload step and
 # the orchestrator pulls artifacts back via SCP. This is the path used by the
 # Aliyun and GCP orchestrators, which don't have DO Spaces credentials.
@@ -79,6 +112,15 @@ shutdown_droplet() {
     # Kill any lingering build processes first to free resources fast.
     pkill -9 -f "java|cc1|gcc|ld|make|repo|emulator|kotlinc|d8|dex2oat" 2>/dev/null || true
     sleep 2
+    # QALOS_NO_SHUTDOWN_ON_FAILURE (added 2026-09-09 for the Aliyun LLM-driven
+    # path). When set to 1, do NOT actually shut down — just kill the build
+    # processes and return. The LLM-driven wrapper needs the instance to
+    # stay Running so the token-gated HTTP server can serve the failure
+    # log to the mavis cron. Default 0 (original DO behaviour).
+    if [ "${QALOS_NO_SHUTDOWN_ON_FAILURE:-0}" = "1" ]; then
+        log "QALOS_NO_SHUTDOWN_ON_FAILURE=1: skipping shutdown, instance stays Running for artifact download"
+        return 0
+    fi
     shutdown -h now 2>/dev/null || poweroff 2>/dev/null || true
 }
 (
@@ -209,8 +251,25 @@ if ! m -j"$BUILD_JOBS" frameworks/base/api:api-stubs-docs-non-updatable 2>&1 | t
     log "  Last 30 lines of preflight.log:"
     tail -30 "$LOG_DIR/preflight.log" | sed 's/^/  /'
     shutdown_droplet
+    # If shutdown_droplet is a no-op (QALOS_NO_SHUTDOWN_ON_FAILURE=1 on
+    # the Aliyun path), we still need to exit the script so the wrapper
+    # can start the HTTP server. On the DO path shutdown_droplet actually
+    # powers the instance off and this exit never runs.
+    exit 1
 fi
 log "PREFLIGHT: api-stubs-docs-non-updatable built cleanly, proceeding to full build"
+
+# QALOS_STOP_AFTER_PREFLIGHT: early-exit hook for the Aliyun LLM-driven
+# path's sync + preflight validation phase. The systemd-run unit exits 0,
+# the LLM's mavis cron sees the unit inactive, downloads the preflight log,
+# and tears down the instance. Full m -jN is skipped.
+if [ "$QALOS_STOP_AFTER_PREFLIGHT" = "1" ]; then
+    log "QALOS_STOP_AFTER_PREFLIGHT=1: skipping full m -jN, exiting cleanly after preflight"
+    kill $WATCHDOG_PID 2>/dev/null || true
+    WATCHDOG_PID=""
+    echo "QALOS_BUILD_DONE_PREFLIGHT_ONLY"
+    exit 0
+fi
 
 log "m -j$BUILD_JOBS (this takes 1-4 hours on a c-8 droplet)"
 m -j"$BUILD_JOBS" 2>&1 | tee "$LOG_DIR/build.log"
@@ -245,6 +304,35 @@ if [ -n "${SPACES_BUCKET:-}" ]; then
         --no-check-md5 2>&1 | tail -3
 else
     log "SPACES_BUCKET is empty -- skipping upload. Orchestrator will pull artifacts via SCP."
+fi
+
+# ----------------------------------------------------------------------------
+# Write the artifacts URL for the cron / user to download over HTTP
+# ----------------------------------------------------------------------------
+# The LLM-driven Aliyun build (and any future cloud build) downloads
+# the artifacts via curl or a browser against a token-gated HTTP
+# server (tools/aliyun/qalos-serve-artifacts.py) that the systemd
+# unit starts in ExecStartPost after this script exits. The server
+# reads its URL from /tmp/qalos-artifacts-url.txt; the cron and the
+# user both read this file.
+#
+# Write the URL file with a placeholder; the systemd unit's
+# ExecStartPost overwrites it with the real URL after the server
+# starts. The placeholder lets the cron poll for either the
+# placeholder (server not yet up) or the real URL (server up,
+# ready to download).
+ARTIFACTS_URL_FILE="/tmp/qalos-artifacts-url.txt"
+if [ -n "${QALOS_ARTIFACTS_PUBLIC_URL:-}" ]; then
+    # The systemd unit passed us the public URL; write it now
+    # so the cron sees it before the server is up.
+    echo "$QALOS_ARTIFACTS_PUBLIC_URL/" > "$ARTIFACTS_URL_FILE"
+    log "artifacts URL file: $ARTIFACTS_URL_FILE (set by systemd)"
+else
+    # The server is going to overwrite this file. Write a
+    # placeholder so the cron knows the build is done but the
+    # server hasn't started yet.
+    echo "pending" > "$ARTIFACTS_URL_FILE"
+    log "artifacts URL file: $ARTIFACTS_URL_FILE (placeholder; the systemd unit's ExecStartPost will overwrite)"
 fi
 
 # ----------------------------------------------------------------------------
