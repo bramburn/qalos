@@ -29,7 +29,7 @@ export QALOS_NO_SHUTDOWN_ON_FAILURE=1
 # 3 h gives headroom for retries (repo sync, full m -jN).
 export MAX_RUNTIME_MINUTES=180
 
-# TUNA mirror for repo sync (drops cross-border to android.googlesource.com).
+# CN mirror (Aliyun mirrors.aliyun.com) for repo sync -- intra-CN, no rate-limit.
 export QALOS_USE_CN_MIRROR=1
 
 log() { echo "[qalos-run-build $(date -u +%H:%M:%S)] $*"; }
