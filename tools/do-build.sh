@@ -56,40 +56,34 @@ BUILD_DIR="${BUILD_DIR:-$HOME/aosp}"
 log() { echo "[qalos][$(date -u +%H:%M:%S)] $*"; }
 
 # ----------------------------------------------------------------------------
-# TUNA mirror hook (added 2026-09-09 for the Aliyun LLM-driven path)
+# CN mirror hook (added 2026-09-09 for the Aliyun LLM-driven path)
 # ----------------------------------------------------------------------------
 # When QALOS_USE_CN_MIRROR=1 is set, override the fetch URL for the AOSP
-# remote to the USTC mirror (China). This shaves the repo sync from ~4-6 h
-# (cross-border to android.googlesource.com from cn-hangzhou) down to
-# ~30-60 min (intra-China to USTC). The qalos manifest's
-# <remote name="aosp" fetch="https://android.googlesource.com/"> is
-# rewritten via `git config --global url.<...>.insteadOf` so the existing
-# manifest needs no edit.
+# remote to Aliyun's own AOSP mirror (mirrors.aliyun.com, served via Aliyun
+# CDN inside China). This avoids the TUNA rate-limit (capped at -j 4),
+# the USTC git-repo stall (30+ min timeouts), and the cross-border latency
+# to android.googlesource.com. The qalos manifest's
+# <remote name="aosp" fetch="https://android.googlesource.com/"> is rewritten
+# via `git config --global url.<...>.insteadOf` so the existing manifest
+# needs no edit.
 #
-# Originally (2026-09-09) we used the TUNA mirror (QALOS_USE_TUNA_MIRROR)
-# but TUNA rate-limits concurrent fetches to 4, which made a fresh sync
-# take 2-3 h. Switched to USTC on 2026-09-10; USTC's rate limit is higher
-# (we successfully use -j 8). The env var is renamed QALOS_USE_CN_MIRROR
-# but QALOS_USE_TUNA_MIRROR=1 is also still honored for back-compat.
+# History:
+# - 2026-09-09: TUNA (mirrors.tuna.tsinghua.edu.cn) -- rate-limited to -j 4
+# - 2026-09-10 AM: USTC (mirrors.ustc.edu.cn) -- git-repo stalled 30+ min
+# - 2026-09-10 PM: Aliyun (mirrors.aliyun.com) -- Aliyun CDN, no rate-limit
 #
-# See https://mirrors.ustc.edu.cn/help/aosp/.
+# The env var is QALOS_USE_CN_MIRROR; QALOS_USE_TUNA_MIRROR=1 is also
+# honoured for back-compat (both resolve to the same Aliyun redirect).
 QALOS_USE_CN_MIRROR="${QALOS_USE_CN_MIRROR:-${QALOS_USE_TUNA_MIRROR:-0}}"
 if [ "$QALOS_USE_CN_MIRROR" = "1" ]; then
-    log "QALOS_USE_CN_MIRROR=1: redirecting android.googlesource.com -> mirrors.ustc.edu.cn"
-    git config --global url."https://mirrors.ustc.edu.cn/aosp/".insteadOf "https://android.googlesource.com/"
-    # Also redirect the `repo` tool's own source so `repo init` doesn't hit
-    # the Google CDN.
-    git config --global url."https://mirrors.ustc.edu.cn/aosp/git-repo/".insteadOf "https://storage.googleapis.com/git-repo-downloads/"
-
-    # Also redirect gerrit.googlesource.com/git-repo (the URL `repo init` tries first;
-    # without this, `repo init` fails with "Network is unreachable" even with the
-    # storage.googleapis.com redirect in place, because the USTC mirror is in CN and
-    # gerrit is in US). Found 2026-09-09 22:32 BST on the first Aliyun build.
-    git config --global url."https://mirrors.ustc.edu.cn/aosp/git-repo/".insteadOf "https://gerrit.googlesource.com/git-repo"
-    # Override the per-call default; the explicit REPO_SYNC_JOBS env var
-    # still wins if the caller set it. USTC supports -j 8 (vs TUNA's -j 4 cap).
+    log "QALOS_USE_CN_MIRROR=1: redirecting android.googlesource.com -> mirrors.aliyun.com"
+    git config --global url."https://mirrors.aliyun.com/android.googlesource.com/".insteadOf "https://android.googlesource.com/"
+    # Aliyun mirror also serves the repo tool binary.
+    git config --global url."https://mirrors.aliyun.com/android.googlesource.com/git-repo/".insteadOf "https://storage.googleapis.com/git-repo-downloads/"
+    git config --global url."https://mirrors.aliyun.com/android.googlesource.com/git-repo/".insteadOf "https://gerrit.googlesource.com/git-repo"
+    # Aliyun mirror also mirrors repo's own git-repo tool source.
     : "${REPO_SYNC_JOBS:=8}"
-    log "  REPO_SYNC_JOBS=$REPO_SYNC_JOBS (USTC handles -j 8; TUNA capped at -j 4)"
+    log "  REPO_SYNC_JOBS=$REPO_SYNC_JOBS (Aliyun mirror, no rate-limit)"
 fi
 
 # QALOS_STOP_AFTER_PREFLIGHT (added 2026-09-09 for the Aliyun LLM-driven path)
@@ -194,7 +188,7 @@ SYNC_OK=0
 # sync failed after all retries") even when the sync actually succeeded. Use a
 # direct file redirect instead.
 for attempt in $(seq 1 $REPO_SYNC_RETRIES); do
-    if repo sync -c -j"$REPO_SYNC_JOBS" --no-tags --no-clone-bundle > "$LOG_DIR/repo-sync.log" 2>&1; then
+    if repo sync -c -j"$REPO_SYNC_JOBS" --depth 1 --no-tags --no-clone-bundle > "$LOG_DIR/repo-sync.log" 2>&1; then
         SYNC_OK=1
         break
     fi
@@ -205,7 +199,7 @@ for attempt in $(seq 1 $REPO_SYNC_RETRIES); do
 done
 if [ $SYNC_OK -eq 0 ] && [ "${REPO_SYNC_FALLBACK_J1:-1}" = "1" ]; then
     log "fallback: retrying repo sync with -j1 --fail-fast (one fetch at a time)"
-    if repo sync -c -j1 --fail-fast --no-tags --no-clone-bundle > "$LOG_DIR/repo-sync.log" 2>&1; then
+    if repo sync -c -j1 --fail-fast --depth 1 --no-tags --no-clone-bundle > "$LOG_DIR/repo-sync.log" 2>&1; then
         SYNC_OK=1
     fi
 fi
