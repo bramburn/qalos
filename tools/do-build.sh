@@ -58,34 +58,38 @@ log() { echo "[qalos][$(date -u +%H:%M:%S)] $*"; }
 # ----------------------------------------------------------------------------
 # TUNA mirror hook (added 2026-09-09 for the Aliyun LLM-driven path)
 # ----------------------------------------------------------------------------
-# When QALOS_USE_TUNA_MIRROR=1 is set, override the fetch URL for the AOSP
-# remote to the Tsinghua TUNA mirror. This shaves the repo sync from ~4-6 h
+# When QALOS_USE_CN_MIRROR=1 is set, override the fetch URL for the AOSP
+# remote to the USTC mirror (China). This shaves the repo sync from ~4-6 h
 # (cross-border to android.googlesource.com from cn-hangzhou) down to
-# ~30-60 min (intra-China to TUNA). The qalos manifest's
+# ~30-60 min (intra-China to USTC). The qalos manifest's
 # <remote name="aosp" fetch="https://android.googlesource.com/"> is
 # rewritten via `git config --global url.<...>.insteadOf` so the existing
 # manifest needs no edit.
 #
-# Side effect: TUNA explicitly rate-limits `repo sync` at -j 4; higher
-# concurrency hits HTTP 503. Drop REPO_SYNC_JOBS to 4 when the mirror is on.
-# (See https://mirrors.tuna.tsinghua.edu.cn/help/AOSP/.)
-QALOS_USE_TUNA_MIRROR="${QALOS_USE_TUNA_MIRROR:-0}"
-if [ "$QALOS_USE_TUNA_MIRROR" = "1" ]; then
-    log "QALOS_USE_TUNA_MIRROR=1: redirecting android.googlesource.com -> mirrors.tuna.tsinghua.edu.cn"
-    git config --global url."https://mirrors.tuna.tsinghua.edu.cn/git/AOSP/".insteadOf "https://android.googlesource.com/"
+# Originally (2026-09-09) we used the TUNA mirror (QALOS_USE_TUNA_MIRROR)
+# but TUNA rate-limits concurrent fetches to 4, which made a fresh sync
+# take 2-3 h. Switched to USTC on 2026-09-10; USTC's rate limit is higher
+# (we successfully use -j 8). The env var is renamed QALOS_USE_CN_MIRROR
+# but QALOS_USE_TUNA_MIRROR=1 is also still honored for back-compat.
+#
+# See https://mirrors.ustc.edu.cn/help/aosp/.
+QALOS_USE_CN_MIRROR="${QALOS_USE_CN_MIRROR:-${QALOS_USE_TUNA_MIRROR:-0}}"
+if [ "$QALOS_USE_CN_MIRROR" = "1" ]; then
+    log "QALOS_USE_CN_MIRROR=1: redirecting android.googlesource.com -> mirrors.ustc.edu.cn"
+    git config --global url."https://mirrors.ustc.edu.cn/aosp/".insteadOf "https://android.googlesource.com/"
     # Also redirect the `repo` tool's own source so `repo init` doesn't hit
     # the Google CDN.
-    git config --global url."https://mirrors.tuna.tsinghua.edu.cn/git/git-repo/".insteadOf "https://storage.googleapis.com/git-repo-downloads/"
+    git config --global url."https://mirrors.ustc.edu.cn/aosp/git-repo/".insteadOf "https://storage.googleapis.com/git-repo-downloads/"
 
     # Also redirect gerrit.googlesource.com/git-repo (the URL `repo init` tries first;
     # without this, `repo init` fails with "Network is unreachable" even with the
-    # storage.googleapis.com redirect in place, because the TUNA mirror is in CN and
+    # storage.googleapis.com redirect in place, because the USTC mirror is in CN and
     # gerrit is in US). Found 2026-09-09 22:32 BST on the first Aliyun build.
-    git config --global url."https://mirrors.tuna.tsinghua.edu.cn/git/git-repo/".insteadOf "https://gerrit.googlesource.com/git-repo"
+    git config --global url."https://mirrors.ustc.edu.cn/aosp/git-repo/".insteadOf "https://gerrit.googlesource.com/git-repo"
     # Override the per-call default; the explicit REPO_SYNC_JOBS env var
-    # still wins if the caller set it.
-    : "${REPO_SYNC_JOBS:=4}"
-    log "  REPO_SYNC_JOBS=$REPO_SYNC_JOBS (TUNA caps at 4 concurrent git fetches)"
+    # still wins if the caller set it. USTC supports -j 8 (vs TUNA's -j 4 cap).
+    : "${REPO_SYNC_JOBS:=8}"
+    log "  REPO_SYNC_JOBS=$REPO_SYNC_JOBS (USTC handles -j 8; TUNA capped at -j 4)"
 fi
 
 # QALOS_STOP_AFTER_PREFLIGHT (added 2026-09-09 for the Aliyun LLM-driven path)

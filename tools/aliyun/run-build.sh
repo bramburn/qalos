@@ -30,7 +30,7 @@ export QALOS_NO_SHUTDOWN_ON_FAILURE=1
 export MAX_RUNTIME_MINUTES=180
 
 # TUNA mirror for repo sync (drops cross-border to android.googlesource.com).
-export QALOS_USE_TUNA_MIRROR=1
+export QALOS_USE_CN_MIRROR=1
 
 log() { echo "[qalos-run-build $(date -u +%H:%M:%S)] $*"; }
 
