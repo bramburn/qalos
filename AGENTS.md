@@ -347,6 +347,37 @@ This convention applies to all three cloud paths: gcp / aliyun / DO. The script 
 | Cloud Logging | `gcloud logging read 'resource.type=gce_instance AND resource.labels.instance_id=<id>' --limit=50` | syslog + agent logs forwarded to Cloud Logging. Requires the Ops Agent to be installed on the instance (not done by `setup-droplet.sh`; install with `gcloud compute instances ops-agents policy create ...` if you want this). |
 | Spot preemption notice | `gcloud compute operations list --filter="operationType=compute.instances.preempted"` | Was the instance killed by Spot reclaim? |
 
+## 5.5. Two-hop AOSP sync via Linux box (Aliyun workaround)
+
+Aliyun ECS in cn-hangzhou **cannot reach** `android.googlesource.com`, `gerrit.googlesource.com`, `storage.googleapis.com`, or GitHub — it is behind China's firewall. The workaround: a Linux box on the open internet acts as the AOSP source gateway.
+
+**One-time SSH key setup (from Windows):**
+
+```powershell
+# 1. Generate key pair (one-time)
+ssh-keygen -t ed25519 -C "bramburn@windows" -f "$env:USERPROFILE\.ssh\id_ed25519_qalos"
+
+# 2. Install public key on the Linux box (password auth needed once here)
+Get-Content "$env:USERPROFILE\.ssh\id_ed25519_qalos.pub" | ssh bramburn@192.168.0.45 "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+
+# 3. Verify passwordless login
+ssh -i "$env:USERPROFILE\.ssh\id_ed25519_qalos" bramburn@192.168.0.45 "echo OK"
+```
+
+**Sync workflow (one command on the Linux box):**
+
+```bash
+# Run on the Linux box (192.168.0.45) as the user who has open internet:
+mkdir -p ~/aosp && cd ~/aosp
+repo init -u https://github.com/bramburn/qalos -b main
+repo sync -c -j8 --no-tags --no-clone-bundle
+# Then tar and scp to Aliyun ECS:
+tar -czf /tmp/qalos-aosp.tar.gz . --exclude='.repo' --exclude='.git'
+scp /tmp/qalos-aosp.tar.gz <aliyun-user>@<aliyun-ip>:/path/to/aosp.tar.gz
+```
+
+**Why this works:** Aliyun ECS can **receive** inbound connections from anywhere — it just can't initiate outbound to Google. The Linux box pushes the synced source to Aliyun over SSH.
+
 ## 6. Cost rules
 
 | Item | Standing | Per AOSP build |
@@ -420,6 +451,22 @@ OpenSSH 9.5p2 (preinstalled on Windows 10 1809+ and Server 2019+) handles modern
        bin_path = None
 ```text
 If the patch is ever applied, all three `gcp-*.ps1` scripts can switch back to `gcloud compute ssh`/`gcloud compute scp` and drop the native OpenSSH helpers.
+
+### 7.7 Aliyun ECS cannot reach `android.googlesource.com` — use two-hop sync
+
+Aliyun ECS in cn-hangzhou (and likely all cn-* regions) **cannot reach** Google's AOSP infrastructure. Verified 2026-09-10 from an `ecs.g7a.*` Spot instance:
+
+| Destination | Result |
+|---|---|
+| `gerrit.googlesource.com` | Connect timeout |
+| `android.googlesource.com` | Connect timeout |
+| `storage.googleapis.com` | 403 Forbidden |
+| `github.com` | TLS errors |
+| `mirrors.aliyun.com/android.googlesource.com` | HTML page only — **not a real git mirror** (`git ls-remote` returns 404). Per Aliyun's own mirror portal, AOSP is not a first-class supported mirror. |
+
+**The correct pattern:** use a Linux box with open internet (192.168.0.45) as the AOSP sync gateway. See §5.5 for the full SSH setup and two-hop sync workflow.
+
+Do not attempt `repo init`/`repo sync` directly on the Aliyun ECS — it will hang or fail on every AOSP project. Do not try `mirrors.aliyun.com` as a substitute — it is not a real git mirror.
 
 ## 8. Known limitations / open work
 
