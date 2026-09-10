@@ -78,10 +78,10 @@ QALOS_USE_CN_MIRROR="${QALOS_USE_CN_MIRROR:-${QALOS_USE_TUNA_MIRROR:-0}}"
 if [ "$QALOS_USE_CN_MIRROR" = "1" ]; then
     log "QALOS_USE_CN_MIRROR=1: redirecting android.googlesource.com -> mirrors.aliyun.com"
     git config --global url."https://mirrors.aliyun.com/android.googlesource.com/".insteadOf "https://android.googlesource.com/"
-    # Aliyun mirror also serves the repo tool binary.
-    git config --global url."https://mirrors.aliyun.com/android.googlesource.com/git-repo/".insteadOf "https://storage.googleapis.com/git-repo-downloads/"
-    git config --global url."https://mirrors.aliyun.com/android.googlesource.com/git-repo/".insteadOf "https://gerrit.googlesource.com/git-repo"
-    # Aliyun mirror also mirrors repo's own git-repo tool source.
+    # Aliyun mirror serves the repo tool under aosp/ (not under android.googlesource.com/).
+    # Path verified 2026-09-10: https://mirrors.aliyun.com/aosp/git-repo/ returns 200.
+    git config --global url."https://mirrors.aliyun.com/aosp/git-repo/".insteadOf "https://storage.googleapis.com/git-repo-downloads/"
+    git config --global url."https://mirrors.aliyun.com/aosp/git-repo/".insteadOf "https://gerrit.googlesource.com/git-repo"
     : "${REPO_SYNC_JOBS:=8}"
     log "  REPO_SYNC_JOBS=$REPO_SYNC_JOBS (Aliyun mirror, no rate-limit)"
 fi
