@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# qalos — on-demand AOSP build script.
+# qalos ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â on-demand AOSP build script.
 #
 # Runs on a fresh DigitalOcean droplet created from the `qalos-build-warm`
 # snapshot. Does the full AOSP build, uploads the resulting images to DO
 # Spaces, then signals completion. The calling script (PowerShell or GH Actions)
-# is responsible for destroying the droplet — but this script also installs a
+# is responsible for destroying the droplet ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â but this script also installs a
 # watchdog on the droplet itself so that even if the orchestrator loses its
 # connection or crashes, the droplet self-destructs at MAX_RUNTIME_MINUTES
 # instead of running forever and burning money.
@@ -47,6 +47,51 @@ BUILD_VARIANT="${BUILD_VARIANT:-userdebug}"
 MAX_RUNTIME_MINUTES="${MAX_RUNTIME_MINUTES:-240}"
 BUILD_DIR="${BUILD_DIR:-$HOME/aosp}"
 
+# log() must be defined before any code that uses it. (Restored 2026-09-10;
+# commit 550ef1e removed the original definition on line 102 but the
+# intended re-insertion after BUILD_DIR was lost in a PowerShell
+# regex-escape bug. Without this, the QALOS_USE_TUNA_MIRROR block on
+# the next line aborts the script with "log: command not found"
+# because of set -e.)
+log() { echo "[qalos][$(date -u +%H:%M:%S)] $*"; }
+
+# ----------------------------------------------------------------------------
+# CN mirror hook (added 2026-09-09 for the Aliyun LLM-driven path)
+# ----------------------------------------------------------------------------
+# When QALOS_USE_CN_MIRROR=1 is set, override the fetch URL for the AOSP
+# remote to Aliyun's own AOSP mirror (mirrors.aliyun.com, served via Aliyun
+# CDN inside China). This avoids the TUNA rate-limit (capped at -j 4),
+# the USTC git-repo stall (30+ min timeouts), and the cross-border latency
+# to android.googlesource.com. The qalos manifest's
+# <remote name="aosp" fetch="https://android.googlesource.com/"> is rewritten
+# via `git config --global url.<...>.insteadOf` so the existing manifest
+# needs no edit.
+#
+# History:
+# - 2026-09-09: TUNA (mirrors.tuna.tsinghua.edu.cn) -- rate-limited to -j 4
+# - 2026-09-10 AM: USTC (mirrors.ustc.edu.cn) -- git-repo stalled 30+ min
+# - 2026-09-10 PM: Aliyun (mirrors.aliyun.com) -- Aliyun CDN, no rate-limit
+#
+# The env var is QALOS_USE_CN_MIRROR; QALOS_USE_TUNA_MIRROR=1 is also
+# honoured for back-compat (both resolve to the same Aliyun redirect).
+QALOS_USE_CN_MIRROR="${QALOS_USE_CN_MIRROR:-${QALOS_USE_TUNA_MIRROR:-0}}"
+if [ "$QALOS_USE_CN_MIRROR" = "1" ]; then
+    log "QALOS_USE_CN_MIRROR=1: redirecting android.googlesource.com -> mirrors.aliyun.com"
+    git config --global url."https://mirrors.aliyun.com/android.googlesource.com/".insteadOf "https://android.googlesource.com/"
+    # Aliyun mirror serves the repo tool under aosp/ (not under android.googlesource.com/).
+    # Path verified 2026-09-10: https://mirrors.aliyun.com/aosp/git-repo/ returns 200.
+    git config --global url."https://mirrors.aliyun.com/aosp/git-repo/".insteadOf "https://storage.googleapis.com/git-repo-downloads/"
+    git config --global url."https://mirrors.aliyun.com/aosp/git-repo/".insteadOf "https://gerrit.googlesource.com/git-repo"
+    : "${REPO_SYNC_JOBS:=8}"
+    log "  REPO_SYNC_JOBS=$REPO_SYNC_JOBS (Aliyun mirror, no rate-limit)"
+fi
+
+# QALOS_STOP_AFTER_PREFLIGHT (added 2026-09-09 for the Aliyun LLM-driven path)
+# When set to 1, exit cleanly after the preflight metalava target builds.
+# Useful for a sync + preflight-only run that validates the wiring before
+# committing to a 1-1.5 h full build. Default 0 (run the full m -jN).
+QALOS_STOP_AFTER_PREFLIGHT="${QALOS_STOP_AFTER_PREFLIGHT:-0}"
+
 # SPACES_BUCKET is optional. When empty, the script skips the upload step and
 # the orchestrator pulls artifacts back via SCP. This is the path used by the
 # Aliyun and GCP orchestrators, which don't have DO Spaces credentials.
@@ -66,10 +111,8 @@ TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
 LOG_DIR="$BUILD_DIR/.qalos-logs"
 mkdir -p "$LOG_DIR"
 
-log() { echo "[qalos][$(date -u +%H:%M:%S)] $*"; }
-
 # ----------------------------------------------------------------------------
-# Watchdog — self-destruct the droplet if MAX_RUNTIME_MINUTES is hit.
+# Watchdog ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â self-destruct the droplet if MAX_RUNTIME_MINUTES is hit.
 # This catches the case where the orchestrator (PowerShell/GH Actions) dies
 # and never comes back to delete the droplet.
 # ----------------------------------------------------------------------------
@@ -79,6 +122,15 @@ shutdown_droplet() {
     # Kill any lingering build processes first to free resources fast.
     pkill -9 -f "java|cc1|gcc|ld|make|repo|emulator|kotlinc|d8|dex2oat" 2>/dev/null || true
     sleep 2
+    # QALOS_NO_SHUTDOWN_ON_FAILURE (added 2026-09-09 for the Aliyun LLM-driven
+    # path). When set to 1, do NOT actually shut down ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â just kill the build
+    # processes and return. The LLM-driven wrapper needs the instance to
+    # stay Running so the token-gated HTTP server can serve the failure
+    # log to the mavis cron. Default 0 (original DO behaviour).
+    if [ "${QALOS_NO_SHUTDOWN_ON_FAILURE:-0}" = "1" ]; then
+        log "QALOS_NO_SHUTDOWN_ON_FAILURE=1: skipping shutdown, instance stays Running for artifact download"
+        return 0
+    fi
     shutdown -h now 2>/dev/null || poweroff 2>/dev/null || true
 }
 (
@@ -90,7 +142,7 @@ WATCHDOG_PID=$!
 trap 'kill $WATCHDOG_PID 2>/dev/null || true' EXIT
 
 # ----------------------------------------------------------------------------
-# Memory tuning — safer on small droplets.
+# Memory tuning ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â safer on small droplets.
 # ----------------------------------------------------------------------------
 export ANDROID_JACK_ARGS="${ANDROID_JACK_ARGS:--Xmx4g -Dfile.encoding=UTF-8}"
 export MALLOC_ARENA_MAX=1
@@ -99,7 +151,7 @@ export CCACHE_DIR="${CCACHE_DIR:-$HOME/.ccache}"
 export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-20G}"
 
 # ----------------------------------------------------------------------------
-# Step 1 — repo init (only the first time)
+# Step 1 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â repo init (only the first time)
 # ----------------------------------------------------------------------------
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
@@ -112,7 +164,7 @@ if [ ! -d ".repo" ]; then
 fi
 
 # ----------------------------------------------------------------------------
-# Step 2 — repo sync
+# Step 2 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â repo sync
 #
 # Use a lower concurrency here than for the AOSP build (j8) because the git
 # fetches hit `android.googlesource.com` which has per-IP rate limits. Running
@@ -136,7 +188,7 @@ SYNC_OK=0
 # sync failed after all retries") even when the sync actually succeeded. Use a
 # direct file redirect instead.
 for attempt in $(seq 1 $REPO_SYNC_RETRIES); do
-    if repo sync -c -j"$REPO_SYNC_JOBS" --no-tags --no-clone-bundle > "$LOG_DIR/repo-sync.log" 2>&1; then
+    if repo sync -c -j"$REPO_SYNC_JOBS" --depth 1 --no-tags --no-clone-bundle > "$LOG_DIR/repo-sync.log" 2>&1; then
         SYNC_OK=1
         break
     fi
@@ -147,7 +199,7 @@ for attempt in $(seq 1 $REPO_SYNC_RETRIES); do
 done
 if [ $SYNC_OK -eq 0 ] && [ "${REPO_SYNC_FALLBACK_J1:-1}" = "1" ]; then
     log "fallback: retrying repo sync with -j1 --fail-fast (one fetch at a time)"
-    if repo sync -c -j1 --fail-fast --no-tags --no-clone-bundle > "$LOG_DIR/repo-sync.log" 2>&1; then
+    if repo sync -c -j1 --fail-fast --depth 1 --no-tags --no-clone-bundle > "$LOG_DIR/repo-sync.log" 2>&1; then
         SYNC_OK=1
     fi
 fi
@@ -157,7 +209,7 @@ if [ $SYNC_OK -eq 0 ]; then
 fi
 
 # ----------------------------------------------------------------------------
-# Step 3 — apply qalos customizations.
+# Step 3 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â apply qalos customizations.
 #
 # tools/apply-qalos.sh copies the qalos device tree, apps, and vendor blobs
 # from .repo/manifests/qalos into the AOSP working tree. It is idempotent
@@ -180,7 +232,7 @@ log "applying qalos customizations from $APPLY_QALOS"
 WORK_TREE="$BUILD_DIR" bash "$APPLY_QALOS"
 
 # ----------------------------------------------------------------------------
-# Step 4 — build
+# Step 4 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â build
 # ----------------------------------------------------------------------------
 # AOSP 15's `lunch` requires <product>-<release>-<variant> (3 parts, see
 # envsetup.sh:442). The old <product>-<variant> form is rejected.
@@ -194,29 +246,56 @@ lunch "$BUILD_TARGET-$BUILD_RELEASE-$BUILD_VARIANT"
 # metalava `UnflaggedApi` / `@FlaggedApi` lint for any new permissions or
 # APIs the qalos patches added to the framework. If this fails, abort
 # immediately rather than waiting 2-4 hours to discover the same error
-# in the full build. AGENTS.md §8.2 documents why this is needed: the
+# in the full build. AGENTS.md ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§8.2 documents why this is needed: the
 # patch dry-run validates *mechanics* (regex match, apply cleanly), not
 # *build behaviour*. The pre-flight closes that gap.
 # ----------------------------------------------------------------------------
-log "PREFLIGHT: building frameworks/base/api:api-stubs-docs-non-updatable (catches metalava UnflaggedApi early)"
-if ! m -j"$BUILD_JOBS" frameworks/base/api:api-stubs-docs-non-updatable 2>&1 | tee "$LOG_DIR/preflight.log"; then
-    log "FATAL: preflight metalava check failed -- new framework API is missing @FlaggedApi"
-    log "  This means one of the qalos patches added a new <permission>, <uses-permission>, or"
-    log "  public class/method that AOSP 15's metalava requires to be @FlaggedApi. The fix is"
-    log "  one of: (a) add a UnflaggedApi entry to frameworks/base/api/lint-baseline.txt, or"
-    log "  (b) define an aconfig flag and reference it in the new code. Do NOT launch a full"
-    log "  cloud build until the preflight passes. See AGENTS.md §8.2 for the workflow."
-    log "  Last 30 lines of preflight.log:"
-    tail -30 "$LOG_DIR/preflight.log" | sed 's/^/  /'
-    shutdown_droplet
+log "PREFLIGHT: building frameworks/base/api:checkapi (catches metalava UnflaggedApi early)"
+# The preflight target was renamed in AOSP 15. The old
+# `frameworks/base/api:api-stubs-docs-non-updatable` (the droidstubs
+# doc-generation target) no longer exists; the closest AOSP 15 equivalent
+# is `checkapi` (the metalava API compatibility check, which still catches
+# the @FlaggedApi / UnflaggedApi lint we care about). If `checkapi` is
+# also missing on some AOSP 15 sub-versions, fall back to building the
+# whole `frameworks/base/api` package.
+if ! m -j"$BUILD_JOBS" frameworks/base/api:checkapi 2>&1 | tee "$LOG_DIR/preflight.log"; then
+    log "WARN: checkapi target missing, falling back to frameworks/base/api (whole package)"
+    if ! m -j"$BUILD_JOBS" frameworks/base/api 2>&1 | tee -a "$LOG_DIR/preflight.log"; then
+        log "FATAL: preflight metalava check failed -- new framework API is missing @FlaggedApi"
+        log "  This means one of the qalos patches added a new <permission>, <uses-permission>, or"
+        log "  public class/method that AOSP 15's metalava requires to be @FlaggedApi. The fix is"
+        log "  one of: (a) add a UnflaggedApi entry to frameworks/base/api/lint-baseline.txt, or"
+        log "  (b) define an aconfig flag and reference it in the new code. Do NOT launch a full"
+        log "  cloud build until the preflight passes. See AGENTS.md Â§8.2 for the workflow."
+        log "  Last 30 lines of preflight.log:"
+        tail -30 "$LOG_DIR/preflight.log" | sed 's/^/  /'
+        shutdown_droplet
+        # If shutdown_droplet is a no-op (QALOS_NO_SHUTDOWN_ON_FAILURE=1 on
+        # the Aliyun path), we still need to exit the script so the wrapper
+        # can start the HTTP server. On the DO path shutdown_droplet actually
+        # powers the instance off and this exit never runs.
+        exit 1
+    fi
 fi
-log "PREFLIGHT: api-stubs-docs-non-updatable built cleanly, proceeding to full build"
+log "PREFLIGHT: checkapi built cleanly, proceeding to full build"
+
+# QALOS_STOP_AFTER_PREFLIGHT: early-exit hook for the Aliyun LLM-driven
+# path's sync + preflight validation phase. The systemd-run unit exits 0,
+# the LLM's mavis cron sees the unit inactive, downloads the preflight log,
+# and tears down the instance. Full m -jN is skipped.
+if [ "$QALOS_STOP_AFTER_PREFLIGHT" = "1" ]; then
+    log "QALOS_STOP_AFTER_PREFLIGHT=1: skipping full m -jN, exiting cleanly after preflight"
+    kill $WATCHDOG_PID 2>/dev/null || true
+    WATCHDOG_PID=""
+    echo "QALOS_BUILD_DONE_PREFLIGHT_ONLY"
+    exit 0
+fi
 
 log "m -j$BUILD_JOBS (this takes 1-4 hours on a c-8 droplet)"
 m -j"$BUILD_JOBS" 2>&1 | tee "$LOG_DIR/build.log"
 
 # ----------------------------------------------------------------------------
-# Step 5 — upload artifacts to DO Spaces (skipped if SPACES_BUCKET is empty)
+# Step 5 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â upload artifacts to DO Spaces (skipped if SPACES_BUCKET is empty)
 # ----------------------------------------------------------------------------
 if [ -n "${SPACES_BUCKET:-}" ]; then
     upload_artifact() {
@@ -237,7 +316,7 @@ if [ -n "${SPACES_BUCKET:-}" ]; then
         upload_artifact "$ARTIFACT_DIR/$img"
     done
 
-    # Upload the build log too — saves a debug round-trip.
+    # Upload the build log too ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â saves a debug round-trip.
     s3cmd put "$LOG_DIR/build.log" "s3://$SPACES_BUCKET/$TIMESTAMP/build.log" \
         --host="$SPACES_REGION.digitaloceanspaces.com" \
         --access_key="$SPACES_KEY" \
@@ -245,6 +324,35 @@ if [ -n "${SPACES_BUCKET:-}" ]; then
         --no-check-md5 2>&1 | tail -3
 else
     log "SPACES_BUCKET is empty -- skipping upload. Orchestrator will pull artifacts via SCP."
+fi
+
+# ----------------------------------------------------------------------------
+# Write the artifacts URL for the cron / user to download over HTTP
+# ----------------------------------------------------------------------------
+# The LLM-driven Aliyun build (and any future cloud build) downloads
+# the artifacts via curl or a browser against a token-gated HTTP
+# server (tools/aliyun/qalos-serve-artifacts.py) that the systemd
+# unit starts in ExecStartPost after this script exits. The server
+# reads its URL from /tmp/qalos-artifacts-url.txt; the cron and the
+# user both read this file.
+#
+# Write the URL file with a placeholder; the systemd unit's
+# ExecStartPost overwrites it with the real URL after the server
+# starts. The placeholder lets the cron poll for either the
+# placeholder (server not yet up) or the real URL (server up,
+# ready to download).
+ARTIFACTS_URL_FILE="/tmp/qalos-artifacts-url.txt"
+if [ -n "${QALOS_ARTIFACTS_PUBLIC_URL:-}" ]; then
+    # The systemd unit passed us the public URL; write it now
+    # so the cron sees it before the server is up.
+    echo "$QALOS_ARTIFACTS_PUBLIC_URL/" > "$ARTIFACTS_URL_FILE"
+    log "artifacts URL file: $ARTIFACTS_URL_FILE (set by systemd)"
+else
+    # The server is going to overwrite this file. Write a
+    # placeholder so the cron knows the build is done but the
+    # server hasn't started yet.
+    echo "pending" > "$ARTIFACTS_URL_FILE"
+    log "artifacts URL file: $ARTIFACTS_URL_FILE (placeholder; the systemd unit's ExecStartPost will overwrite)"
 fi
 
 # ----------------------------------------------------------------------------
@@ -257,7 +365,7 @@ else
     log "artifacts on the instance under: $ARTIFACT_DIR/"
 fi
 
-# Disable the watchdog now that we're done — the orchestrator will destroy
+# Disable the watchdog now that we're done ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â the orchestrator will destroy
 # the droplet. If the orchestrator is dead, the watchdog fires later.
 kill $WATCHDOG_PID 2>/dev/null || true
 WATCHDOG_PID=""
