@@ -121,7 +121,13 @@ public final class HttpApiServer extends Thread {
         // Each connection gets its own thread. The HTTP server is not a
         // hot path; we do not pool threads in v0.
         new Thread(() -> {
-            try (Socket socket = client) {
+            // AOSP 15's javac is strict about try-with-resources
+            // scoping inside lambdas (the catch-block `socket` reference
+            // is rejected with "cannot find symbol"). Hoist the socket
+            // to a final outside the try and use plain try/finally so
+            // both the resource and its name are visible in every branch.
+            final Socket socket = client;
+            try {
                 socket.setSoTimeout(SOCKET_TIMEOUT_MS);
                 if (!socket.getInetAddress().isLoopbackAddress()) {
                     // Defence-in-depth: even though we bind to
@@ -158,6 +164,12 @@ public final class HttpApiServer extends Thread {
                             "internal error: " + e.getClass().getSimpleName());
                 } catch (IOException ignored) {
                     // The client may have hung up; nothing to do.
+                }
+            } finally {
+                try {
+                    socket.close();
+                } catch (IOException ignored) {
+                    // Already closed or never opened; nothing to do.
                 }
             }
         }, "qalos-remote-ctl-conn").start();
