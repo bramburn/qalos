@@ -16,7 +16,7 @@
 #   2. Copies the qalos overlay directories into the working tree
 #      (`device/qalos/qalos_emulator/`, `packages/apps/QaLab/`,
 #      `vendor/qalos/`, plus the framework services source).
-#   3. Runs each of the five Python patch scripts (0002-0006) that
+#   3. Runs each of the six Python patch scripts (0002-0007) that
 #      gate the RemoteControlService in the AOSP framework. Each
 #      edits one upstream AOSP file in place.
 #
@@ -154,14 +154,20 @@ copy_path \
 #   0002  AndroidManifest.xml          — declare REMOTE_CONTROL signature permission
 #   0003  strings.xml                   — add the permission labels/descriptions
 #   0004  SystemServer.java             — start RemoteControlService in PHASE_*
-#   0005  AndroidManifest.xml           — promote the permission to @FlaggedApi
-#                                        (required so checkapi accepts the new
-#                                        public permission in AOSP 15)
-#   0006  services/core/Android.bp      — add aconfig_declarations block so
-#                                        metalava/AAPT2 can resolve the flag
-#                                        referenced by patch 0005
+#   0005  AndroidManifest.xml           — annotate the permission as @SystemApi @hide
+#                                        (was @FlaggedApi; dropped because the
+#                                        qalos aconfig isn't reachable from
+#                                        framework-res' aapt2 build)
+#   0006  services/core/Android.bp      — add aconfig_declarations block (now
+#                                        orphaned since 0005 no longer
+#                                        references a flag; kept for
+#                                        potential future use)
+#   0007  core/api/current.txt          — register REMOTE_CONTROL in the
+#                                        platform API surface (required
+#                                        without @FlaggedApi; metalava/
+#                                        checkapi will fail otherwise)
 PATCH_DIR="$QALOS_REPO/packages/apps/RemoteControlService/patches"
-for n in 0002 0003 0004 0005 0006; do
+for n in 0002 0003 0004 0005 0006 0007; do
     patch_script="$(ls "$PATCH_DIR/${n}-"*.py 2>/dev/null || true)"
     if [ -z "$patch_script" ]; then
         echo "[apply-qalos] status=warn patch=${n} reason=missing-script"
