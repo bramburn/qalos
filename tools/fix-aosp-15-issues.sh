@@ -86,14 +86,15 @@ fix_conscrypt_baseline() {
         return 0
     fi
 
-    # Sanity check: the generated stubs MUST include java.base references
-    # (extends MessageDigestSpi, implements Cloneable, throws NoSuchAlgorithmException).
-    # If they don't, the stubs came from a partial run -- don't overwrite
-    # the baseline with incomplete data.
-    if ! grep -q 'extends java.security.MessageDigestSpi' "$generated" \
-       || ! grep -q 'implements java.lang.Cloneable' "$generated" \
-       || ! grep -q 'throws java.security.NoSuchAlgorithmException' "$generated"; then
-        log "conscrypt: generated stubs are incomplete (missing java.base refs), skipping"
+    # Sanity check: the AOSP 15 conscrypt stub generator STRIPS class-level
+    # `extends X implements Y` markers from `java.base` (because of
+    # `patch_module: "java.base"`) but KEEPS per-constructor `throws X`
+    # markers. So the only marker we can rely on is the `throws` clause.
+    # If the generated stubs don't have ANY `throws java.security.*`
+    # clause, the stub generation probably failed -- don't overwrite the
+    # baseline with empty data.
+    if ! grep -q 'throws java.security.NoSuchAlgorithmException' "$generated"; then
+        log "conscrypt: generated stubs missing throws marker, skipping baseline update"
         return 0
     fi
 

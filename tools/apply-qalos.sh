@@ -144,4 +144,18 @@ for n in 0002 0003 0004; do
     fi
 done
 
+# Apply AOSP 15 upstream fixes (Collator.java, conscrypt last-api.txt).
+# These are upstream AOSP 15 issues that block the preflight
+# (`m api-stubs-docs-non-updatable`) on a fresh repo sync. The
+# `fix-aosp-15-issues.sh` script is idempotent.
+if [ -f "$QALOS_REPO/tools/fix-aosp-15-issues.sh" ]; then
+    if bash "$QALOS_REPO/tools/fix-aosp-15-issues.sh"; then
+        echo "[apply-qalos] status=ok fix=aosp-15-issues"
+    else
+        echo "[apply-qalos] status=warn fix=aosp-15-issues (see /tmp/fix-aosp-15.log if present)"
+    fi
+else
+    echo "[apply-qalos] status=warn fix=aosp-15-issues reason=missing-script"
+fi
+
 echo "[apply-qalos] done."

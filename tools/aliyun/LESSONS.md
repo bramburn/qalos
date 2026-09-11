@@ -28,12 +28,6 @@ attempts start from here.
    all in `cn-hangzhou-j`. Egress policy can vary per zone
    within the same region. **Bottom line: do not assume
    "different zone" = "different policy" = "will work."**
-   but IPv6 routes are open.** It cannot reach `google.com`,
-   `gerrit.googlesource.com`, `android.googlesource.com`,
-   `storage.googleapis.com`, `github.com`, or
-   `mirrors.aliyun.com` via IPv4. It CAN reach
-   `mirrors.ustc.edu.cn` and `aosp.tuna.tsinghua.edu.cn` via
-   IPv6. Verified from inside the instance.
 2. **Aliyun's "android.googlesource.com" namespace is a fake
    mirror.** `https://mirrors.aliyun.com/android.googlesource.com/`
    returns an HTML marketing page to HEAD requests but
