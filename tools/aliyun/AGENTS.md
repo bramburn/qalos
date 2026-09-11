@@ -9,6 +9,15 @@
 > file** for the per-command JSON parse shape and the error code
 > table. Read **[`build-cost.md`](build-cost.md)** for the cost
 > numbers.
+>
+> **READ [`LESSONS.md`](LESSONS.md) FIRST.** It documents the
+> 2026-09-10 build series failures (5 attempts, ~¥20 burned):
+> Aliyun cn-hangzhou cannot reach AOSP mirrors, the
+> `mirrors.aliyun.com/android.googlesource.com` endpoint is a
+> fake marketing page, the 2-3 MB/s transfer rate is the real
+> bottleneck, and AOSP 15 needs `g7a.16xlarge` (256 GB), NOT
+> `g7a.2xlarge` (32 GB). **If you skip LESSONS.md, you will
+> repeat the same 5 failures.**
 
 ## What this runbook does
 

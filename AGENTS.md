@@ -310,6 +310,16 @@ connection dropped. The smoke test and setup-base scripts
 remain on disk for users who prefer scripts (they don't have
 the SSH-blocking bug).
 
+> **🚨 READ [`tools/aliyun/LESSONS.md`](tools/aliyun/LESSONS.md) FIRST.**
+> The 2026-09-10 build series burned ~¥20 across 5 failed attempts
+> because we didn't know: (1) Aliyun `cn-hangzhou` ECS is on a
+> closed network and cannot reach any AOSP mirror (TUNA, USTC,
+> Aliyun itself are all blocked or fake), (2) transfer speed from
+> any source to the Aliyun ECS is 2-3 MB/s, and (3) AOSP 15 needs
+> `g7a.16xlarge` (256 GB RAM), not `g7a.2xlarge` (32 GB). LESSONS.md
+> documents the decision tree for the next attempt and the
+> `do-build.sh` fixes that are still valid.
+
 The one-time install is the same:
 
 ```powershell
