@@ -438,6 +438,21 @@ Bucket management (`mb`, `stat`, `get-acl`) works fine. `ossutil cp` and `ossuti
 
 Expected wall time for 34 GB: 2–10 hours depending on UK home upstream.
 
+### 5.4.4 UK → cn-guangzhou SSH is DPI-throttled (2026-09-11, added after the §5.4.2 recipe failed)
+
+**Do NOT trust the 2-10 hour estimate above.** On 2026-09-11 the actual measured throughput was ~1-12 KB/s — a 64-minute rsync transferred only 5.3 MB of 100 MB (~1.4 KB/s avg), and a 5 MB scp test hung past the 120s timeout. At that rate, 34 GB would take 281 days.
+
+**Symptoms:**
+- TCP handshake to cn-guangzhou ECS port 22: ✅ fast (0.26s)
+- SSH auth / key exchange: ✅ works
+- Bulk data on port 22: ❌ ~1-12 KB/s sustained, parallel streams don't help
+
+**Diagnosis:** Looks like GFW DPI throttling per-flow SSH data once it detects a sustained large transfer. The throttle is per-connection, not total bandwidth — running 4 parallel rsyncs didn't increase throughput.
+
+**Workaround that actually works:** don't use port 22 / SSH for the bulk hop. Upload from UK to a non-throttled HTTPS intermediate (Cloudflare R2, Backblaze B2, AWS S3, GitHub Releases — anything on port 443) which is typically unthrottled. Then download from the intermediate to the cn-guangzhou ECS either from inside cn-hongkong (free, fast) or by relaying through an HK VPS. Total wall time drops from "unusable" to ~3-4 hours.
+
+**Verification step before committing to a transfer:** always run a 5 MB scp speed test first. If throughput is <100 KB/s, abort and pick a different path — don't waste hours hoping it'll improve.
+
 **Long-term fix:** ask Aliyun support to either (a) lift the public-endpoint block on the account, or (b) document the CNAME record they want us to use. Until then, the direct-ECS path above is the only one that works.
 
 ### 5.4.3 RAM user state traps (2026-09-11)
