@@ -35,9 +35,12 @@
     <integer name="config_multiuserMaximumUsers">1</integer>
 
     <!--
-      Auto-power-mode: turn off background work aggressively so the
-      test APK is not throttled by "wellbeing." Upstream default is
-      false on phones; we flip it to true.
+      Auto-power-mode: explicit override for the qalos emulator build.
+      Upstream default is `false`; we keep it `false` here so the
+      DeviceIdleController does NOT aggressively throttle background
+      work during QA testing. Note: setting this to `true` would do
+      the opposite of what one might intuitively expect — it ENABLES
+      Doze / DeviceIdle throttling, not disable it.
     -->
-    <bool name="config_enableAutoPowerModes">true</bool>
+    <bool name="config_enableAutoPowerModes">false</bool>
 </resources>

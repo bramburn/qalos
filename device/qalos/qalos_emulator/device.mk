@@ -78,7 +78,12 @@ PRODUCT_PACKAGES := $(filter-out \
 # This is the Tier 1 resource-overlay layer from the strip plan
 # (device/qalos/qalos_emulator/AGENTS.md "Strip policy").
 # ---------------------------------------------------------------------------
-PRODUCT_PACKAGE_OVERLAYS := device/qalos/qalos_emulator/overlay
+# DEVICE_PACKAGE_OVERLAYS is the per-device variant and is processed
+# earlier than PRODUCT_PACKAGE_OVERLAYS during config. AOSP 15 still
+# accepts PRODUCT_PACKAGE_OVERLAYS but emits a deprecation warning;
+# DEVICE_PACKAGE_OVERLAYS is the recommended pattern for per-device
+# resource overlays.
+DEVICE_PACKAGE_OVERLAYS := device/qalos/qalos_emulator/overlay
 
 # Show the qalos build id on the AVD's boot screen.
 # `PRODUCT_PROPERTY_OVERRIDES` is technically deprecated in favour of
