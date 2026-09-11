@@ -1,0 +1,28 @@
+// QaLab — the only first-party app that ships with qalos.
+//
+// Platform-signed (so it can read @hide system_server APIs via
+// IActivityManager), single-activity launcher that prints build
+// metadata at startup. Replaces the legacy Android.mk which AOSP 15
+// deprecated.
+
+android_app {
+    name: "QaLab",
+
+    // `LOCAL_CERTIFICATE := platform` in the old Android.mk.
+    certificate: "platform",
+
+    // `LOCAL_PRIVATE_PLATFORM_APIS := true` in the old Android.mk.
+    // Empty `sdk_version` compiles against the system image at runtime,
+    // granting the @hide API access that the old flag did.
+    sdk_version: "",
+
+    srcs: ["src/**/*.java"],
+
+    // `LOCAL_MODULE_TAGS := optional` in the old Android.mk. Soong's
+    // equivalent.
+    tags: ["optional"],
+
+    // Manifest must declare this so Android knows to install the
+    // package as a system app (the manifest is in this directory too).
+    manifest: "AndroidManifest.xml",
+}
