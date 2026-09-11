@@ -151,14 +151,17 @@ copy_path \
 # com/qalos/remotectl/*.java. See REBASE.md for the history.)
 #
 # Patches:
-#   0002  AndroidManifest.xml — declare REMOTE_CONTROL signature permission
-#   0003  strings.xml          — add the permission labels/descriptions
-#   0004  SystemServer.java    — start RemoteControlService in PHASE_*
-#   0005  AndroidManifest.xml  — promote the permission to @FlaggedApi
-#                               (required so checkapi accepts the new
-#                               public permission in AOSP 15)
+#   0002  AndroidManifest.xml          — declare REMOTE_CONTROL signature permission
+#   0003  strings.xml                   — add the permission labels/descriptions
+#   0004  SystemServer.java             — start RemoteControlService in PHASE_*
+#   0005  AndroidManifest.xml           — promote the permission to @FlaggedApi
+#                                        (required so checkapi accepts the new
+#                                        public permission in AOSP 15)
+#   0006  services/core/Android.bp      — add aconfig_declarations block so
+#                                        metalava/AAPT2 can resolve the flag
+#                                        referenced by patch 0005
 PATCH_DIR="$QALOS_REPO/packages/apps/RemoteControlService/patches"
-for n in 0002 0003 0004 0005; do
+for n in 0002 0003 0004 0005 0006; do
     patch_script="$(ls "$PATCH_DIR/${n}-"*.py 2>/dev/null || true)"
     if [ -z "$patch_script" ]; then
         echo "[apply-qalos] status=warn patch=${n} reason=missing-script"
