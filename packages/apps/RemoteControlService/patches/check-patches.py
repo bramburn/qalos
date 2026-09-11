@@ -26,6 +26,7 @@ PATCHES = [
     "0003-strings-REMOTE_CONTROL.py",
     "0004-SystemServer-StartRemoteControlService.py",
     "0005-AndroidManifest-REMOTE_CONTROL-FlaggedApi.py",
+    "0006-services-core-aconfig-qalos.py",
 ]
 
 
