@@ -1,1 +1,11 @@
+# qalos — service_contexts for the qalos Remote Control Service.
+#
+# Maps a Binder token name to the SELinux label of the service process
+# that registers it. Required by init when the service is registered
+# with ServiceManager via ServiceManager.addService("qalos_remote_control", ...).
+#
+# This file is harmless to ship before the AIDL/Binder registration
+# lands (v0.1): if no service claims the token, ServiceManager just
+# never resolves it. Once the AIDL lands, init reads this entry at
+# boot and grants the right context.
 qalos_remote_control u:object_r:qalos_remote_control:s0
