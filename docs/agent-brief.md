@@ -140,7 +140,7 @@ It's safe to re-run after a `git pull` in `~/qalos`.
 ```bash
 cd ~/aosp
 source build/envsetup.sh
-lunch qalos_emulator-userdebug
+lunch qalos_emulator-trunk_staging-userdebug
 ```text
 Expected tail of output should include:
 

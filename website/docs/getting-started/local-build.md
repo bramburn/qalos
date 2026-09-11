@@ -34,7 +34,7 @@ repo init -u https://github.com/bramburn/qalos -b main
 repo sync -c -j$(nproc) --no-tags --no-clone-bundle    # 1-2 hours, first time
 ../qalos/tools/apply-qalos.sh                          # copies qalos product files into the tree
 . build/envsetup.sh
-lunch qalos_emulator-userdebug
+lunch qalos_emulator-trunk_staging-userdebug
 m -j$(nproc)                                           # 1-2 hours, first time
 ```
 
@@ -51,7 +51,7 @@ The three images you want land in `~/aosp/out/target/product/qalos_emulator/`:
 # after editing QaLab code:
 cd ~/aosp
 . build/envsetup.sh
-lunch qalos_emulator-userdebug
+lunch qalos_emulator-trunk_staging-userdebug
 m -j$(nproc) qalos_target                # only rebuild the qalos bits
 ```
 
