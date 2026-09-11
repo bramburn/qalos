@@ -163,7 +163,13 @@ log_info "image: $IMAGE_ID"
 
 # -----------------------------------------------------------------------------
 # 8. RunInstances
+#
+# IMPORTANT: register the cleanup trap BEFORE RunInstances so that any
+# signal received during the launch window (timeout, Ctrl+C, parent
+# shell death) still triggers teardown of the billed instance.
 # -----------------------------------------------------------------------------
+INSTANCE_ID=""
+trap cleanup EXIT INT TERM
 INSTANCE_NAME="${PREFIX}-$(date +%H%M%S)"
 log_info "launching $INSTANCE_NAME (type: $CHOSEN_TYPE)..."
 INSTANCE_ID="$(aliyon ecs RunInstances \
@@ -212,6 +218,13 @@ done
 # -----------------------------------------------------------------------------
 cleanup() {
     local exit_code=$?
+    # Guard: INSTANCE_ID may be empty if cleanup runs before RunInstances
+    # succeeded (e.g. a signal during the launch window). Nothing to
+    # tear down in that case.
+    if [[ -z "${INSTANCE_ID:-}" ]]; then
+        stop_watchdog || true
+        return $exit_code
+    fi
     log_info "tearing down instance $INSTANCE_ID..."
     stop_watchdog
     aliyon ecs StopInstance --RegionId "$REGION" --InstanceId "$INSTANCE_ID" >/dev/null 2>&1 || true
@@ -231,7 +244,8 @@ cleanup() {
     done
     return $exit_code
 }
-trap cleanup EXIT INT TERM
+# Trap was registered earlier (just before RunInstances) so signals
+# arriving during the launch window are also caught.
 
 # -----------------------------------------------------------------------------
 # 12. Persist infra state for aliyun-setup-base.sh / aliyun-build.sh to reuse
