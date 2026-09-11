@@ -375,6 +375,81 @@ aliyun configure
 # build: LLM reads tools/aliyun/AGENTS.md and calls aliyun ecs ... directly
 ```text
 
+### 5.4.1 Aliyun account identity & known blockages (added 2026-09-11)
+
+**Verified working identity (do NOT confuse with the local Ubuntu username):**
+
+| Item | Value |
+| --- | --- |
+| Account ID | `<redacted — see user-private config>` |
+| RAM user (full FQN) | `<redacted — see user-private config>` |
+| Display name | `aliyun-cli-user` |
+| AccessKey ID | `<redacted — see ~/.bashrc on macmini2024>` |
+| AccessKey Secret | (in `~/.bashrc` on `macmini2024`, AKA `192.168.0.46`, and in `~/.aliyun/config.json`) |
+| Default region | `cn-guangzhou` |
+
+**Stored on `macmini2024`** in `~/.bashrc` and `~/.profile`:
+
+```bash
+export ALIYUN_RAM_USER="<redacted — see ~/.bashrc on macmini2024>"
+export ALIYUN_ACCOUNT_ID="<redacted — see ~/.bashrc on macmini2024>"
+```
+
+These are exported as non-interactive env vars so any agent that lands on the Mac Mini can immediately grant or check this user's permissions in the Aliyun console (https://ram.console.aliyun.com/users/aliyun-cli-user/identity).
+
+**Windows-side `aliyun configure list` shows a different AK (`...ZGd`).** That AK belongs to a different sub-user. Do not use it for qalos work — use the BH8 AK from `~/.bashrc` on `macmini2024` or from the user's private AccessKey.csv (not committed).
+
+### 5.4.2 Known OSS blockage: public endpoint disabled at account level (2026-09-11)
+
+This Aliyun account has **OSS data operations blocked on the public endpoint** from outside China. Symptom:
+
+```
+Error: operation error PutObject: Error returned by Service.
+Http Status Code: 400.
+Error Code: PublicEndpointForbidden.
+Message: Not allowed using the OSS public endpoint , please use CNAME instead.
+EC: 0003-00000801 (for CreateBucket when RAM user is disabled) / 0048-00000401 (for PUT/LIST).
+```
+
+Bucket management (`mb`, `stat`, `get-acl`) works fine. `ossutil cp` and `ossutil ls` against any prefix fail with this error.
+
+**Workaround that was proven on 2026-09-11:** skip OSS as the staging layer entirely and upload directly from `macmini2024` (UK) to a small ECS receiver in `cn-guangzhou` over SSH. Concrete recipe:
+
+1. Create the receiver ECS (Ubuntu 24.04, `ecs.u1-c1m2.large` is fine, public IP required):
+   ```bash
+   aliyun ecs RunInstances --RegionId cn-guangzhou \
+     --ImageId ubuntu_24_04_x64_20G_alibase_<YYYYMMDD>.vhd \
+     --InstanceType ecs.u1-c1m2.large \
+     --VSwitchId vsw-7xvvy64syomut0vdu6iin \
+     --SecurityGroupId sg-7xv0xvsywi6cm82ea65c \
+     --KeyPairName qalos-aosp-key-ed25519 \
+     --InstanceChargeType PostPaid \
+     --InternetChargeType PayByTraffic --InternetMaxBandwidthOut 100 \
+     --SystemDisk.Category cloud_essd --SystemDisk.Size 40
+   ```
+2. Resize the system disk to ≥300 GB **while stopped** (online resize fails for this image; need `StopInstance` → `ResizeDisk` → `StartInstance`), then SSH in and run `growpart /dev/vda 3 && resize2fs /dev/vda3`.
+3. SSH the receiver from `macmini2024`, install `p7zip-full`.
+4. Upload via rsync (resumable):
+   ```bash
+   rsync -av --progress --partial --inplace \
+     -e 'ssh -i ~/.ssh/id_ed25519_qalos -o StrictHostKeyChecking=no -o ServerAliveInterval=30' \
+     ~/aosp_volumes/ root@<ECS_IP>:/aosp/
+   ```
+
+Expected wall time for 34 GB: 2–10 hours depending on UK home upstream.
+
+**Long-term fix:** ask Aliyun support to either (a) lift the public-endpoint block on the account, or (b) document the CNAME record they want us to use. Until then, the direct-ECS path above is the only one that works.
+
+### 5.4.3 RAM user state traps (2026-09-11)
+
+Two distinct failure modes both look like permission problems but need different fixes:
+
+1. **`UserDisable` (HTTP 403, code `0003-00000801`) on `CreateBucket`** — the RAM user has policies attached but is **Disabled**. Fix: go to https://ram.console.aliyun.com/users/aliyun-cli-user/identity and click **Enable User**. (The "User Status" field is NOT in the Authentication sub-tab — it's on the user detail page Basic Information section or the Users list kebab menu.)
+
+2. **`AccessDenied` (HTTP 403, code `Unauthorized`) on `ListBuckets` or other OSS ops** — the user is enabled but has no policy. Fix: attach the system policy `AliyunOSSFullAccess` to the user.
+
+If you can `ossutil ls` (returns `Bucket Number is: 0`) but `ossutil mb` fails with `UserDisable`, you are in case (1), not case (2).
+
 ### 5.5 GCP fallback (Windows)
 
 ```powershell
