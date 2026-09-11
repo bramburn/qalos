@@ -16,8 +16,8 @@
 #   2. Copies the qalos overlay directories into the working tree
 #      (`device/qalos/qalos_emulator/`, `packages/apps/QaLab/`,
 #      `vendor/qalos/`, plus the framework services source).
-#   3. Runs each of the three Python patch scripts (0002, 0003, 0004)
-#      that gate the RemoteControlService in the AOSP framework. Each
+#   3. Runs each of the five Python patch scripts (0002-0006) that
+#      gate the RemoteControlService in the AOSP framework. Each
 #      edits one upstream AOSP file in place.
 #
 # Run this AFTER `repo init` and `repo sync`. It is idempotent: re-running
