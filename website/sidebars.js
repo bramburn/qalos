@@ -14,6 +14,7 @@ const sidebars = {
         'getting-started/local-build',
         'getting-started/do-build',
         'getting-started/aliyun-build',
+        'getting-started/aosp-source-migration',
         'getting-started/gcp-build',
       ],
     },
