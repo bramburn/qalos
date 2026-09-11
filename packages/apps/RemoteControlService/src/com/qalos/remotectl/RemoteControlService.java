@@ -345,11 +345,14 @@ public final class RemoteControlService extends SystemService implements IRemote
         // previous code called `mContext.getDisplay().getRealSize(size)`,
         // which made `enforceCoordinatesOnDisplay` validate coordinates
         // against the wrong display on multi-display emulators.
-        final android.graphics.Point size = new android.graphics.Point();
-        display.getRealSize(size);
+        //
+        // `Display.getRealSize(Point)` was deprecated in API 30 (R). The
+        // AOSP 15 replacement is `Display.Mode.getResolution()` which
+        // returns the size as a `Size` directly.
+        final android.util.Size resolution = display.getMode().getResolution();
         // android.util.Size.of(int, int) was removed in AOSP 15; use the
         // public 2-arg constructor instead.
-        return new Size(size.x, size.y);
+        return new Size(resolution.getWidth(), resolution.getHeight());
     }
 
     // ------------------------------------------------------------------
