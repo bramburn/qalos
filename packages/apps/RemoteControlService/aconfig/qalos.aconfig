@@ -1,0 +1,27 @@
+// qalos aconfig flags.
+//
+// One flag today: `remote_control`, which gates the
+// `android.permission.REMOTE_CONTROL` signature permission declared by
+// patch 0002 in frameworks/base/core/res/AndroidManifest.xml.
+//
+// The package name (`com.qalos.flags`) and flag name (`remote_control`)
+// MUST match the `android:featureFlag` attribute on the permission
+// XML and the `@FlaggedApi("...")` annotation above it. checkapi
+// rejects mismatches between the two.
+//
+// `is_exported: true` is required because the flag is read from a
+// different module (frameworks/base, where the permission lives) than
+// the module where the flag is declared (frameworks/base/services/core,
+// where this file ends up after `apply-qalos.sh`). Without
+// `is_exported`, the framework's permission parser cannot resolve the
+// flag at runtime.
+package: "com.qalos.flags"
+container: "system"
+
+flag {
+    name: "remote_control"
+    namespace: "qalos"
+    is_exported: true
+    description: "Gates the qalos Remote Control Service signature permission. When the flag is disabled, callers without the qalos vendor signature can be denied access even though the permission is signature-protected."
+    bug: "0"
+}

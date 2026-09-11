@@ -123,15 +123,32 @@ copy_path \
     "$QALOS_REPO/packages/apps/RemoteControlService/src/com/qalos/remotectl" \
     frameworks/base/services/core/java/com/qalos/remotectl
 
-# Apply the three Python "patches" that gate the service. Each script
+# Copy the aconfig flag declaration alongside the qalos Java sources.
+# This must run before patch 0005, which references the flag in the
+# permission XML. AOSP 15's aconfig build system auto-discovers
+# `.aconfig` files in `frameworks/base/services/core/aconfig/`, so the
+# `services.core` module picks it up without an explicit bp entry.
+copy_path \
+    "$QALOS_REPO/packages/apps/RemoteControlService/aconfig/qalos.aconfig" \
+    frameworks/base/services/core/aconfig/qalos.aconfig
+
+# Apply the Python "patches" that gate the service. Each script
 # edits one upstream AOSP file in place; the script exits 1 if the
 # anchor is not found. We surface that as a machine-readable line.
 # (Patch 0001 used to edit services.core/Android.bp srcs but is no
 # longer needed: AOSP 15's services.core-sources filegroup already
 # has srcs: ["java/**/*.java"] which globs in our copied
 # com/qalos/remotectl/*.java. See REBASE.md for the history.)
+#
+# Patches:
+#   0002  AndroidManifest.xml — declare REMOTE_CONTROL signature permission
+#   0003  strings.xml          — add the permission labels/descriptions
+#   0004  SystemServer.java    — start RemoteControlService in PHASE_*
+#   0005  AndroidManifest.xml  — promote the permission to @FlaggedApi
+#                               (required so checkapi accepts the new
+#                               public permission in AOSP 15)
 PATCH_DIR="$QALOS_REPO/packages/apps/RemoteControlService/patches"
-for n in 0002 0003 0004; do
+for n in 0002 0003 0004 0005; do
     patch_script="$(ls "$PATCH_DIR/${n}-"*.py 2>/dev/null || true)"
     if [ -z "$patch_script" ]; then
         echo "[apply-qalos] status=warn patch=${n} reason=missing-script"
