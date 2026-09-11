@@ -347,13 +347,15 @@ public final class RemoteControlService extends SystemService implements IRemote
         // against the wrong display on multi-display emulators.
         //
         // `Display.getRealSize(Point)` was deprecated in API 30 (R).
-        // In AOSP 15 `Display.Mode.getResolution()` was removed entirely
-        // (replaced by `Display.getMode().getModeId()` + a separate lookup
-        // table for resolution); the simplest portable replacement is to
-        // read the mode's width/height directly. `Display.Mode.getWidth`
-        // / `getHeight` are available on every AOSP 15 build.
+        // In AOSP 15 `Display.Mode.getResolution()` was removed entirely,
+        // and `Display.Mode` no longer exposes public `getWidth`/`getHeight`
+        // either (those exist on `Display` itself, but not on `Mode`).
+        // The public API on `Display.Mode` in API 35 is `getModeId`,
+        // `getPhysicalWidth`, `getPhysicalHeight`, `getRefreshRate`. Use
+        // the physical dimensions to match the resolution callers expect.
         final android.util.Size resolution = new android.util.Size(
-                display.getMode().getWidth(), display.getMode().getHeight());
+                display.getMode().getPhysicalWidth(),
+                display.getMode().getPhysicalHeight());
         return new Size(resolution.getWidth(), resolution.getHeight());
     }
 
