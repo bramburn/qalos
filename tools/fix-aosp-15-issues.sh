@@ -21,7 +21,12 @@
 set -eo pipefail
 
 BUILD_DIR="${BUILD_DIR:-$HOME/aosp}"
-QALOS_DIR="${QALOS_DIR:-$HOME/qalos}"
+# The qalos repo is the manifest clone in the AOSP-15 layout
+# (repo init -u https://github.com/bramburn/qalos.git), so the source
+# of the python helpers lives at $BUILD_DIR/.repo/manifests, not at
+# $HOME/qalos. Honor an explicit QALOS_DIR override for non-standard
+# layouts, then fall back to the AOSP-15 default.
+QALOS_DIR="${QALOS_DIR:-$BUILD_DIR/.repo/manifests}"
 COLLATOR="$BUILD_DIR/external/icu/android_icu4j/src/main/java/android/icu/text/Collator.java"
 CONSCRYPT_BASELINE="$BUILD_DIR/external/conscrypt/api/intra/last-api.txt"
 
