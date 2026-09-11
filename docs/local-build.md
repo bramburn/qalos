@@ -39,7 +39,7 @@ repo sync -c -j$(nproc) --no-tags --no-clone-bundle    # 1-2 hours the first tim
 ../qalos/tools/apply-qalos.sh                          # copies device tree + QaLab
 
 . build/envsetup.sh
-lunch qalos_emulator-userdebug
+lunch qalos_emulator-trunk_staging-userdebug
 m -j$(nproc)                                           # 1-2 hours
 ```
 
@@ -79,7 +79,7 @@ refreshes the working tree.
 ```bash
 cd ~/aosp
 . build/envsetup.sh
-lunch qalos_emulator-userdebug
+lunch qalos_emulator-trunk_staging-userdebug
 
 # The emulator binary is at prebuilts/android-emulator/<arch>/emulator
 # A minimal launch:
