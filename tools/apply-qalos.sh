@@ -96,19 +96,23 @@ if [ "$SKIP_PATCH_CHECK" -eq 0 ] && [ -x "$(command -v python3 2>/dev/null)" ]; 
     fi
 fi
 
-# Copy a qalos overlay directory into the AOSP working tree. Independent
-# of any other path — a missing optional source does not fail the whole
-# apply.
+# Copy a qalos overlay directory OR single file into the AOSP working
+# tree. Independent of any other path — a missing optional source does
+# not fail the whole apply.
 copy_path() {
     local src="$1"
     local dst="$2"
-    if [ ! -d "$src" ]; then
+    if [ ! -e "$src" ]; then
         echo "[apply-qalos] skipping $dst (source $src not present in qalos repo)"
         return
     fi
     mkdir -p "$(dirname "$dst")"
     rm -rf "$dst"
-    cp -r "$src" "$dst"
+    if [ -d "$src" ]; then
+        cp -r "$src" "$dst"
+    else
+        cp "$src" "$dst"
+    fi
     echo "[apply-qalos] copied $dst"
 }
 
