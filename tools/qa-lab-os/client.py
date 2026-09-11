@@ -169,12 +169,27 @@ class QaLabDevice:
         self._post("/type", {"text": text})
 
     def key(self, key_code: int, *, down: bool = True) -> None:
-        """Send a hardware key event.
+        """Send ONE half of a hardware key event (sticky).
 
         ``key_code`` is an Android ``KeyEvent.KEYCODE_*`` constant,
         e.g. ``4`` for ``KEYCODE_BACK``.
+
+        WARNING: This only emits a single ACTION_DOWN (down=True) or
+        ACTION_UP (down=False). Android treats a DOWN without a
+        matching UP as a key held continuously, which corrupts
+        subsequent touch events. For a normal key press use
+        :meth:`press_key` instead, which emits DOWN+UP atomically.
         """
         self._post("/key", {"key_code": int(key_code), "down": bool(down)})
+
+    def press_key(self, key_code: int) -> None:
+        """Send a complete hardware key press (ACTION_DOWN + ACTION_UP).
+
+        Equivalent to a human tapping the key once. Use this for
+        normal navigation (Back, Home, volume up/down, etc.).
+        """
+        self.key(int(key_code), down=True)
+        self.key(int(key_code), down=False)
 
     # ------------------------------------------------------------------
     # App lifecycle
@@ -249,16 +264,25 @@ class QaLabDevice:
 
     @staticmethod
     def _decode(response: requests.Response, path: str) -> dict:
+        # Try to extract a structured error from the response body even
+        # when the HTTP status is non-200. HttpApiServer responds with
+        # HTTP 400/404/500 + JSON {"status":"error","message":"..."} for
+        # logical errors; checking status first would discard the
+        # message and leave the caller with an opaque text dump.
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = None
+
+        if isinstance(payload, dict) and payload.get("status") == "error":
+            raise QaLabError(f"{path} returned error: {payload.get('message')}")
+
         if response.status_code != 200:
             raise QaLabError(
                 f"{path} returned HTTP {response.status_code}: {response.text[:200]}"
             )
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            raise QaLabError(f"{path} returned non-JSON: {exc}") from exc
+        if payload is None:
+            raise QaLabError(f"{path} returned non-JSON")
         if not isinstance(payload, dict):
             raise QaLabError(f"{path} returned non-object JSON: {type(payload).__name__}")
-        if payload.get("status") == "error":
-            raise QaLabError(f"{path} returned error: {payload.get('message')}")
         return payload
