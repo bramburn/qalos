@@ -6,7 +6,9 @@
 #
 # Supporting infrastructure (VPC / vSwitch / Security Group / KeyPair named
 # `qalos-smoke-*`) is kept around because it's free and will be reused by
-# `aliyun-build.ps1` later. Their IDs are written to
+# `aliyun-build.ps1` later (now removed; the LLM-driven path at
+# tools/aliyun/AGENTS.md reads this state directly). Their IDs are
+# written to
 # .pi/aliyun-state.json for the build script to consume.
 #
 # Mirrors the four-safety-net pattern from `doctl-build.ps1`:
@@ -285,7 +287,7 @@ finally {
     }
 }
 
-# --- 13. Persist infra state for aliyun-build.ps1 to reuse -------------------
+# --- 13. Persist infra state for the LLM-driven build path to reuse ---------
 $stateFile = Join-Path $PSScriptRoot '..\.pi\aliyun-state.json'
 $stateDir = Split-Path $stateFile -Parent
 if (-not (Test-Path $stateDir)) { New-Item -ItemType Directory -Path $stateDir -Force | Out-Null }
@@ -316,7 +318,7 @@ if ($status -eq 'Running') {
     Write-Host "  region/zone: $Region / $vswZone"
     Write-Host "  time to Running: $([math]::Round($elapsed,1))s"
     Write-Host ""
-    Write-Host "Persistent resources KEPT (free) for aliyun-build.ps1:" -ForegroundColor Cyan
+    Write-Host "Persistent resources KEPT (free) for the LLM-driven build (tools/aliyun/AGENTS.md):" -ForegroundColor Cyan
     Write-Host "  VPC      = $vpcId  ($vpcName)"
     Write-Host "  VSwitch  = $vswId  ($vswName)  in $vswZone"
     Write-Host "  SG       = $sgId  ($sgName)  - SSH 22/22 from 0.0.0.0/0"
