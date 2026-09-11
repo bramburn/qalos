@@ -7,6 +7,8 @@ import android.view.Gravity;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import java.util.Locale;
+
 /**
  * QaLab — the only first-party app that ships with qalos. It prints the build's
  * identifying metadata so a tester can confirm at a glance that the running AVD
@@ -47,6 +49,7 @@ public class QaLabActivity extends Activity {
         // twice on the screen is noise, so we use `Build.DISPLAY`
         // only and drop the duplicate.
         props.setText(String.format(
+            Locale.US,
             "  Build.ID:        %s%n" +
             "  Product:         %s%n" +
             "  Device:          %s%n" +
