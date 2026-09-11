@@ -50,7 +50,7 @@ fix_collator() {
     fi
 
     log "collator: applying HiddenAbstractMethod fix (3 methods)"
-    python3 "$QALOS_DIR/tools/fix_collator.py"
+    BUILD_DIR="$BUILD_DIR" python3 "$QALOS_DIR/tools/fix_collator.py"
 }
 
 # ---------------------------------------------------------------------------
