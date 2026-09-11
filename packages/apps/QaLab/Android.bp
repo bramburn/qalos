@@ -4,6 +4,10 @@
 // IActivityManager), single-activity launcher that prints build
 // metadata at startup. Replaces the legacy Android.mk which AOSP 15
 // deprecated.
+//
+// Note: the legacy `LOCAL_MODULE_TAGS := optional` had no direct
+// bp equivalent. Soong derives tag visibility from the module name
+// and the build target, so the `tags:` property is omitted entirely.
 
 android_app {
     name: "QaLab",
@@ -12,17 +16,13 @@ android_app {
     certificate: "platform",
 
     // `LOCAL_PRIVATE_PLATFORM_APIS := true` in the old Android.mk.
-    // Empty `sdk_version` compiles against the system image at runtime,
-    // granting the @hide API access that the old flag did.
-    sdk_version: "",
+    // `sdk_version: "current"` compiles against the system image at
+    // runtime, granting the @hide API access that the old flag did.
+    sdk_version: "current",
 
     srcs: ["src/**/*.java"],
 
-    // `LOCAL_MODULE_TAGS := optional` in the old Android.mk. Soong's
-    // equivalent.
-    tags: ["optional"],
-
-    // Manifest must declare this so Android knows to install the
-    // package as a system app (the manifest is in this directory too).
-    manifest: "AndroidManifest.xml",
+    // AndroidManifest.xml is auto-discovered when it lives next to
+    // Android.bp in the same directory, so no explicit `manifest:`
+    // line is needed.
 }
