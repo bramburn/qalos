@@ -33,10 +33,10 @@ NEW_LINE = (
     '"android.permission.REMOTE_CONTROL";\n'
 )
 
-# Insert AFTER this anchor line (REMOTE_AUDIO is alphabetically right
+# Insert AFTER this anchor line (RECORD_AUDIO is alphabetically right
 # before REMOTE_CONTROL). Falls back to before the closing brace of the
 # android.permission class if the anchor isn't found.
-ANCHOR = 'REMOTE_AUDIO = "android.permission.REMOTE_AUDIO";'
+ANCHOR = 'RECORD_AUDIO = "android.permission.RECORD_AUDIO";'
 
 
 def main(work_tree: Path) -> int:
@@ -53,9 +53,11 @@ def main(work_tree: Path) -> int:
             print("[0007] already applied (idempotent skip)")
         return 0
     if ANCHOR not in text:
+        nearby = [l for l in text.splitlines() if "RECORD" in l or "REMOTE" in l]
         print(
             f"[0007] anchor '{ANCHOR}' not found in {target}. "
-            "Cannot determine insertion point. See REBASE.md.",
+            f"Nearby lines: {nearby[:5]}. Cannot determine insertion point. "
+            "See REBASE.md.",
             file=sys.stderr,
         )
         return 1
