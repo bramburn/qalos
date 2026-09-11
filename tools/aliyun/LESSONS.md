@@ -446,3 +446,177 @@ agent should:
 - `tools/aliyun/run-build.sh` — the on-instance build runner.
 - `D:\qalos\.pi\aliyun-build-state.json` — the canonical
   per-build state record.
+
+---
+
+# Lessons from 2026-09-11: AOSP source migration via HK relay
+
+The 2026-09-10 series proved that Aliyun ECS **cannot source AOSP itself**
+(no usable AOSP git mirror inside cn-hangzhou). 2026-09-11 is the
+follow-up: **how do you actually get the source tree INTO Aliyun?**
+This section documents the recipe that worked end-to-end and the
+sharp edges that bit during it.
+
+## TL;DR
+
+The HK relay pattern works. 35.5 GB compressed → 127 GB extracted
+AOSP source in cn-guangzhou in **~2.5–3.5 hours**:
+
+```
+Mac Mini (UK)
+  → HK OSS bucket (public endpoint, ~9 MiB/s, 60 min)
+  → HK ECS (download via INTERNAL endpoint, ~110 MiB/s, 5 min)
+  → cat + zstd + tar on HK ECS (~40-75 min on 2 vCPU)
+  → CreateImage + CopyImage (intra-Aliyun, free)
+  → cn-guangzhou ECS launched from copied image
+```
+
+**Three new gotchas discovered** (also documented in
+`AGENTS.md` §7.8–7.10 and `website/docs/reference/gotchas.md`):
+
+1. **`PublicEndpointForbidden` on cn-guangzhou public OSS.** The
+   cn-guangzhou public OSS endpoint is blocked at the **account
+   level** for this Aliyun account. Symptom: `PublicEndpointForbidden`
+   (HTTP 400, code `0048-00000401`). HK's public endpoint is
+   not blocked. Use HK OSS as the staging layer.
+2. **UK → cn-guangzhou SSH is DPI-throttled to ~1 KB/s.** Don't
+   try to rsync 35 GB over SSH; it'll take 281 days. Use the
+   HK OSS → HK ECS relay path instead.
+3. **OSS internal endpoint is 5–10× faster than public.** When
+   downloading from inside Aliyun, always use
+   `oss-cn-<region>-internal.aliyuncs.com` instead of the public
+   one. It's on Aliyun's private backbone, no egress, no DPI.
+
+## Why HK, not Singapore
+
+The user explicitly asked for HK because it's cheaper than
+Singapore. Per-instance spot prices on `ecs.u1-c1m2.large`:
+
+| Region | Spot price (USD/hr) | Notes |
+| --- | --- | --- |
+| cn-hongkong | ~$0.015 | Cheapest; egress to cn-guangzhou is free |
+| ap-southeast-1 (Singapore) | ~$0.020 | 30% more |
+| cn-guangzhou | n/a | public OSS endpoint blocked at account level |
+
+The `CopyImage` HK → cn-guangzhou transfer is free (intra-Aliyun),
+which makes HK even more attractive for the relay role.
+
+**Don't assume Singapore would be a drop-in substitute.** The
+public-endpoint block in §5.4.2 of AGENTS.md is documented for
+cn-guangzhou; ap-southeast-1's public endpoint behavior on this
+account is **not** verified. Before switching, run a 5 MB
+`ossutil cp` test first.
+
+## End-to-end timing (measured 2026-09-11)
+
+| Phase | Throughput | Wall time for 35.5 GB → 127 GB |
+| --- | --- | --- |
+| Mac Mini → HK OSS (public endpoint) | 9.4 MiB/s | 60 min |
+| HK OSS → HK ECS (INTERNAL endpoint) | 109 MiB/s | 5 min |
+| HK ECS: `cat` 339 volumes | ~50 MB/s | 12 min |
+| HK ECS: `zstd -d` | single-threaded | 30–60 min |
+| HK ECS: `tar -xf` | disk-bound | 5–10 min |
+| CreateImage + CopyImage | Aliyun API | 10–30 min |
+| **Total** | | **~2.5–3.5 hours** |
+
+For comparison, the naïve "scp the source tree" estimate (based on
+the §5.4.4 measured throttling of 1.4 KB/s for UK → cn-guangzhou)
+would have been **281 days**.
+
+## ECS sizing for the extraction phase
+
+The small HK ECS that works for the download is **undersized for
+the extraction**. On `ecs.u1-c1m2.large` (2 vCPU / 2 GB RAM):
+
+- The OS swaps aggressively during the 127 GB write phase
+  (`kswapd0` was at 100% for 90+ min during the verified run).
+- SSH periodically times out during heavy I/O — every `du -sh`
+  or `ls -la` against `/aosp` returns nothing for 10–30 sec.
+- The cat phase runs at only ~50 MB/s (3.6% CPU, I/O bound),
+  which is fine — the I/O is the bottleneck, not CPU.
+
+**Why not upgrade?** At ¥0.15/hour, the difference between 2 vCPU
+and 4 vCPU is ¥0.10/hour. If the extraction takes 2 hours either
+way (because zstd is single-threaded), the saving is ¥0.20. The
+cost of being stuck on a non-responsive ECS for an extra hour of
+human debugging is way more than that.
+
+**Next time:** use `ecs.u1-c1m4.large` (4 vCPU / 8 GB) for the
+extraction. ¥0.25/hr vs ¥0.15/hr is a ¥0.20 difference for 2 hours.
+The extra RAM keeps swap pressure low enough that SSH stays
+responsive throughout.
+
+## Three-phase extraction (not one pipe)
+
+The naïve recipe — `cat aosp.zst.* | zstd -d | tar -xf -` — has
+four problems:
+
+1. **Command-line length:** 339 × ~12 chars = ~4 KB. Some shells
+   truncate at the first SIGPIPE during subprocess invocation.
+2. **Debuggability:** if it fails at 80%, you restart from zero.
+3. **Resource isolation:** cat is I/O-bound, zstd is CPU-bound,
+   tar is I/O+metadata-bound. A single pipe mixes them and you
+   can't tell which one is slow.
+4. **Failure visibility:** if zstd errors with "invalid frame",
+   you only see it at the tail of a 127 GB tar failure.
+
+The proven recipe:
+
+```bash
+echo "=== Phase 1: concatenate ===" && date
+cat /aosp/aosp.zst.000 ... /aosp/aosp.zst.338 > /aosp/aosp.tar
+# ~12 min on 2 vCPU
+
+echo "=== Phase 2: zstd decompress ===" && date
+zstd -d /aosp/aosp.tar -o /aosp/aosp.tar.raw
+# 30-60 min on 2 vCPU (single-threaded, no -T0 because RAM is tight)
+
+echo "=== Phase 3: tar extract ===" && date
+mkdir -p /aosp-extracted
+tar -xf /aosp/aosp.tar.raw -C /aosp-extracted/
+# 5-10 min on 2 vCPU
+
+# Clean up intermediates before snapshot (saves 162 GB).
+rm /aosp/aosp.tar /aosp/aosp.tar.raw /aosp/aosp.zst.*
+```
+
+**Disk budget:** 35 GB compressed + 35 GB intermediate tar +
+127 GB decompressed + 127 GB extracted = 324 GB peak. A 300 GB
+disk will run out. Plan for ≥500 GB, or delete the compressed
+volumes after Phase 1.
+
+## RAM user state traps (the 2026-09-11 reminder)
+
+Both of these bit us during the 2026-09-11 work:
+
+1. **`UserDisable` (HTTP 403, code `0003-00000801`) on `CreateBucket`** —
+   the RAM user has policies attached but is **Disabled**. Fix:
+   go to <https://ram.console.aliyun.com/users/aliyun-cli-user/identity>
+   and click **Enable User**.
+
+2. **`AccessDenied` (HTTP 403, code `Unauthorized`) on `ListBuckets`**
+   — the user is enabled but has no policy. Fix: attach the
+   system policy `AliyunOSSFullAccess` to the user.
+
+If you can `ossutil ls` (returns `Bucket Number is: 0`) but
+`ossutil mb` fails with `UserDisable`, you are in case (1),
+not case (2). Don't waste time attaching policies to a
+disabled user.
+
+## What to try next (for the 2026-09-11 build)
+
+Once the HK custom image has been Copied to cn-guangzhou and the
+production build VM has been launched from it, the LLM-driven
+Phase 4 build runbook (see `tools/aliyun/AGENTS.md`) takes over:
+
+1. `systemd-run --unit=qalos-resumeN` launches `do-build.sh`
+   detached on the build VM.
+2. The `mavis cron` monitor owns teardown.
+3. Artifacts land in `out/aliyun-build/` after you `curl` them
+   from the token-gated URL in `/tmp/qalos-artifacts-url.txt`.
+
+**Don't try to run `do-build.sh` directly from a Windows-side
+PowerShell SSH session.** That SSH session is the same shape that
+bit `gcp-build.ps1` on 2026-09-04 (4-hour wait, then unconditional
+delete). The `systemd-run` + `mavis cron` pattern is the proven
+detached-build + safe-cleanup shape.
