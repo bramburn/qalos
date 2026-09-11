@@ -169,7 +169,7 @@ smallest_in_stock_instance_type() {
     local in_stock_json
     in_stock_json="$(aliyun ecs DescribeAvailableResource \
         --RegionId "$region" --ZoneId "$zone" --DestinationResource 'InstanceType' \
-        | jq -r '.AvailableZones.AvailableZone.AvailableResources.AvailableResource[]
+        | jq -r '.AvailableZones.AvailableZone[].AvailableResources.AvailableResource[]
                 | .SupportedResources.SupportedResource[]
                 | select(.Status == "Available") | .Value')"
     if [[ -z "$in_stock_json" ]]; then

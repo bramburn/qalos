@@ -70,7 +70,7 @@ $createContent = "@echo off`r`n`"$gcloudPython`" `"$gcloudScript`" compute insta
 [System.IO.File]::WriteAllText($createBat, $createContent, [System.Text.UTF8Encoding]::new($false))
 $createProc = Start-Process -FilePath $createBat -NoNewWindow -Wait -PassThru
 $createRaw = if (Test-Path $createOutFile) { (Get-Content $createOutFile -Raw) } else { '' }
-mavis-trash $createOutFile, $createBat '2>&1' | Out-Null
+mavis-trash $createOutFile, $createBat 2>&1 | Out-Null
 if ($createProc.ExitCode -ne 0) {
     Write-Host "[launch] FAILED to create instance (exit $($createProc.ExitCode)):" -ForegroundColor Red
     Write-Host $createRaw
@@ -100,7 +100,7 @@ for ($i = 0; $i -lt 60; $i++) {
         break
     }
 }
-mavis-trash $statusOutFile, $statusBat '2>&1' | Out-Null
+mavis-trash $statusOutFile, $statusBat 2>&1 | Out-Null
 
 if (-not $ready) {
     Write-Host "[launch] instance did not reach RUNNING in 5 min" -ForegroundColor Red
@@ -136,7 +136,11 @@ Write-Host "[launch] files uploaded" -ForegroundColor Green
 # The build will keep running even if the SSH connection drops
 # ---------------------------------------------------------------------------
 Write-Host "[launch] launching build via systemd-run (detached)..." -ForegroundColor Cyan
-$launchCmd = "sudo systemd-run --unit=qalos-build --setenv=HOME=/root --setenv=XDG_CACHE_HOME=/root/.cache --setenv=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /tmp/do-build.sh"
+# systemd-run creates a clean transient service unit. The /tmp/qalos-env.sh
+# file we generated earlier holds the build target / log dir overrides;
+# source it inside the unit so do-build.sh sees them. We use systemd's
+# --setenv-file form (not bash -c) for the cleaner propagation semantics.
+$launchCmd = "sudo systemd-run --unit=qalos-build --setenv-file=/tmp/qalos-env.sh /tmp/do-build.sh"
 & $sshExe -i $sshKey -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL "bramburn@${ip}" $launchCmd
 if ($LASTEXITCODE -ne 0) { Write-Host "[launch] systemd-run FAILED" -ForegroundColor Red; exit 1 }
 Write-Host "[launch] build launched as qalos-build.service" -ForegroundColor Green

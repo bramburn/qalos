@@ -189,7 +189,7 @@ catch {
     Write-Warning "[qalos] build failed: $_"
     if ($KeepOnFailure) {
         Write-Host "[qalos] KeepOnFailure was set — leaving $dropletId alive for 30 minutes for debugging."
-        Write-Host "  ssh root@$dropletIp  (then: cat $BUILD_DIR/.qalos-logs/build.log)"
+        Write-Host "  ssh root@$dropletIp  (then: cat /root/aosp/.qalos-logs/build.log)"
         Start-Sleep -Seconds 1800
     }
 }
