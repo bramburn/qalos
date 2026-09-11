@@ -17,7 +17,7 @@ Usage on the build instance (started by the systemd unit's
 ExecStartPost after do-build.sh finishes):
 
     # Generate a token
-    TOKEN=$(python3 -c 'import uuid4; print(uuid4.uuid4())')
+    TOKEN=$(python3 -c 'import uuid; print(uuid.uuid4())')
     # Start the server in the background; it writes the URL to a
     # file the agent / cron can read.
     python3 /opt/qalos/qalos-serve-artifacts.py \
@@ -183,24 +183,27 @@ def main(argv: list[str]) -> int:
     # address the orchestrator can reach; on a VPC the private IP
     # also works if the orchestrator is in the same VPC. The
     # orchestrator passes QALOS_PUBLIC_IP in the env file; the
-    # fallback is for local testing and for unusual bind addresses.
+    # --bind-ip CLI flag overrides it for local testing.
+    #
+    # Fallback order:
+    #   1. QALOS_PUBLIC_IP env var (set by the orchestrator)
+    #   2. --bind-ip CLI flag (only if it's not 0.0.0.0)
+    #   3. HARD FAILURE — historically this used `os.uname().nodename`
+    #      which is the *internal* Linux hostname (e.g. iZbp1...),
+    #      not a routable address. Any caller relying on the fallback
+    #      would get an unresolvable URL. Better to refuse and ask
+    #      the orchestrator to pass the right IP explicitly.
     public_ip = os.environ.get("QALOS_PUBLIC_IP", "")
+    if not public_ip and args.bind and args.bind != "0.0.0.0":
+        # Specific bind address (e.g. 127.0.0.1 for local testing).
+        public_ip = args.bind
     if not public_ip:
-        if args.bind and args.bind != "0.0.0.0":
-            # Specific bind address (e.g. 127.0.0.1 for local
-            # testing). Use it directly.
-            public_ip = args.bind
-        else:
-            # 0.0.0.0 or unset — fall back to the hostname.
-            # `os.uname()` is Linux-only; `socket.gethostname()`
-            # works on both. The Linux build instance is the
-            # target — the orchestrator passes QALOS_PUBLIC_IP
-            # in the env file.
-            try:
-                public_ip = os.uname().nodename  # type: ignore[attr-defined]
-            except AttributeError:
-                import socket
-                public_ip = socket.gethostname()
+        log.error(
+            "cannot determine public IP: set QALOS_PUBLIC_IP or pass "
+            "--bind-ip <addr>. Refusing to fall back to hostname (would "
+            "produce an unroutable URL)."
+        )
+        return 1
     url = f"http://{public_ip}:{args.port}/{token}/"
 
     write_pid_file(args.pid_file)
