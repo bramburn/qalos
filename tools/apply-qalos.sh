@@ -119,7 +119,13 @@ copy_path() {
 # --- Existing overlay paths ---
 copy_path "$QALOS_REPO/device/qalos/qalos_emulator"   device/qalos/qalos_emulator
 copy_path "$QALOS_REPO/packages/apps/QaLab"           packages/apps/QaLab
-copy_path "$QALOS_REPO/vendor/qalos"                  vendor/qalos
+
+# Copy the SELinux overlay under vendor/ (Treble-safe location). The
+# BoardConfig.mk wires BOARD_VENDOR_SEPOLICY_DIRS to this path. The
+# device/ tree copy above intentionally leaves sepolicy/ behind, since
+# AOSP 15 would panic in removeSrcDirPrefix if it were loaded from
+# device/ instead of vendor/.
+copy_path "$QALOS_REPO/device/qalos/qalos_emulator/sepolicy" vendor/qalos/qalos_emulator/sepolicy
 
 # --- New in v0: qalos RemoteControlService ---
 # Copy the Java/AIDL source into the framework services tree.
