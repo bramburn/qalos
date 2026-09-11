@@ -18,11 +18,21 @@ We identify them by their unique signatures, then replace ONLY the single
 file is left alone (they are required by RuleBasedCollator and friends).
 
 Idempotent: re-running is a no-op if the methods are already concrete.
+
+Path resolution: BUILD_DIR is taken from the environment (matches the
+variable used by fix-aosp-15-issues.sh), defaulting to $HOME/aosp. The
+target file is BUILD_DIR/external/icu/android_icu4j/src/main/java/
+android/icu/text/Collator.java.
 """
+import os
 import re
 import sys
 
-FILE = "/root/aosp/external/icu/android_icu4j/src/main/java/android/icu/text/Collator.java"
+BUILD_DIR = os.environ.get("BUILD_DIR") or os.path.expanduser("~/aosp")
+FILE = os.path.join(
+    BUILD_DIR,
+    "external/icu/android_icu4j/src/main/java/android/icu/text/Collator.java",
+)
 
 # (regex, replacement_template) — one per target method.
 # Each regex matches the EXACT "public abstract <ret> <name>(<args>);"
@@ -73,6 +83,10 @@ TARGETS = [
 
 
 def main():
+    if not os.path.exists(FILE):
+        print(f"ERROR: {FILE} not found. Is BUILD_DIR correct?", file=sys.stderr)
+        return 1
+
     with open(FILE) as f:
         text = f.read()
 
