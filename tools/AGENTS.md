@@ -61,6 +61,7 @@
 | Aliyun CLI | [`tools/aliyun/aliyun-cli-reference.md`](aliyun/aliyun-cli-reference.md) | Cheat sheet for every `aliyun ecs ...` command the runbook uses. |
 | Aliyun cost | [`tools/aliyun/build-cost.md`](aliyun/build-cost.md) | The cost table — per-build + standing + scaling. |
 | Aliyun artifact server | [`tools/aliyun/qalos-serve-artifacts.py`](aliyun/qalos-serve-artifacts.py) | The token-gated Python HTTP server that serves the build artifacts over a one-shot URL. |
+| **Aliyun lessons (READ FIRST)** | **[`tools/aliyun/LESSONS.md`](aliyun/LESSONS.md)** | **Read this BEFORE any Aliyun build attempt.** Post-mortem of the 2026-09-10 build series (5 attempts, ~¥20 burned, all failed due to network restrictions). Captures: Aliyun cn-hangzhou closed network, the fake `mirrors.aliyun.com` AOSP endpoint, the 2-3 MB/s transfer rate reality, AOSP 15 RAM requirements (64+ GB), and the decision tree for what to try next. |
 | GCP | (no runbook yet; see `qalos-launch.ps1` at the repo root for the working example, and `website/docs/qa-lab-os/agent-build-shell.md` for primitives) | The `gcp-*.ps1` scripts are usable for short jobs; the LLM pattern (`systemd-run` + mavis cron) is the right long-build path. |
 | DigitalOcean | (covered by the existing `doctl-*.ps1` scripts) | Battle-tested; the LLM pattern can layer on top but is not yet a runbook. |
 
