@@ -162,12 +162,17 @@ copy_path \
 #                                        orphaned since 0005 no longer
 #                                        references a flag; kept for
 #                                        potential future use)
-#   0007  core/api/current.txt          — register REMOTE_CONTROL in the
-#                                        platform API surface (required
-#                                        without @FlaggedApi; metalava/
-#                                        checkapi will fail otherwise)
+#   0007  core/api/current.txt          — REMOVE the REMOTE_CONTROL line that
+#                                        a previous version of this script
+#                                        added; the permission is @hide and
+#                                        so does not belong in the public
+#                                        current.txt at all.
+#   0008  core/api/system-lint-baseline.txt — add an UnflaggedApi baseline
+#                                        entry for REMOTE_CONTROL (the qalos
+#                                        flag is unreachable from framework-
+#                                        res so @FlaggedApi isn't an option).
 PATCH_DIR="$QALOS_REPO/packages/apps/RemoteControlService/patches"
-for n in 0002 0003 0004 0005 0006 0007; do
+for n in 0002 0003 0004 0005 0006 0007 0008; do
     patch_script="$(ls "$PATCH_DIR/${n}-"*.py 2>/dev/null || true)"
     if [ -z "$patch_script" ]; then
         echo "[apply-qalos] status=warn patch=${n} reason=missing-script"
