@@ -160,16 +160,23 @@ PRODUCT_PROPERTY_OVERRIDES += \
 # has already succeeded).
 #
 # We copy an empty product manifest (vintf/product_manifest.xml) into the
-# product partition via PRODUCT_COPY_FILES. The destination path is
-# `system/product/etc/vintf/manifest.xml` — the dirmap /product path that
-# vintffm walks.
+# product partition via PRODUCT_COPY_FILES. The destination uses
+# $(TARGET_COPY_OUT_PRODUCT) so the file lands at the correct dirmap
+# (/product) for vintffm on system-as-root builds — for qalos_emulator
+# (which inherits aosp_x86_64's `system-as-root + product-as-system-product`
+# layout), TARGET_COPY_OUT_PRODUCT resolves to `system/product`.
+#
+# A literal `system/product/etc/vintf/manifest.xml` destination was tried
+# first (in commit ce02562) and silently failed to land the file in
+# the staged tree — the build still reported NAME_NOT_FOUND at
+# check_vintf_all. `$(TARGET_COPY_OUT_PRODUCT)` is the correct path.
 #
 # If qalos ever ships product-side HALs (vendor/qalos/qalos_emulator/hal/
 # with .manifest.xml in product/etc/vintf/), this copy becomes a
 # `<hal>` element in the manifest body — the file itself stays.
 # ---------------------------------------------------------------------------
 PRODUCT_COPY_FILES += \
-    device/qalos/qalos_emulator/vintf/product_manifest.xml:system/product/etc/vintf/manifest.xml
+    device/qalos/qalos_emulator/vintf/product_manifest.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/vintf/manifest.xml
 
 # Note: the qalos SELinux policy overlay is wired via BoardConfig.mk
 # (not here). AOSP's sepolicy build reads BOARD_SEPOLICY_DIRS from
