@@ -180,8 +180,15 @@ copy_path \
 #                                        required. Without this, vintffm
 #                                        fails the framework-vs-frozen check
 #                                        at the final packaging step.
+#   0010  core/api/system-current.txt — add the REMOTE_CONTROL permission
+#                                        entry. Patch 0002 declares the
+#                                        permission in AndroidManifest.xml;
+#                                        metalava generates a stub for it;
+#                                        checkapi diffs against current.txt
+#                                        which doesn't list it -> FAIL.
+#                                        Add the line in alphabetical order.
 PATCH_DIR="$QALOS_REPO/packages/apps/RemoteControlService/patches"
-for n in 0002 0003 0004 0005 0006 0007 0008 0009; do
+for n in 0002 0003 0004 0005 0006 0007 0008 0009 0010; do
     patch_script="$(ls "$PATCH_DIR/${n}-"*.py 2>/dev/null || true)"
     if [ -z "$patch_script" ]; then
         echo "[apply-qalos] status=warn patch=${n} reason=missing-script"
