@@ -18,9 +18,14 @@
   "no product HALs" answer; vintffm sees the file, reads the manifest
   type, finds no entries to verify, and the frozen check passes.
 
-  Wired by PRODUCT_COPY_FILES in device/qalos/qalos_emulator/device.mk
-  so the file lands at system/product/etc/vintf/manifest.xml in the
-  system image (the dirmap /product path that vintffm checks).
+  Wired by PRODUCT_MANIFEST_FILES in device/qalos/qalos_emulator/device.mk.
+  AOSP 15's build system (system/libhidl/vintfdata/Android.mk) consumes
+  this list and creates a prebuilt module that assembles the entries via
+  assemble_vintf and installs at system/product/etc/vintf/manifest.xml
+  (LOCAL_PRODUCT_MODULE=true, LOCAL_MODULE_RELATIVE_PATH := vintf).
+  This is the canonical AOSP 15 mechanism for shipping a product
+  manifest; PRODUCT_COPY_FILES for VINTF manifests is rejected by
+  build/make/core/Makefile.
 -->
 <manifest version="1.0" type="product">
 </manifest>
