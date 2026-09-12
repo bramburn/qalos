@@ -159,24 +159,41 @@ PRODUCT_PROPERTY_OVERRIDES += \
 # aborts the build before the .img files are sealed, even when compilation
 # has already succeeded).
 #
-# We copy an empty product manifest (vintf/product_manifest.xml) into the
-# product partition via PRODUCT_COPY_FILES. The destination uses
-# $(TARGET_COPY_OUT_PRODUCT) so the file lands at the correct dirmap
-# (/product) for vintffm on system-as-root builds — for qalos_emulator
-# (which inherits aosp_x86_64's `system-as-root + product-as-system-product`
-# layout), TARGET_COPY_OUT_PRODUCT resolves to `system/product`.
+# We use the canonical AOSP 15 mechanism: PRODUCT_MANIFEST_FILES. The
+# build system (system/libhidl/vintfdata/Android.mk) automatically
+# assembles these into a `product_manifest.xml` prebuilt module that
+# lands at `system/product/etc/vintf/manifest.xml` (LOCAL_PRODUCT_MODULE
+# + LOCAL_MODULE_RELATIVE_PATH := vintf) via assemble_vintf. No
+# destination path math is required.
 #
-# A literal `system/product/etc/vintf/manifest.xml` destination was tried
-# first (in commit ce02562) and silently failed to land the file in
-# the staged tree — the build still reported NAME_NOT_FOUND at
-# check_vintf_all. `$(TARGET_COPY_OUT_PRODUCT)` is the correct path.
+# Two earlier approaches were tried and rejected:
+#
+#   1. PRODUCT_COPY_FILES with literal destination
+#      (commit ce02562):
+#      `device/qalos/qalos_emulator/vintf/product_manifest.xml:
+#       system/product/etc/vintf/manifest.xml`
+#      → File did not land in staged tree. check_vintf_all still
+#        reported NAME_NOT_FOUND. $(TARGET_COPY_OUT_PRODUCT) is
+#        empty after `lunch` on AOSP 15 (variable no longer exists
+#        in build/make).
+#
+#   2. PRODUCT_COPY_FILES with $(TARGET_COPY_OUT_PRODUCT)
+#      (commit 31cd7e0):
+#      → AOSP 15's build/make/core/Makefile:127 actively REJECTS
+#        VINTF metadata in PRODUCT_COPY_FILES with this error:
+#        `error: VINTF metadata found in PRODUCT_COPY_FILES: ...,
+#         use PRODUCT_MANIFEST_FILES / DEVICE_PRODUCT_COMPATIBILITY_MATRIX_FILE
+#         / vintf_compatibility_matrix / vintf_fragments instead!`
+#        The packaging step aborts before check_vintf_all even runs.
+#
+# PRODUCT_MANIFEST_FILES is the only correct, durable mechanism.
 #
 # If qalos ever ships product-side HALs (vendor/qalos/qalos_emulator/hal/
-# with .manifest.xml in product/etc/vintf/), this copy becomes a
-# `<hal>` element in the manifest body — the file itself stays.
+# with .manifest.xml in product/etc/vintf/), add the fragment paths here
+# as additional entries — assemble_vintf merges them.
 # ---------------------------------------------------------------------------
-PRODUCT_COPY_FILES += \
-    device/qalos/qalos_emulator/vintf/product_manifest.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/vintf/manifest.xml
+PRODUCT_MANIFEST_FILES += \
+    device/qalos/qalos_emulator/vintf/product_manifest.xml
 
 # Note: the qalos SELinux policy overlay is wired via BoardConfig.mk
 # (not here). AOSP's sepolicy build reads BOARD_SEPOLICY_DIRS from
