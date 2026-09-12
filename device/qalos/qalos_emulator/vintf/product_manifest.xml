@@ -14,9 +14,14 @@
   product-shipped HALs of its own (the HALs all live in vendor/ via the
   generic x86_64 vendor tree). The product manifest is therefore empty.
 
-  An empty <manifest> element with type="product" is the canonical
-  "no product HALs" answer; vintffm sees the file, reads the manifest
-  type, finds no entries to verify, and the frozen check passes.
+  An empty <manifest> element with type="device" is the canonical
+  "no product-shipped HALs" answer. **AOSP 15's vintf schema only accepts
+  type="device" or type="framework" (see
+  system/libvintf/include/vintf/SchemaType.h).** Earlier we shipped
+  type="product" and assemble_vintf rejected it with "unknown format".
+  type="device" with no <hal> entries is what AOSP's own empty
+  product manifests use. vintffm sees the file, finds no HAL entries
+  to verify against the level-5 frozen matrix, and the check passes.
 
   Wired by PRODUCT_MANIFEST_FILES in device/qalos/qalos_emulator/device.mk.
   AOSP 15's build system (system/libhidl/vintfdata/Android.mk) consumes
@@ -27,5 +32,5 @@
   manifest; PRODUCT_COPY_FILES for VINTF manifests is rejected by
   build/make/core/Makefile.
 -->
-<manifest version="1.0" type="product">
+<manifest version="1.0" type="device">
 </manifest>
