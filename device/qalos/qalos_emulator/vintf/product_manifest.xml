@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Empty product VINTF manifest for qalos emulator.
+
+  AOSP 15's vintffm frozen-manifest check (build/make/target/product/vintf/
+  check_vintf_all.mk, invoked during the final packaging step at
+  out/target/product/<product>/obj/PACKAGING/check_vintf_all_intermediates/
+  vintffm.log) walks the staged system/product/etc/vintf/manifest.xml. If
+  the file is missing, the check fails with NAME_NOT_FOUND and aborts the
+  build before any of the .img files are sealed, even when the actual
+  compilation has succeeded.
+
+  qalos inherits AOSP's aosp_x86_64 product, which does not declare any
+  product-shipped HALs of its own (the HALs all live in vendor/ via the
+  generic x86_64 vendor tree). The product manifest is therefore empty.
+
+  An empty <manifest> element with type="product" is the canonical
+  "no product HALs" answer; vintffm sees the file, reads the manifest
+  type, finds no entries to verify, and the frozen check passes.
+
+  Wired by PRODUCT_COPY_FILES in device/qalos/qalos_emulator/device.mk
+  so the file lands at system/product/etc/vintf/manifest.xml in the
+  system image (the dirmap /product path that vintffm checks).
+-->
+<manifest version="1.0" type="product">
+</manifest>
