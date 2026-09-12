@@ -147,6 +147,30 @@ PRODUCT_PROPERTY_OVERRIDES += \
     transition_animation_scale=0 \
     animator_duration_scale=0
 
+# ---------------------------------------------------------------------------
+# Product VINTF manifest.
+#
+# AOSP 15's final packaging step runs vintffm --check against
+# system/etc/vintf/manifest.xml (system + system_ext) and
+# system/product/etc/vintf/manifest.xml (product). The emulator product
+# inherits from aosp_x86_64 which does not declare any product-shipped
+# HALs, so the product manifest is empty — but vintffm still requires the
+# file to exist (otherwise the check fails with `NAME_NOT_FOUND` and
+# aborts the build before the .img files are sealed, even when compilation
+# has already succeeded).
+#
+# We copy an empty product manifest (vintf/product_manifest.xml) into the
+# product partition via PRODUCT_COPY_FILES. The destination path is
+# `system/product/etc/vintf/manifest.xml` — the dirmap /product path that
+# vintffm walks.
+#
+# If qalos ever ships product-side HALs (vendor/qalos/qalos_emulator/hal/
+# with .manifest.xml in product/etc/vintf/), this copy becomes a
+# `<hal>` element in the manifest body — the file itself stays.
+# ---------------------------------------------------------------------------
+PRODUCT_COPY_FILES += \
+    device/qalos/qalos_emulator/vintf/product_manifest.xml:system/product/etc/vintf/manifest.xml
+
 # Note: the qalos SELinux policy overlay is wired via BoardConfig.mk
 # (not here). AOSP's sepolicy build reads BOARD_SEPOLICY_DIRS from
 # BoardConfig.mk; setting it in device.mk is silently ignored on

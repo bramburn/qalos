@@ -20,7 +20,8 @@ qalos_emulator/
 ├── device.mk                   ← product additions: packages, properties
 ├── qalos_emulator.mk           ← product definition: name, branding, build id
 ├── overlay/                    ← framework resource overlay (Tier 1 strip)
-└── sepolicy/                   ← vendor SELinux overlay (see its AGENTS.md)
+├── sepolicy/                   ← vendor SELinux overlay (see its AGENTS.md)
+└── vintf/                      ← product VINTF manifest (empty; see note 11)
 ```text
 The four `*.mk` files are the contract the AOSP build system looks for
 by name. Do not rename or merge them.
@@ -77,6 +78,19 @@ by name. Do not rename or merge them.
    on the same day. Do not change the format.
 10. **`BUILD_VERSION_TAGS = qalos`.** This is the string AOSP uses to
     distinguish qalos builds from upstream AOSP. Keep it.
+11. **Empty product VINTF manifest is required.** AOSP 15's final
+    packaging step runs `vintffm --check` against
+    `system/etc/vintf/manifest.xml` (system + system_ext) **and**
+    `system/product/etc/vintf/manifest.xml` (product). The qalos
+    product inherits `aosp_x86_64` which does not declare any
+    product-shipped HALs, but vintffm still demands the file exist
+    — without it the build aborts at the packaging step with
+    `NAME_NOT_FOUND`. The empty manifest at
+    `vintf/product_manifest.xml` (a one-line `<manifest version="1.0"
+    type="product">` element) is wired via `PRODUCT_COPY_FILES` in
+    `device.mk` so it lands at `system/product/etc/vintf/manifest.xml`
+    in the system image. If qalos ever ships product-side HALs, add
+    `<hal>` elements to the manifest body — do NOT delete the file.
 
 ## Strip policy — what ships, what does not (Tier 1)
 
