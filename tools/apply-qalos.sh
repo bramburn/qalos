@@ -16,7 +16,7 @@
 #   2. Copies the qalos overlay directories into the working tree
 #      (`device/qalos/qalos_emulator/`, `packages/apps/QaLab/`,
 #      `vendor/qalos/`, plus the framework services source).
-#   3. Runs each of the six Python patch scripts (0002-0007) that
+#   3. Runs each of the eight Python patch scripts (0002-0009) that
 #      gate the RemoteControlService in the AOSP framework. Each
 #      edits one upstream AOSP file in place.
 #
@@ -171,8 +171,17 @@ copy_path \
 #                                        entry for REMOTE_CONTROL (the qalos
 #                                        flag is unreachable from framework-
 #                                        res so @FlaggedApi isn't an option).
+#   0009  system/libhidl/vintfdata/frozen/{5,6,7,8}.xml — mark
+#                                        android.hidl.allocator IAllocator
+#                                        as <optional>. qalos inherits
+#                                        aosp_x86_64 which does not ship
+#                                        ashmemd, but the frozen matrices at
+#                                        level 5+ declare IAllocator as
+#                                        required. Without this, vintffm
+#                                        fails the framework-vs-frozen check
+#                                        at the final packaging step.
 PATCH_DIR="$QALOS_REPO/packages/apps/RemoteControlService/patches"
-for n in 0002 0003 0004 0005 0006 0007 0008; do
+for n in 0002 0003 0004 0005 0006 0007 0008 0009; do
     patch_script="$(ls "$PATCH_DIR/${n}-"*.py 2>/dev/null || true)"
     if [ -z "$patch_script" ]; then
         echo "[apply-qalos] status=warn patch=${n} reason=missing-script"
