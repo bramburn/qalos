@@ -32,5 +32,5 @@
   manifest; PRODUCT_COPY_FILES for VINTF manifests is rejected by
   build/make/core/Makefile.
 -->
-<manifest version="1.0" type="device">
+<manifest version="1.0" type="framework">
 </manifest>
