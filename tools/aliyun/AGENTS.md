@@ -327,6 +327,14 @@ mv D:\qalos\.pi\aliyun-state.json.tmp D:\qalos\.pi\aliyun-state.json
 **Standing cost:** ¥8-12/month at ESSD PL1. The root AGENTS.md §6
 quotes ¥1/month — that is stale and was corrected in this run.
 
+**2026-09-13 note:** the image the 11-attempt build series actually
+launched from was the **HK AOSP-source base `m-j6c46j484tdz37urlgtn`**
+(cn-hongkong AOSP 15 source tree, copied to cn-guangzhou for the
+build VM) — not a Phase-3-style dependency-only image. The HK relay
+image is created by the §5.4.5 flow in the root AGENTS.md; the
+recipe above covers the generic deps image. Full build series:
+`website/docs/qa-lab-os/aosp-15-build-journal.md`.
+
 ## Phase 4 — Per-build (the actual LLM-driven flow)
 
 This is the main event. The LLM:

@@ -85,11 +85,16 @@ by name. Do not rename or merge them.
     product inherits `aosp_x86_64` which does not declare any
     product-shipped HALs, but vintffm still demands the file exist
     — without it the build aborts at the packaging step with
-    `NAME_NOT_FOUND`. The empty manifest at
-    `vintf/product_manifest.xml` (a one-line `<manifest version="1.0"
-    type="product">` element) is wired via `PRODUCT_COPY_FILES` in
-    `device.mk` so it lands at `system/product/etc/vintf/manifest.xml`
-    in the system image. If qalos ever ships product-side HALs, add
+    `NAME_NOT_FOUND`. The manifest is wired via
+    **`PRODUCT_MANIFEST_FILES`** at `device.mk:195` (NOT
+    `PRODUCT_COPY_FILES` — AOSP 15's `build/make/core/Makefile`
+    actively rejects VINTF metadata that way), and the shipped
+    element is `<manifest version="1.0" type="framework">` (see
+    `vintf/product_manifest.xml:35`). **Do not change the `type`:**
+    AOSP 15's `assemble_vintf` rejects both `type="product"`
+    (build attempt 9) and `type="device"` (build attempt 10) for
+    this file; `type="framework"` (attempt 11) is the only value
+    that passes. If qalos ever ships product-side HALs, add
     `<hal>` elements to the manifest body — do NOT delete the file.
 
 ## Strip policy — what ships, what does not (Tier 1)

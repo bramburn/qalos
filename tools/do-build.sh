@@ -58,6 +58,13 @@ log() { echo "[qalos][$(date -u +%H:%M:%S)] $*"; }
 # ----------------------------------------------------------------------------
 # CN mirror hook (added 2026-09-09 for the Aliyun LLM-driven path)
 # ----------------------------------------------------------------------------
+# DEAD (marked 2026-09-13): mirrors.aliyun.com/android.googlesource.com is a
+# FAKE mirror (marketing page; 404s on any actual git op) and github.com
+# TLS-fails with GnuTLS recv -110 from cn-hangzhou. Do NOT set
+# QALOS_USE_CN_MIRROR=1. The only working source path into cn-* is the
+# pre-staged tree (HK OSS relay custom image); see tools/aliyun/LESSONS.md.
+# This block is kept for history only.
+#
 # When QALOS_USE_CN_MIRROR=1 is set, override the fetch URL for the AOSP
 # remote to Aliyun's own AOSP mirror (mirrors.aliyun.com, served via Aliyun
 # CDN inside China). This avoids the TUNA rate-limit (capped at -j 4),
