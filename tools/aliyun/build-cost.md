@@ -8,6 +8,18 @@
 > doc quotes the Aliyun warm image as ¥1/month. The actual cost
 > at ESSD PL1 ¥1/GB/month on an 8-12 GB image is **¥8-12/month**.
 > The root doc was updated in this turn.
+>
+> **2026-09-13 reality check (the 11-attempt build series).** The
+> tables below are the 2026-09-09 *planning* numbers. The actual
+> build that finally produced the qalos emulator image ran on
+> **`ecs.u1-c1m8.4xlarge`** (16 vCPU / 128 GB, cn-guangzhou), not
+> `g7a.16xlarge`, and used **two standing custom images, not one**
+> — the HK AOSP-source base (`m-j6c46j484tdz37urlgtn`, cn-hongkong)
+> plus its cn-guangzhou copy — so standing cost is **~¥16-24/month**
+> (2 × ¥8-12/mo). Attempts 1-6 alone cost **~¥100 total** before a
+> single `.img` was produced (attempt 11 finished in ~47 min from a
+> hand-made 96%-done warm image). See
+> `website/docs/qa-lab-os/aosp-15-build-journal.md` for the series.
 
 ## Build instance: `ecs.g7a.16xlarge` Spot, 500 GB ESSD PL2
 
@@ -73,6 +85,12 @@ For comparison, the same 1.5-hour build on on-demand:
 | OSS bucket (optional, for artifact storage) | — | ¥0 if unused |
 | Egress (none when not building) | — | **¥0** |
 | **Idle total** | | **~¥10/month** |
+
+**Two-image reality (2026-09-13):** the build series that actually
+completed keeps **two** standing images — the HK AOSP-source base
+plus its cn-guangzhou copy — so the realistic idle total is
+**~¥16-24/month** (2 × ¥8-12/mo). If idle cost matters, delete the
+cn-guangzhou copy between builds (re-`CopyImage` is ~10-30 min).
 
 If the user wants ¥0 idle cost: delete the warm image between
 builds (`aliyun ecs DeleteImage --ImageId m-bp1xxxx`). Re-creating

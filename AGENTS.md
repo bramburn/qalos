@@ -691,6 +691,23 @@ scp /tmp/qalos-aosp.tar.gz <aliyun-user>@<aliyun-ip>:/path/to/aosp.tar.gz
 
 **Why this works:** Aliyun ECS can **receive** inbound connections from anywhere — it just can't initiate outbound to Google. The Linux box pushes the synced source to Aliyun over SSH.
 
+### 5.6 Known build & boot failures — documented on the website (2026-09-13)
+
+The AOSP 15 qalos build **succeeded on attempt 11** (~47 min,
+2026-09-13, Aliyun cn-guangzhou; ECS deleted). The **Windows
+emulator boot of the artifacts failed** (9 attempts) and is still
+under diagnosis. The full record lives in the website docs —
+**pointer only** (this repo defers to linked docs; do not duplicate
+content here):
+
+- [`website/docs/qa-lab-os/aosp-15-build-journal.md`](website/docs/qa-lab-os/aosp-15-build-journal.md) — the 11-attempt build history, fix-commit chain, artifact contract, and the corrected boot-failure narrative.
+- [`website/docs/qa-lab-os/emulator-boot-diagnosis.md`](website/docs/qa-lab-os/emulator-boot-diagnosis.md) — boot-failure evidence trail, hypothesis verdicts (WHPX / cmdline / initrd ruled out), most-plausible cause (paravirt bare hardware → LAPIC-timer window; kernel-version secondary), ranked experiments, do-not-try list.
+- [`website/docs/qa-lab-os/emulator-loading-recipe.md`](website/docs/qa-lab-os/emulator-loading-recipe.md) — the minimal file set (kernel / ramdisk / system / userdata; no super/vbmeta/boot), verified qalos sysdir state, AVD config fixes, cold-boot command, verification steps.
+
+Read the diagnosis + recipe pages **before** repeating any boot
+experiment — the old "kernel hangs at zonelists" theory is
+disproven (log truncation on force-kill faked it).
+
 ## 6. Cost rules
 
 | Item | Standing | Per AOSP build |

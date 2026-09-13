@@ -33,6 +33,12 @@ attempts start from here.
    returns an HTML marketing page to HEAD requests but
    `404`-s on any actual git operation
    (`info/refs?service=git-upload-pack`).
+   **DEAD (2026-09-13):** the `do-build.sh` CN-mirror hook
+   (`QALOS_USE_CN_MIRROR=1`, `tools/do-build.sh` ~lines 58-87)
+   points at exactly this fake mirror — keep the flag OFF. The
+   same restrictions mean github.com TLS-fails (`GnuTLS recv -110`)
+   from cn-hangzhou. Pre-staged source (HK OSS relay custom image)
+   is the only working path into cn-*.
 3. **Two working AOSP mirrors from Aliyun cn-hangzhou (via IPv6):**
    - **USTC**: `https://mirrors.ustc.edu.cn/aosp/`
      - `platform/manifest` → 200, `git-repo` → 200
@@ -137,6 +143,19 @@ User verified 2026-09-10 that Aliyun's developer mirror
 portal does not list AOSP as a first-class supported mirror
 the way TUNA and USTC do. The Aliyun "mirror" of AOSP is
 unusable.
+
+**DEAD (2026-09-13) — do not re-probe this namespace.** The
+`do-build.sh` CN-mirror hook (`QALOS_USE_CN_MIRROR=1`) still
+redirects `https://android.googlesource.com/` →
+`https://mirrors.aliyun.com/android.googlesource.com/` and
+`storage.googleapis.com/git-repo-downloads/` /
+`gerrit.googlesource.com/git-repo` →
+`https://mirrors.aliyun.com/aosp/git-repo/`. All three targets
+are fake (marketing page / no git data), and github.com itself
+TLS-fails from cn-hangzhou. The flag is commented DEAD in
+`tools/do-build.sh`; the only working source path into cn-* is
+the pre-staged AOSP tree shipped via the HK OSS relay custom
+image (`m-j6c46j484tdz37urlgtn` for the 2026-09-13 series).
 
 ## The fix that worked (one part of it)
 
@@ -319,7 +338,11 @@ situation:
   whole setup script.
 - **`$HOME` not set in systemd context.** The systemd unit
   needs `Environment=HOME=/root` explicitly, or `ccache` and
-  other tools that read `~/.ccache` will fail silently.
+  other tools that read `~/.ccache` will fail silently. In
+  particular, a **20 GB `ccache` cap** configured in the login
+  profile silently dies with HOME unset — ccache falls back to
+  its tiny default cache and the build just gets slower, with no
+  error. Verified during the 2026-09-13 attempt-11 series.
 - **UserData is ephemeral.** Every new instance launch loses
   UserData. The setup script must be re-run (e.g., via a
   systemd unit that clones the qalos repo and runs

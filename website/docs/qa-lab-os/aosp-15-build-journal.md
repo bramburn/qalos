@@ -3,7 +3,7 @@ id: aosp-15-build-journal
 title: Build journal — AOSP 15 (Sep 2026)
 sidebar_label: AOSP 15 build journal
 sidebar_position: 11
-description: The full story of the six build attempts that produced the first qalos emulator system.img. What failed, what fixed it, and what to never repeat.
+description: The full story of the eleven build attempts that produced the first qalos emulator system.img (attempt 11, 2026-09-13). What failed, what fixed it, and what to never repeat.
 ---
 
 # Build journal — AOSP 15 (September 2026)
@@ -11,7 +11,7 @@ description: The full story of the six build attempts that produced the first qa
 This is the **runtime counterpart** to
 [`lessons-learned.md`](./lessons-learned.md). That page captures
 the v0 patch-design mistakes (anchor mismatches, removed APIs, AIDL
-wiring). This page captures the **6-build attempt journey** that
+wiring). This page captures the **11-build attempt journey** that
 followed: the runtime failures that only surface when `m` actually
 runs, the cloud-build infrastructure that had to evolve to support
 it, and the AOSP 15 quirks catalogue that should be the first stop
@@ -22,10 +22,13 @@ same problem.
 
 ## Executive summary
 
-Six build attempts, ~12 hours of CPU time, ~¥100 in Aliyun Spot
-spend. The **first bootable `.img` set** was produced on the 7th
-attempt (after the resize to a bigger VM, which is when this doc
-was written). Each attempt failed at a different layer:
+Eleven build attempts; the first six alone cost ~¥100 in Aliyun
+spend. The **first complete `.img` set** was produced on the
+**11th** attempt (`type="framework"` product manifest, ~47 min on
+a warm 96%-done `/out/` cache). An early draft of this doc claimed
+the 7th attempt produced a bootable set — **that was wrong**: the
+7th attempt failed on IAllocator and never finished. Each attempt
+failed at a different layer:
 
 | # | Stage reached | Failure mode | Fix commit |
 |---|---|---|---|
@@ -35,7 +38,11 @@ was written). Each attempt failed at a different layer:
 | 4 | 9% — javac | `Display.Mode.getWidth()` removed too — fix used wrong API | `0881859` |
 | 5 | 96% — checkapi | `REMOTE_CONTROL` in `current.txt` is a `@hide` — must be REMOVED, not ADDED | `061e180` |
 | 6 | 96% — vintffm | `system/product/etc/vintf/manifest.xml` `NAME_NOT_FOUND` | `ce02562` (this build attempt) |
-| 7 | running | (in progress on bigger machine) | — |
+| 7 | assembly | IAllocator failure on the resized VM — the earlier "7th attempt bootable" claim in this doc was **wrong** | — |
+| 8 | packaging | VINTF metadata via `PRODUCT_COPY_FILES` rejected by `build/make/core/Makefile`; moved to `PRODUCT_MANIFEST_FILES` | `ded2a57` |
+| 9 | packaging | product manifest ships `type="product"` — `assemble_vintf` rejects it | `360d661` (patch 0009) |
+| 10 | packaging | `type="device"` — also rejected for a *product* manifest | `96a10e7` |
+| 11 | **DONE (~47 min)** | `type="framework"` — `assemble_vintf` accepts it; `m` completes, four `.img` files produced | `8ee959e` (packaging), `f2eeda9` (patch 0010) |
 
 The pattern: **every layer of the AOSP build has its own
 validation gate**, and the gates get stricter as you approach
@@ -119,6 +126,74 @@ Steps (all completed):
 
 Net: 96% of the build work preserved, machine 2× larger, ~3 hours
 estimated wall to bootable `.img`.
+
+### Phase 4: Attempts 7-11 (Sep 13) — the packaging gauntlet, first complete `.img` set
+
+Attempts 7-11 all ran on the resized `ecs.u1-c1m8.4xlarge`
+(16 vCPU / 128 GB) VM, resuming the 96% `/out/` cache that the
+Phase-3 snapshot preserved. Commit chain in order:
+`ded2a57` (PRODUCT_MANIFEST_FILES) → `360d661` (patch 0009) →
+`96a10e7` (type=`device` for the empty product manifest) →
+`8ee959e` (packaging fixes) → `f2eeda9` (patch 0010) →
+`dc73324` (this journal doc). (`31cd7e0`, the first
+`PRODUCT_COPY_FILES` attempt that `build/make/core/Makefile`
+rejected, predates `ded2a57` — see the comment at
+`device/qalos/qalos_emulator/device.mk:180-196`.)
+
+| # | What happened | Fix |
+|---|---|---|
+| 7 | `m` reaches the assembly step, then fails on **IAllocator**. Nothing was bootable from this attempt — the "7th attempt bootable" line in the first draft of this doc was simply wrong. | — |
+| 8 | VINTF metadata in `PRODUCT_COPY_FILES` aborts packaging (`error: VINTF metadata found in PRODUCT_COPY_FILES ... use PRODUCT_MANIFEST_FILES ... instead!`). The empty product manifest is rewired via `PRODUCT_MANIFEST_FILES`. | `ded2a57` |
+| 9 | Product manifest ships with `type="product"` — `assemble_vintf` rejects the value for this file. | `360d661` (patch 0009) |
+| 10 | `type="device"` — also rejected for a **product** manifest (device type is for the device manifest, not the product one). | `96a10e7` |
+| 11 | **`type="framework"` works.** `m` completes in **~47 min**; the four `.img` files are produced. This attempt ran **PostPaid / NoSpot** (state file), not the default `SpotAsPriceGo`. | `8ee959e` (packaging fixes), `f2eeda9` (patch 0010) |
+
+**Repro gaps to close before the next series:**
+
+- **Warm-resume win is hand-made, not automatic.** The 47-min
+  attempt 11 depended on a 96%-done `/out/` cache preserved by a
+  **manual** snapshot → `CreateImage` during the Phase-3 resize.
+  There is **no automated snapshot-before-teardown** anywhere in
+  the build flow — an attempt that dies after artifacts land (or
+  before) loses the cache unless an agent snapshots it first.
+- **Attempt 11 ran NoSpot** while the defaults are `SpotAsPriceGo`.
+  The state file records it; keep the deviation visible in the
+  build-state file (`spot: false`) so cost accounting stays honest.
+- **HK source image id:** the warm image this series launched from
+  is `m-j6c46j484tdz37urlgtn` (cn-hongkong AOSP-15 source tree,
+  copied to cn-guangzhou). It previously appeared in **no repo
+  doc**; it is recorded here and in `tools/aliyun/AGENTS.md`
+  (Phase 3 — Warm image).
+- **`build-cost.md` drift:** the planning cost doc still models one
+  cn-hangzhou warm image and a `g7a.16xlarge`; the real stack is
+  `ecs.u1-c1m8.4xlarge` with **two** standing images (HK base +
+  cn-guangzhou copy) at ~¥8-12/mo each, and attempts 1-6 cost
+  ~¥100 total. `tools/aliyun/build-cost.md` was updated 2026-09-13.
+
+## Artifact contract — what attempt 11 emitted
+
+`lunch qalos_emulator-trunk_staging-userdebug` produces a
+**legacy (non-dynamic-partition) image set**, not the
+`boot.img` + `super.img` + `vendor/product/system_ext` set that
+AOSP 15's modern-partition docs assume. Older qalos notes
+referencing the "modern" layout (or "five image files") do not
+apply to this product:
+
+| Artifact | Size (verified 2026-09-13) | Notes |
+|---|---|---|
+| `system.img` | 2048 MB (2 GiB, 2147483648 B) | raw ext4; qalos system + product/system_ext content installed under `system/` (e.g. the product manifest at `system/product/etc/vintf/manifest.xml`) |
+| `userdata.img` | 550 MB (576716800 B) | the qalos data partition; **this** is the file the emulator must provision with `-wipe-data` — see [emulator-loading-recipe](./emulator-loading-recipe.md) |
+| `cache.img` | 66 MB (69206016 B) | cache partition |
+| `ramdisk.img` | 638 B | minimal empty initramfs (valid newc-cpio, gzip; **no `/init`**) — benign by design, see emulator-loading-recipe |
+| kernel | — | **absent from `out/` by design.** The emulator kernel is a **prebuilt**, not a build artifact: `prebuilts/qemu-kernel/x86_64/5.4/kernel-qemu2` (17,213,216 B, SHA256-verified). Do not search `out/` for a kernel. |
+
+No `boot.img` (system-as-root — the kernel is the prebuilt
+above), no `super.img` / `vbmeta.img` (no dynamic partitions; the
+userdebug image has **no AVB** → unverified boot), and no separate
+`vendor.img` / `product.img` / `system_ext.img` (that content is
+installed into `system.img`; the emulator synthesizes its
+partition table from whatever files exist in the sysdir — see
+[emulator-loading-recipe](./emulator-loading-recipe.md)).
 
 ## AOSP 15 build runtime quirks — the catalogue
 
@@ -244,19 +319,23 @@ HALs.
 Symptom: `FAILED: ... check_vintf_all_intermediates/vintffm.log`
 followed by `Fetch 'out/target/product/<product>/system/product/etc/vintf/manifest.xml': NAME_NOT_FOUND`.
 
-Fix: ship an empty product VINTF manifest. Add a one-line XML:
-
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<manifest version="1.0" type="product"></manifest>
-```
-
-Wire via `PRODUCT_COPY_FILES` in `device.mk`:
+Fix: ship an **empty** product VINTF manifest, wired via
+`PRODUCT_MANIFEST_FILES` — the only mechanism AOSP 15 accepts
+(`PRODUCT_COPY_FILES` for VINTF metadata is rejected outright by
+`build/make/core/Makefile`):
 
 ```makefile
-PRODUCT_COPY_FILES += \
-    device/qalos/qalos_emulator/vintf/product_manifest.xml:system/product/etc/vintf/manifest.xml
+PRODUCT_MANIFEST_FILES += \
+    device/qalos/qalos_emulator/vintf/product_manifest.xml
 ```
+
+The manifest element is `<manifest version="1.0" type="framework">`.
+**The `type` matters, and only `framework` works for this file:**
+`assemble_vintf` accepts `device|framework`, and neither
+`type="product"` (build attempt 9) nor `type="device"` (build
+attempt 10) survives when the file is assembled as a *product*
+manifest. Do not "fix" the type back to product/device without
+re-running a full build — the packaging step checks it.
 
 This is now `note 11` in `device/qalos/qalos_emulator/AGENTS.md`.
 The `apply-qalos.sh` script copies `device/qalos/qalos_emulator/`
@@ -449,72 +528,101 @@ failed for this reason.
   `MEMORY.md`) — the qalos-specific `apply-qalos.sh`, `BUILD_ID`,
   do-build.sh, and HK-relay entries are searchable by those keys.
 
-## Windows emulator boot — known broken (Sep 12)
+## Windows emulator boot — failed and mis-diagnosed (Sep 12-13)
 
-After the cn-guangzhou build 11 succeeded (47m 02s, all four .img files
-downloaded to Windows), we tried to boot the artifacts in the local
-Windows Android emulator. **Every boot attempt hung the same way:**
+The qalos artifacts failed to boot in the local Windows Android
+emulator — **9 attempts, all ending before rootfs**. An early draft
+of this section blamed a kernel hang at "Built 1 zonelists" inside
+`build_all_zonelists()`. **That diagnosis was disproven** by the
+captured boot logs (all in `C:\Users\bramburn\AppData\Local\Temp\2\`):
+the guest was never stuck — every capture was force-killed while
+the kernel was still printing.
 
-```
-[    0.000000] Linux version 5.4.78-android12-0-00528-...
-[    0.000000] Command line: ... root=/dev/vda init=/init androidboot.selinux=permissive ...
-[    0.000000] BIOS-e820: ...
-[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 1032035
-```
+### Symptom vs reality — the "zonelists hang" myth
 
-…and then silence. The kernel hangs in `mm_init()` →
-`sched_init()`, very early — before any initrd / rootfs / block-device
-work. qemu sits at <1 CPU second; adb device stays offline.
+| Old claim (WRONG) | Verified reality |
+|---|---|
+| Kernel hangs at "Built 1 zonelists" in mm_init / sched_init | Boot proceeds **past** zonelists (emu5_out.log, 1010 lines): line 995 `Built 1 zonelists` → 996 `Kernel command line` → 997-998 dentry/inode hash → **1000 `Memory: 4018256K/4193760K available` (mm_init DONE)** → 1002 SLUB → 1003-1008 RCU init → 1009 init_IRQ → **1010 `rcu: Offload RCU ca…` cut mid-word at EOF** |
+| All attempts die at the same point | No — each capture ends at a **different** point, mid-operation: emu5_out.log (1010 lines) cut mid-word in RCU init; emu7_out.log (140 lines) ends mid-ACPI-dump (last line `ACPI: FACS 0x00000000BFFE00`); emu8_out.log (138 lines) ends mid-line on an ACPI FACP record (`… v01 BOCHS  BXPCF`) |
+| Kernel is stuck / qemu spins at <1 CPU-s | The captures were **force-killed** while the guest was still printing. Real behaviour: a race-dependent stall, always < ~0.5 CPU-s of guest time, always **before** timers / calibration / SMP-AP-bringup — the next units after init_IRQ in 5.4 (tick_init → init_timers → hrtimers → timekeeping → time_init → calibrate_delay → SMP bringup → rest_init → rootfs → /init) are **never reached** |
+| Possible "memory mismatch" | `Total pages: 1032035` × 4 KiB = 4,129,341,440 B ≈ 4 GiB = `hw.ramSize` — **normal**, not a mismatch |
 
-### What we tried (all hang at the same point)
+*Capture caveat:* the truncation above is an artefact of **pipe
+redirect** (emulator stdout piped to the log), which truncates the
+instant the process is force-killed. Serial-append capture
+(`-qemu -serial file:...`) does not truncate — use it for any
+re-run.
+
+### What we tried (9 attempts — none reached rootfs)
 
 | Attempt | Variation | Result |
 |---|---|---|
 | v1 | Default `emulator.exe -avd pixel_8_hsk` (AVD sysdir pointed at qalos images) | Booted *Android 12 stock* — emulator silently fell back to the SDK AVD, ignoring our `image.sysdir.1` override. |
-| v2 | Explicit `-system/-data/-cache/-kernel/-ramdisk` flags pointing at the qalos images | Hung at "Built 1 zonelists". Kernel was corrupt (`FF FF FF FF` header). |
-| v3 | Pulled the real `5.4/kernel-qemu2` from cn-guangzhou (17 MB, SHA verified) and the qalos 638-byte `ramdisk.img` | Hung at "Built 1 zonelists". |
-| v5 | Added `-show-kernel` for visibility | Confirmed kernel reaches the zonelists print but no further. Cmdline has no `init=`/`root=`. |
-| v7 | Added AVD `kernel.parameters=root=/dev/vda init=/init androidboot.selinux=permissive` (emulator.exe splices this into the qemu `-append`) | Cmdline now correct, but kernel still hangs at "Built 1 zonelists". |
-| v8 | Same as v7 but without `-ramdisk` (let kernel mount system.img directly via root=) | Same hang. |
+| v2 | Explicit `-system/-data/-cache/-kernel/-ramdisk` flags pointing at the qalos images | Kernel corrupt (`FF FF FF FF` header); capture ended early. |
+| v3 | Pulled the real `5.4/kernel-qemu2` from cn-guangzhou (17 MB, SHA verified) and the qalos 638-byte `ramdisk.img` | Capture ended early — later confirmed to be truncation-on-kill, not a hang. |
+| v5 | Added `-show-kernel` for visibility | Confirms zonelists + mm_init reached; cmdline has **no** `init=`/`root=` (emu5_out.log:996). Capture truncated at 1010 lines, mid-word. |
+| v7 | Added AVD `kernel.parameters=root=/dev/vda init=/init androidboot.selinux=permissive` (emulator.exe splices this into the qemu `-append`) | Cmdline now correct — full canonical set incl. `console=ttyS0,38400 earlyprintk androidboot.hardware=ranchu` (emu7_out.log:104). Capture truncated mid-ACPI-dump at 140 lines. |
+| v8 | Same as v7 but without `-ramdisk` (let kernel mount system.img directly via root=) | Capture truncated at 138 lines, mid-line (`... BXPCF`). |
 | v9 | `-accel off` (TCG only, no WHPX) | emulator.exe refused the flag; no qemu spawned. |
 
-### Diagnosis
+### Verified controlled evidence (Sep 12-13)
 
-The kernel log shows the boot progresses through:
-- `start_kernel()` → `setup_arch()` → `setup_per_cpu_areas()` →
-  `page_address_init()` → `setup_per_cpu_areas()` →
-  `smp_prepare_boot_cpu()` → `build_all_zonelists()` ← HANGS HERE
+- **WHPX-in-general: RULED OUT.** A stock `android-31` Pixel_8 AVD
+  booted to completion on this exact host / emulator / WHPX stack:
+  `C:\Users\bramburn\AppData\Local\Temp\2\emulator.log:149` =
+  `INFO         | Boot completed in 63090 ms`.
+- **Cmdline parity: RULED OUT as the stall cause.** v7/v8 already
+  carried the full canonical set (incl. `console=ttyS0,38400
+  earlyprintk androidboot.hardware=ranchu` — emu7_out.log:104).
+- **Initrd / layout / board: RULED OUT.** No initrd work was ever
+  reached; and the correct ranchu ELF kernel decompresses +
+  relocates fine (emu8_out.log:88-102: `Parsing ELF... Performing
+  relocations... done.` / `Booting the kernel.`).
+- **Most plausible cause:** emu5_out.log:991 `Booting
+  paravirtualized kernel on bare hardware` + emu5_out.log:952
+  `tsc: Fast TSC calibration failed` — no hypervisor signature is
+  exposed (Hyper-V enlightenments missing from the WHPX exposure),
+  so the guest relies on the emulated TSC/PIT/LAPIC and dies in
+  the LAPIC-timer / IPI window right after init_IRQ.
+- **Secondary suspect:** kernel version. Our `kernel-ranchu` is
+  5.4.78 (17,213,216 B, SHA256-verified AOSP 15 prebuilt
+  `5.4/kernel-qemu2`); AOSP 15 leans GKI 6.x and the emulator
+  ships 6.1/6.6/6.12 prebuilts. The stock API-35-ext15 kernel is
+  20,374,528 B.
 
-This is **before** any of:
-- `page_alloc_init()` / `mm_init()` completion
-- `sched_init()`
-- `preempt_enable()`
-- initrd load
-- virtio-blk probe
-- rootfs mount
+Full hypothesis verdict table, canonical cmdline, and the record
+for future agents: [emulator-boot-diagnosis](./emulator-boot-diagnosis.md).
 
-The hang is in the early page allocator or zone init — most likely a
-**WHPX / qemu 37.1.11.0 / AOSP 5.4 kernel compatibility issue** on
-this Windows host (NVIDIA RTX 3060, WHPX 10.0.17763). The kernel
-can decompress itself and run initial code, but never gets the
-memory subsystem fully online under WHPX.
+### Ranked next experiments (all free / local; NOT yet executed)
 
-The AOSP 15 emulator kernel build (5.4.78) is the **most recent
-prebuilt** in
-`prebuilts/qemu-kernel/x86_64/5.4/kernel-qemu2`. No newer prebuilt
-exists in the AOSP 15 tree.
+1. **Fresh stock API-35 control AVD boot (~15 min)** — decisively
+   separates "emulator + WHPX + API-35 kernel generically" from
+   "qalos artifacts".
+2. **Artifact bisect from the known-good Pixel_8 AVD (~30 min)** —
+   point `image.sysdir.1` at the qalos dir, remove
+   `kernel.parameters` + flag overrides, then swap
+   kernel → ramdisk → system.img one at a time against the
+   stock files.
+3. **Re-run the android-31 control with `-show-kernel`**, capturing
+   via `-qemu -serial file:...` (NOT pipe redirect — the
+   truncation on kill is what faked the original "hang").
 
-### Workarounds that did NOT help
+Run list 1 before touching qalos files again: it also re-baselines
+the boot expectation on this host.
 
-- Dropping `-ramdisk` (kernel still hangs before initrd load)
-- Using `-kernel` flag with a real kernel from cn-guangzhou
-- Adding `kernel.parameters` with `init=/init root=/dev/vda`
-- `swiftshader_indirect` GPU (vs host GPU)
-- `-memory 2048 -cores 2` (less resources)
-- Different AVD (`pixel_8_hsk` is the only AOSP-35-capable AVD on
-  this host)
+### Do NOT try
 
-### Lessons learned
+- **Building goldfish 5.4 "for AOSP 15"** — the last goldfish
+  branch is `android-goldfish-5.4-dev`, two majors behind GKI.
+- **Rebuilding system.img** — never reached; the guest never got
+  near rootfs.
+- **Chasing the Total-pages number** — it is exactly 4 GiB and
+  normal.
+- **Switching to AEHD** — sunsets Dec 2026.
+- **`-no-accel` as a fix** — debug only, and v9 showed the flag
+  is refused by this emulator build anyway.
+
+### Lessons learned that survived the re-diagnosis
 
 - **`emulator.exe` doesn't accept `-append`.** Use AVD
   `kernel.parameters=<space-separated-k=v>` instead. The qemu
@@ -523,41 +631,72 @@ exists in the AOSP 15 tree.
   Only `kernel.parameters` works.
 - **PowerShell `ssh ... cat > $file` corrupts binary files.**
   Use `scp -i $key user@host:/path $dst`. SSH cat is fine for text.
-- **The qalos AOSP 15 build doesn't produce a real initrd** —
+- **The qalos AOSP 15 build doesn't produce a real initrd by default.**
   `out/.../qalos_emulator/ramdisk.img` is a 638-byte gzipped
-  placeholder. The build relies on system-as-root (kernel mounts
-  system.img directly and runs `/init` from there), which is why
-  `kernel.parameters init=/init root=/dev/vda` is mandatory for boot.
+  `debug_ramdisk` placeholder (just empty directory skeletons + dev
+  nodes + a `build.prop`). The qalos kernel (5.4.78, 17,213,216 B
+  prebuilt) also has **no built-in initramfs** (binary scan: 0
+  newc-cpio hits across 17 MB; stock API-35 has 3 hits, stock
+  android-31 has 1). So the default config produces an unbootable
+  image. The "relies on system-as-root" framing above was wrong —
+  the qalos kernel is **not** configured with `system-as-root`, and
+  even if it were, the empty ramdisk has no `lib/modules/*.ko` to
+  load virtio_blk. T3 (2026-09-13) confirmed: kernel boots fully on
+  this WHPX host, then `VFS: Cannot open root device "vda"` and
+  reboot-loops. **Fix (single change, unblocks boot):**
+  `INITRAMFS_IMAGE := initrd` in `BoardConfig.mk` (plus
+  `BUILD_INIT_KERNEL_IMAGE := true` as belt-and-suspenders). The
+  build system then produces the standard AOSP 15 initramfs with
+  `/init`, `init.rc`, `fstab.qalos_emulator`, `ueventd.rc`,
+  `default.prop`, and the virtio modules, and appends it to the
+  kernel during packaging. See attempt 13 below.
 
-### Open questions for the next contributor
+### Open questions — now resolved by the initramfs fix
 
-1. Does a real initrd (built on cn-guangzhou with the standard AOSP
-   contents: /init, /init.rc, /init.environ.rc, /ueventd.rc,
-   /default.prop, /fstab.goldfish) unblock the boot? The kernel
-   would still hang at the same point if the issue is WHPX-related,
-   not initrd-related.
-2. Is there an AOSP 6.x / Android 16 kernel prebuilt in a newer
-   AOSP source tree? The 5.4 prebuilt may simply be too old for
-   Windows 10 + WHPX 10.0.17763 + qemu 37.
-3. Can the qalos device config enable `TARGET_BOOTIMAGE_USE_ELF` or
-   similar to skip the kernel/initrd split? This is an AOSP build
-   flag that might force the system.img to include a working initrd
-   internally.
-4. Should we add a `cf_x86_64_phone-userdebug` build target instead
-   of `qalos_emulator`? The `cf_x86_64_phone` is the standard AOSP
-   x86_64 emulator phone target, and its build system *does*
-   produce a working initrd. The qalos device.mk may be too minimal
-   compared to the goldfish/cf_x86_64 templates it inherits from.
+The previous open-question list (real initrd?, newer kernel?,
+boot-image flags?, `cf_x86_64_phone`?) is **resolved**: the
+empty-ramdisk diagnosis is verified by T3, and the fix is the
+single `INITRAMFS_IMAGE := initrd` line below. No kernel swap,
+no `cf_x86_64_phone`, no boot-image flag changes are needed.
+
+### Attempt 13 — the initramfs fix (2026-09-13, in flight)
+
+After T1–T4 verified the qalos kernel has no initramfs and the
+638-byte stub ramdisk has no modules, this attempt adds
+`INITRAMFS_IMAGE := initrd` to
+`device/qalos/qalos_emulator/BoardConfig.mk` (commit at HEAD).
+Build target:
+
+| Item | Value |
+|---|---|
+| Image | `m-7xv5vtreznnwb509t3y0` (CreateImage from `s-7xv3kduiljyc6i2ffgny`, the 96% warm cache from attempt 11) |
+| Instance | `i-7xvdd8coriz1err9ykr6` (`ecs.u1-c1m8.4xlarge`, 16 vCPU / 128 GB, cn-guangzhou-a) |
+| Build | `m -j16` from the 96% warm cache — only the kernel-initramfs-append + packaging re-run |
+| Watchdogs | (a) cron `09 12 * * * /sbin/shutdown -h now`, (b) bg `sleep 5400 && /sbin/shutdown -h now` PID 3698 — 90 min from build start |
+| Monitor | `mavis cron 61ee321f-e3f6-444a-94e0-d0356f10797f` (every 8 min) — probes build, downloads artifacts via `scp`, deletes VM, self-deletes |
+| Expected wall | 10–30 min from 96% warm cache |
+| Expected spend | ~¥3–5 |
+
+Outcome (success / failure / further fix needed) to be appended
+once the build completes; the T3/T4 narrative above remains
+accurate regardless.
 
 ### Status as of this commit
 
-The qalos build artifacts are **valid** — `m` completed successfully
-and the four `.img` files are well-formed ext4/sparse images with
-the qalos packages inside. The boot test is **blocked on a Windows
-emulator host issue**, not on the qalos code. Treat this as a known
-limitation when picking up the project.
+The qalos build artifacts from attempt 11 are **valid but
+unbootable** — `m` completed and the four `.img` files are
+the expected sizes with the qalos packages inside, but the
+638-byte `ramdisk.img` is a `debug_ramdisk` stub (no init, no
+modules, no fstab) and the kernel has no built-in initramfs
+either. Attempt 13 above fixes this with a one-line
+`BoardConfig.mk` change. The cn-guangzhou build ECS used by
+attempts 1–11 is **deleted** (2026-09-13); attempt 13 uses a
+fresh ECS from a snapshot of the 96% warm-cache disk.
 
-The cn-guangzhou build VM will auto-shutdown via the on-host bash
-watchdog at 20:03 CST on Sep 13 (`sleep 14400`). The .img files are
-preserved locally at `D:\qalos\.pi\out\qalos-cn-guangzhou-2026-09-13\`
-and can be retried in a future emulator session.
+Previous artifacts are preserved at
+`D:\qalos\.pi\out\qalos-cn-guangzhou-2026-09-13\` (broken);
+the verified emulator sysdir is at
+`D:\qalos\.pi\out\qalos-sys-img\android-35-ext15\default\x86_64\`.
+Once attempt 13 artifacts arrive in
+`D:\qalos\.pi\out\qalos-patched-2026-09-13\`, they become the
+new boot source.
