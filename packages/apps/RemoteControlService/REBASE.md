@@ -1,6 +1,6 @@
 # REBASE — RemoteControlService
 
-This document explains how to bring the three patches in `patches/`
+This document explains how to bring the nine patches in `patches/`
 up to date when a new AOSP release shifts the file layout, and how
 to update the SELinux policy overlay in
 `device/qalos/qalos_emulator/sepolicy/`.
@@ -51,7 +51,7 @@ For each failing patch:
 4. **Verify** with the dry-run recipe in
    [`lessons-learned.md`](../../../website/docs/qa-lab-os/lessons-learned.md).
    Download the real upstream file, run `check-patches.py`
-   against the fake working tree, and confirm all three
+   against the fake working tree, and confirm all nine
    patches report `OK`.
 
 5. **Commit** the change as a follow-up commit titled
