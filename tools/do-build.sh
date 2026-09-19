@@ -20,7 +20,7 @@
 #     AOSP_TAG           default: android-15.0.0_r1
 #     BUILD_TARGET       default: qalos_emulator
 #     BUILD_VARIANT      default: userdebug
-#     MAX_RUNTIME_MINUTES default: 240  (4 hours; watchdog hard-kills the build at this point)
+#     MAX_RUNTIME_MINUTES default: 480  (8 hours; watchdog hard-kills the build at this point — covers a clean first build that takes 5-6 hours per aosp-15-build-journal.md)
 #     BUILD_JOBS         default: $(nproc)
 #     BUILD_DIR          default: $HOME/aosp
 
@@ -44,7 +44,7 @@ BUILD_TARGET="${BUILD_TARGET:-qalos_emulator}"
 # BUILD_RELEASE=foo to use a different label (e.g. a build-number cut).
 BUILD_RELEASE="${BUILD_RELEASE:-trunk_staging}"
 BUILD_VARIANT="${BUILD_VARIANT:-userdebug}"
-MAX_RUNTIME_MINUTES="${MAX_RUNTIME_MINUTES:-240}"
+MAX_RUNTIME_MINUTES="${MAX_RUNTIME_MINUTES:-480}"
 BUILD_DIR="${BUILD_DIR:-$HOME/aosp}"
 
 # log() must be defined before any code that uses it. (Restored 2026-09-10;
