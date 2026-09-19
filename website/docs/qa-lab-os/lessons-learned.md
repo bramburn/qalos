@@ -58,17 +58,21 @@ gaps, not text-mismatch gaps):
 - **SELinux policy.** AOSP requires `service_contexts`,
   `service.te`, and `system_server.te` entries for any new system
   service that binds a TCP socket; the v0 had none. Fix: added a
-  sepolicy overlay in `device/qalos/qalos_emulator/sepolicy/`
-  and wired it via `BOARD_SEPOLICY_DIRS` in `BoardConfig.mk` (NOT
-  `device.mk` — the AOSP sepolicy build reads the var from
-  `BoardConfig.mk`; `device.mk` is silently ignored).
+  sepolicy overlay in `vendor/qalos/qalos_emulator/sepolicy/`
+  and wired it via `BOARD_VENDOR_SEPOLICY_DIRS` in `BoardConfig.mk`
+  (NOT `BOARD_SEPOLICY_DIRS` — that variable is for system policy;
+  AOSP 15's Treble requires the vendor-prefixed form for any
+  policy under `/vendor/`). The variable must live in
+  `BoardConfig.mk`; setting it in `device.mk` is silently ignored.
 
 The lesson: the dry-run catches text-level mismatches. The
 web-research step catches architectural-level gaps ("you're not
 editing file X at all"). Both are needed.
 
-The fix: download the four target files from
-`https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-15.0.0_r1/<path>?format=TEXT`,
+The fix: download the target files from
+`https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-15.0.0_r1/<path>?format=TEXT`
+and `https://android.googlesource.com/platform/system/libhidl/+/refs/tags/android-15.0.0_r1/<path>?format=TEXT`
+(eight files under frameworks/base, four under system/libhidl),
 decode the base64, drop them into a fake AOSP working tree at
 the right relative paths, and run the patch scripts against the
 tree. **5 minutes of setup catches bugs that two review passes
@@ -166,15 +170,19 @@ $base = "https://android.googlesource.com/platform/frameworks/base/+/refs/tags/a
 $out  = ".tmp/aosp-15"
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 
-# 1. Fetch each target file
-$files = @(
+# 1. Fetch each target file (frameworks/base)
+$fwBase = "https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-15.0.0_r1"
+$fwFiles = @(
   "services/core/Android.bp",
   "core/res/AndroidManifest.xml",
   "core/res/res/values/strings.xml",
-  "services/java/com/android/server/SystemServer.java"
+  "services/java/com/android/server/SystemServer.java",
+  "core/api/current.txt",
+  "core/api/system-current.txt",
+  "core/api/system-lint-baseline.txt"
 )
-foreach ($f in $files) {
-  $url = "$base/$($f)?format=TEXT"
+foreach ($f in $fwFiles) {
+  $url = "$fwBase/$($f)?format=TEXT"
   $dst = Join-Path $out $f
   New-Item -ItemType Directory -Force -Path (Split-Path $dst) | Out-Null
   $resp = Invoke-WebRequest -Uri $url -UseBasicParsing
@@ -182,16 +190,37 @@ foreach ($f in $files) {
   Set-Content -Path $dst -Value ([System.Text.Encoding]::UTF8.GetString($bytes)) -Encoding utf8
 }
 
-# 2. Mirror into a fake AOSP working tree
-$wt = ".tmp/aosp-15-frameworks"
-New-Item -ItemType Directory -Force -Path "$wt/frameworks/base" | Out-Null
-Copy-Item -Recurse "$out/services" "$wt/frameworks/base/services"
-Copy-Item -Recurse "$out/core"     "$wt/frameworks/base/core"
+# 2. Fetch the patch 0009 targets (system/libhidl)
+$sysBase = "https://android.googlesource.com/platform/system/libhidl/+/refs/tags/android-15.0.0_r1"
+$sysFiles = @(
+  "vintfdata/frozen/5.xml",
+  "vintfdata/frozen/6.xml",
+  "vintfdata/frozen/7.xml",
+  "vintfdata/frozen/8.xml"
+)
+$sysOut = ".tmp/aosp-15-system"
+New-Item -ItemType Directory -Force -Path $sysOut | Out-Null
+foreach ($f in $sysFiles) {
+  $url = "$sysBase/$($f)?format=TEXT"
+  $dst = Join-Path $sysOut $f
+  New-Item -ItemType Directory -Force -Path (Split-Path $dst) | Out-Null
+  $resp = Invoke-WebRequest -Uri $url -UseBasicParsing
+  $bytes = [System.Convert]::FromBase64String($resp.Content)
+  Set-Content -Path $dst -Value ([System.Text.Encoding]::UTF8.GetString($bytes)) -Encoding utf8
+}
 
-# 3. Run the pre-flight
+# 3. Mirror into a fake AOSP working tree
+$wt = ".tmp/aosp-15-tree"
+New-Item -ItemType Directory -Force -Path "$wt/frameworks/base" | Out-Null
+New-Item -ItemType Directory -Force -Path "$wt/system/libhidl" | Out-Null
+Copy-Item -Recurse "$out/services"  "$wt/frameworks/base/services"
+Copy-Item -Recurse "$out/core"      "$wt/frameworks/base/core"
+Copy-Item -Recurse "$sysOut/vintfdata" "$wt/system/libhidl/vintfdata"
+
+# 4. Run the pre-flight
 python3 packages/apps/RemoteControlService/patches/check-patches.py $wt
 
-# 4. Run each patch individually
+# 5. Run each patch individually
 foreach ($p in Get-ChildItem packages/apps/RemoteControlService/patches/000*.py) {
   python3 $p.FullName $wt
 }
