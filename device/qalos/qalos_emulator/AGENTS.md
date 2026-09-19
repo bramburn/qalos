@@ -16,7 +16,7 @@ a small vendor SELinux overlay for the Remote Control Service.
 ```text
 qalos_emulator/
 ├── AndroidProducts.mk          ← registers the product for `lunch`
-├── BoardConfig.mk              ← board + BOARD_SEPOLICY_DIRS
+├── BoardConfig.mk              ← board + BOARD_VENDOR_SEPOLICY_DIRS
 ├── device.mk                   ← product additions: packages, properties
 ├── qalos_emulator.mk           ← product definition: name, branding, build id
 ├── overlay/                    ← framework resource overlay (Tier 1 strip)
@@ -39,7 +39,7 @@ by name. Do not rename or merge them.
    It also calls `inherit-product` to pull in the AOSP base + `device.mk`.
 3. **`BoardConfig.mk` is board-level config.** It includes
    `device/generic/x86_64/BoardConfig.mk` and sets
-   `BOARD_SEPOLICY_DIRS`. **No product properties, no `PRODUCT_PACKAGES`**
+   `BOARD_VENDOR_SEPOLICY_DIRS`. **No product properties, no `PRODUCT_PACKAGES`**
    in this file — those belong in `device.mk`.
 4. **`device.mk` is product-level additions.** It adds packages
    (`PRODUCT_PACKAGES`) and product-wide property overrides
@@ -51,7 +51,7 @@ by name. Do not rename or merge them.
 
 ### AOSP-specific rules (these are non-obvious — read once, never trip on them)
 
-5. **`BOARD_SEPOLICY_DIRS` must be set in `BoardConfig.mk`.** Setting it
+5. **`BOARD_VENDOR_SEPOLICY_DIRS` must be set in `BoardConfig.mk`.** Setting it
    in `device.mk` is **silently ignored** on AOSP 14+/15+ for vendor
    policy. The SELinux overlay is wired from `BoardConfig.mk`, not from
    `device.mk`. See the rationale comment in `BoardConfig.mk`.
