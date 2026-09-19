@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-"""Check that the four qalos patches would apply cleanly to the given
-AOSP working tree. Exits 0 if all four apply, 1 otherwise.
+"""Check that the nine qalos patches would apply cleanly to the given
+AOSP working tree. Exits 0 if all nine apply, 1 otherwise.
 
 Usage:
     python3 packages/apps/RemoteControlService/patches/check-patches.py [WORK_TREE]
@@ -28,6 +28,9 @@ PATCHES = [
     "0005-AndroidManifest-REMOTE_CONTROL-FlaggedApi.py",
     "0006-services-core-aconfig-qalos.py",
     "0007-core-api-current-txt-REMOTE_CONTROL.py",
+    "0008-system-lint-baseline-UnflaggedApi-REMOTE_CONTROL.py",
+    "0009-frozen-matrix-IAllocator-optional.py",
+    "0010-system-current-txt-REMOTE_CONTROL.py",
 ]
 
 
