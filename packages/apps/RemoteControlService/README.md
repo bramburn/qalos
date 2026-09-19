@@ -15,10 +15,16 @@ packages/apps/RemoteControlService/
 │   ├── RemoteControlService.java      ← system service in system_server
 │   └── HttpApiServer.java             ← embedded HTTP/JSON front-end
 ├── patches/
-│   ├── 0002-AndroidManifest-REMOTE_CONTROL-permission.patch
-│   ├── 0003-strings-REMOTE_CONTROL.patch
-│   ├── 0004-SystemServer-StartRemoteControlService.patch
-│   └── check-patches.py               ← `git apply --check` for all three
+│   ├── 0002-AndroidManifest-REMOTE_CONTROL-permission.py
+│   ├── 0003-strings-REMOTE_CONTROL.py
+│   ├── 0004-SystemServer-StartRemoteControlService.py
+│   ├── 0005-AndroidManifest-REMOTE_CONTROL-FlaggedApi.py
+│   ├── 0006-services-core-aconfig-qalos.py
+│   ├── 0007-core-api-current-txt-REMOTE_CONTROL.py
+│   ├── 0008-system-lint-baseline-UnflaggedApi-REMOTE_CONTROL.py
+│   ├── 0009-frozen-matrix-IAllocator-optional.py
+│   ├── 0010-system-current-txt-REMOTE_CONTROL.py
+│   └── check-patches.py               ← subprocess runner with QALOS_PATCH_CHECK=1 for all nine
 └── tests/
     └── README.md                      ← placeholder for future on-target tests
 ```text
@@ -38,7 +44,7 @@ packages/apps/RemoteControlService/
 `tools/apply-qalos.sh` (in the qalos manifest repo) copies the
 `src/com/qalos/remotectl/` directory into the AOSP working tree at
 `frameworks/base/services/core/java/com/qalos/remotectl/` and
-applies the three patches. The build then compiles the service into
+applies the nine patches. The build then compiles the service into
 the `services.core` java_library, which is part of `system_server`.
 
 The build target is `qalos_emulator-trunk_staging-userdebug` (or
