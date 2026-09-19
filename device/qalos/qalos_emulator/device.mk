@@ -196,6 +196,6 @@ PRODUCT_MANIFEST_FILES += \
     device/qalos/qalos_emulator/vintf/product_manifest.xml
 
 # Note: the qalos SELinux policy overlay is wired via BoardConfig.mk
-# (not here). AOSP's sepolicy build reads BOARD_SEPOLICY_DIRS from
+# (not here). AOSP's sepolicy build reads BOARD_VENDOR_SEPOLICY_DIRS from
 # BoardConfig.mk; setting it in device.mk is silently ignored on
 # modern AOSP. See BoardConfig.mk in this directory.

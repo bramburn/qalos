@@ -6,9 +6,9 @@
 > of truth for cross-cutting rules. If they disagree, the root wins.
 
 This is a **vendor SELinux overlay**. It is wired into the AOSP sepolicy
-build via `BOARD_SEPOLICY_DIRS` in
+build via `BOARD_VENDOR_SEPOLICY_DIRS` in
 [`../BoardConfig.mk`](../BoardConfig.mk) — see the rationale comment there
-for why `BOARD_SEPOLICY_DIRS` must be set in `BoardConfig.mk` and not in
+for why `BOARD_VENDOR_SEPOLICY_DIRS` must be set in `BoardConfig.mk` and not in
 `device.mk`.
 
 ## What's in this folder
@@ -20,7 +20,7 @@ sepolicy/
 └── system_server.te           ← allow rules appended to upstream
 ```text
 The AOSP sepolicy build concatenates every directory listed in
-`BOARD_SEPOLICY_DIRS` with the upstream system policy. **Rules here are
+`BOARD_VENDOR_SEPOLICY_DIRS` with the upstream vendor policy. **Rules here are
 appended to (not replacing) the upstream AOSP system_server.te.**
 
 ## Opinions (folder-wide — read before editing any `.te` file)

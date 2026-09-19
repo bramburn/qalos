@@ -30,7 +30,7 @@ device/qalos/
 3. **The vendor folder stays thin.** No first-party qalos code (apps,
    daemons, init rc) lives directly in `device/qalos/`. Only product
    subfolders and their subfolders.
-4. **`BOARD_SEPOLICY_DIRS` belongs in the product's `BoardConfig.mk`,
+4. **`BOARD_VENDOR_SEPOLICY_DIRS` belongs in the product's `BoardConfig.mk`,
    not in `device.mk`.** AOSP 14+/15+ silently ignores it in `device.mk`
    for vendor policy. See
    [`qalos_emulator/BoardConfig.mk`](qalos_emulator/BoardConfig.mk)
