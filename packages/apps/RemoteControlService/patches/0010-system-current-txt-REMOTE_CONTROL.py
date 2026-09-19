@@ -22,27 +22,32 @@ most AOSP framework jars), we just add the line by hand.
 Idempotent: only adds the line if it's missing.
 """
 
+import os
 import sys
 from pathlib import Path
 
-WORK_TREE = Path(sys.argv[1])
-CURRENT = WORK_TREE / "frameworks/base/core/api/system-current.txt"
 LINE = '    field public static final String REMOTE_CONTROL = "android.permission.REMOTE_CONTROL";'
 ANCHOR_BEFORE = '    field public static final String REMOTE_DISPLAY_PROVIDER'
 
 def main() -> int:
-    if not CURRENT.exists():
-        print(f"patch 0010: SKIP (file not found): {CURRENT}", file=sys.stderr)
+    work_tree = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.cwd()
+    check_only = os.environ.get("QALOS_PATCH_CHECK") == "1"
+    current = work_tree / "frameworks/base/core/api/system-current.txt"
+    if not current.exists():
+        print(f"patch 0010: SKIP (file not found): {current}", file=sys.stderr)
         return 0
-    text = CURRENT.read_text(encoding="utf-8")
+    text = current.read_text(encoding="utf-8")
     if LINE in text:
         print("patch 0010: OK (REMOTE_CONTROL already in current.txt)")
         return 0
     if ANCHOR_BEFORE not in text:
         print(f"patch 0010: FAILED (anchor not found: {ANCHOR_BEFORE!r})", file=sys.stderr)
         return 1
+    if check_only:
+        print("patch 0010: OK (anchor present; check mode — no write)")
+        return 0
     new_text = text.replace(ANCHOR_BEFORE, LINE + "\n" + ANCHOR_BEFORE, 1)
-    CURRENT.write_text(new_text, encoding="utf-8")
+    current.write_text(new_text, encoding="utf-8")
     print("patch 0010: added REMOTE_CONTROL to system-current.txt")
     return 0
 

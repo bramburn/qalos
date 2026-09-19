@@ -28,6 +28,7 @@ Fix:
 This is idempotent. Re-running this patch is safe.
 """
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -42,6 +43,7 @@ FROZEN_FILES = [
 
 def main():
     aosp_root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.cwd()
+    check_only = os.environ.get("QALOS_PATCH_CHECK") == "1"
     patched = []
     for rel in FROZEN_FILES:
         path = aosp_root / rel
@@ -61,9 +63,12 @@ def main():
             flags=re.DOTALL,
         )
         if new_src != src:
-            path.write_text(new_src)
-            patched.append(rel)
-            print(f"[0009] PATCHED: {rel}")
+            if check_only:
+                print(f"[0009] OK (would patch; check mode — no write): {rel}")
+            else:
+                path.write_text(new_src)
+                patched.append(rel)
+                print(f"[0009] PATCHED: {rel}")
         else:
             print(f"[0009] OK (no change): {rel}")
     if not patched:
