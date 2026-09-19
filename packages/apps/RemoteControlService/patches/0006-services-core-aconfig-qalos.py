@@ -2,28 +2,21 @@
 # SPDX-License-Identifier: MIT
 """Apply patch 0006: wire qalos.aconfig into services.core's Android.bp.
 
-Patch 0005 promoted `android.permission.REMOTE_CONTROL` to the
-`@FlaggedApi` form and references the `com.qalos.flags.remote_control`
-feature flag. For metalava / AAPT2 to find the flag declaration,
-the .aconfig file must be declared in an Soong `aconfig_declarations`
-module — dropping the file into `aconfig/qalos.aconfig` is not
-enough on its own.
+This patch appends an `aconfig_declarations` block for the qalos aconfig
+flags to `frameworks/base/services/core/Android.bp`. The block is
+copied verbatim from the qalos.aconfig header.
 
-We append the block to the end of
-`frameworks/base/services/core/Android.bp`. Soong is happy with the
-append: any text after the top-level `package {}` scope is read as
-top-level soong module declarations, just like the existing
-`java_library_static`, `filegroup`, etc. entries in the file.
+CURRENT STATUS (2026-09-19): orphaned. Patch 0005 originally promoted
+the REMOTE_CONTROL permission with `@FlaggedApi` and referenced the
+`com.qalos.flags.remote_control` flag declared here. Commit `9d98413`
+("drop @FlaggedApi on REMOTE_CONTROL") replaced that annotation with
+`@SystemApi @hide`, leaving no consumer of the flag. The block is kept
+appended so that any future aconfig consumer in services.core resolves
+without re-running this patch; it is otherwise dead code.
 
-The `package` and `container` here MUST match the header of the
-.aconfig file (`com.qalos.flags` / `system`).
-
-Idempotent: re-running is a no-op if `name: "qalos_flags"` is
-already present.
-
-Honors `QALOS_PATCH_CHECK=1`: in check mode, only verify that the
-anchor would be found (or the patch already applied). Do not write
-to the target file.
+Idempotent: re-running is a no-op if `name: "qalos_flags"` is already
+present. Honors `QALOS_PATCH_CHECK=1`: in check mode, only verify the
+target would be writable; do not write.
 """
 
 from __future__ import annotations
