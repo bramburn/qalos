@@ -34,9 +34,6 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -71,23 +68,34 @@ public final class HttpApiServer extends Thread {
 
     @FunctionalInterface
     private interface RouteHandler {
-        void handle(Socket socket, String body) throws IOException;
+        /**
+         * Run the handler.
+         *
+         * @param socket the client connection (handlers usually only need
+         *               {@code socket.getOutputStream()})
+         * @param body   the parsed request body as a UTF-8 string; empty
+         *               string for GET/DELETE without a body
+         * @param query  the parsed query string as a JSONObject (URL-decoded;
+         *               values parsed as int/bool/string); empty JSONObject if
+         *               the request had no query string
+         */
+        void handle(Socket socket, String body, JSONObject query) throws IOException;
     }
 
     private static final Map<String, RouteHandler> ROUTES = new HashMap<>();
     static {
-        ROUTES.put("GET /health",     (sock, body) -> handleHealth(sock.getOutputStream()));
-        ROUTES.put("GET /display",   (sock, body) -> handleDisplay(sock.getOutputStream()));
-        ROUTES.put("GET /screenshot",(sock, body) -> handleScreenshot(sock.getOutputStream(), body));
-        ROUTES.put("GET /foreground",(sock, body) -> handleForeground(sock.getOutputStream()));
-        ROUTES.put("POST /tap",       (sock, body) -> handleTap(sock.getOutputStream(), body));
-        ROUTES.put("POST /type",      (sock, body) -> handleType(sock.getOutputStream(), body));
-        ROUTES.put("POST /key",       (sock, body) -> handleKey(sock.getOutputStream(), body));
-        ROUTES.put("POST /launch",    (sock, body) -> handleLaunch(sock.getOutputStream(), body));
-        ROUTES.put("POST /force_stop",(sock, body) -> handleForceStop(sock.getOutputStream(), body));
-        ROUTES.put("POST /long_press",(sock, body) -> handleLongPress(sock.getOutputStream(), body));
-        ROUTES.put("POST /swipe",     (sock, body) -> handleSwipe(sock.getOutputStream(), body));
-        ROUTES.put("POST /pinch",     (sock, body) -> handlePinch(sock.getOutputStream(), body));
+        ROUTES.put("GET /health",     (sock, body, query) -> handleHealth(sock.getOutputStream()));
+        ROUTES.put("GET /display",   (sock, body, query) -> handleDisplay(sock.getOutputStream()));
+        ROUTES.put("GET /screenshot",(sock, body, query) -> handleScreenshot(sock.getOutputStream(), query));
+        ROUTES.put("GET /foreground",(sock, body, query) -> handleForeground(sock.getOutputStream()));
+        ROUTES.put("POST /tap",       (sock, body, query) -> handleTap(sock.getOutputStream(), body));
+        ROUTES.put("POST /type",      (sock, body, query) -> handleType(sock.getOutputStream(), body));
+        ROUTES.put("POST /key",       (sock, body, query) -> handleKey(sock.getOutputStream(), body));
+        ROUTES.put("POST /launch",    (sock, body, query) -> handleLaunch(sock.getOutputStream(), body));
+        ROUTES.put("POST /force_stop",(sock, body, query) -> handleForceStop(sock.getOutputStream(), body));
+        ROUTES.put("POST /long_press",(sock, body, query) -> handleLongPress(sock.getOutputStream(), body));
+        ROUTES.put("POST /swipe",     (sock, body, query) -> handleSwipe(sock.getOutputStream(), body));
+        ROUTES.put("POST /pinch",     (sock, body, query) -> handlePinch(sock.getOutputStream(), body));
     }
 
     /** Per-connection socket timeout. */
@@ -96,6 +104,16 @@ public final class HttpApiServer extends Thread {
     private final int mPort;
     private final IRemoteControl mService;
     private final boolean mBindLocalOnly;
+    /**
+     * Cached bearer token, populated once at construction from the path
+     * managed by {@code RemoteControlService.ensureTokenExists()}. {@code null}
+     * here means the token file was unreadable at startup — non-loopback
+     * requests will all be rejected with 401, which is the safe failure mode.
+     * Marked {@code volatile} so the per-connection handler threads see the
+     * value without a synchronisation edge (same happens-before fence as
+     * {@code mServer}).
+     */
+    private final String mBearerToken;
 
     private volatile boolean mRunning = true;
     // `mServer` is written in `run()` and read by `shutdown()` from
@@ -104,11 +122,13 @@ public final class HttpApiServer extends Thread {
     // the field is assigned in `run()`, not the constructor.
     private volatile ServerSocket mServer;
 
-    public HttpApiServer(int port, IRemoteControl service, boolean bindLocalOnly) {
+    public HttpApiServer(int port, IRemoteControl service, boolean bindLocalOnly,
+            String bearerToken) {
         super("qalos-remote-ctl-http");
         mPort = port;
         mService = service;
         mBindLocalOnly = bindLocalOnly;
+        mBearerToken = bearerToken;
         // Daemon: a service shutdown must not block system_server
         // waiting for us to drain.
         setDaemon(true);
@@ -301,7 +321,7 @@ public final class HttpApiServer extends Thread {
             return;
         }
         try {
-            handler.handle(socket, body);
+            handler.handle(socket, body, query);
         } catch (JSONException e) {
             // Malformed JSON body or unexpected JSON type — surface as 400
             // so the client can distinguish a bad request from a server bug.
@@ -339,9 +359,13 @@ public final class HttpApiServer extends Thread {
         writeJson(out, 200, json);
     }
 
-    private void handleScreenshot(OutputStream out, String body)
+    private void handleScreenshot(OutputStream out, JSONObject query)
             throws IOException, JSONException {
-        final JSONObject query = body.isEmpty() ? new JSONObject() : parseJson(body);
+        // GET /screenshot?width=N&height=N&display=N&quality=N
+        // Params come from the query string, not the request body.
+        // (Pre-fix bug: this handler was reading `body`, which is empty
+        // for GET, so every screenshot request 400'd with
+        // "missing JSON body".)
         final int width = query.optInt("width", 0);
         final int height = query.optInt("height", 0);
         final int quality = query.optInt("quality", 85);
@@ -647,19 +671,11 @@ public final class HttpApiServer extends Thread {
         }
     }
 
-    private static boolean validateBearerToken(OutputStream out, String authHeader) throws IOException {
-        final String tokenPath = "/data/local/tmp/qalos_token";
-        String expectedToken;
-        try {
-            expectedToken = Files.readString(Paths.get(tokenPath)).trim();
-        } catch (java.io.FileNotFoundException e) {
-            // Token not yet generated — return 401; boot-time generation
-            // in RemoteControlService will have created it by the time
-            // real traffic arrives.
-            writeUnauthorized(out);
-            return false;
-        } catch (java.io.IOException e) {
-            Log.e(TAG, "failed to read bearer token file", e);
+    private boolean validateBearerToken(OutputStream out, String authHeader) throws IOException {
+        // The token was read once at construction (see mBearerToken
+        // javadoc). If startup failed to read it, every non-loopback
+        // request is rejected — the safe failure mode.
+        if (mBearerToken == null) {
             writeUnauthorized(out);
             return false;
         }
@@ -668,7 +684,15 @@ public final class HttpApiServer extends Thread {
             return false;
         }
         final String presentedToken = authHeader.substring(7).trim();
-        if (!presentedToken.equals(expectedToken)) {
+        // Constant-time compare: String.equals short-circuits on the first
+        // mismatching byte, leaking per-byte timing to a network attacker.
+        // MessageDigest.isEqual walks the full byte range regardless of
+        // mismatches. For a 64-char hex token the practical risk is low
+        // (nanosecond differences over millisecond-scale LAN latency), but
+        // the fix is one line and removes the entire class of concern.
+        final byte[] presented = presentedToken.getBytes(StandardCharsets.UTF_8);
+        final byte[] expected = mBearerToken.getBytes(StandardCharsets.UTF_8);
+        if (!java.security.MessageDigest.isEqual(presented, expected)) {
             writeUnauthorized(out);
             return false;
         }

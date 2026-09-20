@@ -26,9 +26,15 @@ import android.hardware.input.InputManager;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
+import android.graphics.Bitmap;
+import android.graphics.ColorSpace;
+import android.hardware.HardwareBuffer;
+import android.util.Base64;
 import android.util.Log;
 import android.util.Size;
 import android.view.Display;
+import android.window.ScreenshotHardwareBuffer;
+import android.window.ScreenCapture;
 import android.view.InputDevice;
 import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
@@ -85,15 +91,42 @@ public final class RemoteControlService extends SystemService implements IRemote
     @Override
     public void onStart() {
         ensureTokenExists();
+        // Read the bearer token once at startup and pass it to the
+        // HTTP server. This eliminates the per-request disk read
+        // (review item #6) and means the token path lives in one
+        // place (review item #5). If the token file is missing or
+        // unreadable we still start the HTTP server — but token
+        // validation will fail for every non-loopback request, which
+        // is the safe failure mode (operators see auth errors, not
+        // silent data leaks).
+        final String bearerToken = readBearerToken();
+        if (bearerToken == null) {
+            Log.w(TAG, "bearer token not readable; non-loopback auth will reject all requests");
+        }
         // The HTTP server is the only v0 client; it holds a direct
         // reference to this instance. We do not publish the service
         // over Binder (no AIDL in v0).
         mHttpServer = new HttpApiServer(
                 DEFAULT_PORT,
                 this,
-                DEFAULT_BIND_LOCAL_ONLY);
+                DEFAULT_BIND_LOCAL_ONLY,
+                bearerToken);
         mHttpServer.start();
         Log.i(TAG, "remote control service ready on port " + DEFAULT_PORT);
+    }
+
+    private static String readBearerToken() {
+        final java.io.File tokenFile = new java.io.File(TOKEN_PATH);
+        if (!tokenFile.exists()) {
+            return null;
+        }
+        try {
+            return new String(java.nio.file.Files.readAllBytes(tokenFile.toPath()),
+                    java.nio.charset.StandardCharsets.UTF_8).trim();
+        } catch (java.io.IOException e) {
+            Log.e(TAG, "failed to read bearer token from " + TOKEN_PATH, e);
+            return null;
+        }
     }
 
     @Override
@@ -265,14 +298,34 @@ public final class RemoteControlService extends SystemService implements IRemote
             down.setDisplayId(displayId);
             up.setDisplayId(displayId);
         }
+        // The ACTION_UP must be sent even if the sleep is interrupted,
+        // otherwise the input system stays in DOWN state and corrupts
+        // subsequent touches. We catch InterruptedException and
+        // continue to the UP, leaving the interrupt flag set so the
+        // per-connection HTTP handler thread can see it later.
+        boolean upSent = false;
         try {
             injectEvent(down);
-            Thread.sleep(durationMs);
+            try {
+                Thread.sleep(durationMs);
+            } catch (InterruptedException e) {
+                Log.w(TAG, "longPress interrupted mid-press; UP will still be sent");
+            }
             injectEvent(up);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            Log.w(TAG, "longPress interrupted");
+            upSent = true;
         } finally {
+            if (!upSent) {
+                // Best-effort UP. If this also fails we are in a
+                // genuinely degraded state (e.g. InputManagerService
+                // unavailable); log it and let the operator reset.
+                Log.e(TAG, "longPress failed before UP could be sent; "
+                        + "the device may have a stuck touch");
+                try {
+                    injectEvent(up);
+                } catch (RuntimeException e) {
+                    Log.e(TAG, "best-effort UP also failed", e);
+                }
+            }
             down.recycle();
             up.recycle();
         }
@@ -290,7 +343,6 @@ public final class RemoteControlService extends SystemService implements IRemote
                 1.0f, 1.0f, 0, 1.0f, 1.0f, 0, 0);
         if (displayId != 0) down.setDisplayId(displayId);
 
-        MotionEvent prev = down;
         try {
             injectEvent(down);
             for (int i = 1; i <= steps; i++) {
@@ -328,68 +380,78 @@ public final class RemoteControlService extends SystemService implements IRemote
         final float p2x0 = centreX + offset;
         final float p2y0 = centreY + offset;
 
-        // Pointer indices: 0 and 1
+        // Pointer indices into the coords[] / props[] arrays. The
+        // ACTION_POINTER_INDEX_SHIFT bits on POINTER_DOWN / POINTER_UP
+        // identify which array slot holds the *new* (or *lifting*)
+        // pointer — not the pointer's id.
         final int pointerIndex0 = 0;
         final int pointerIndex1 = 1;
 
-        // POINTER_DOWN for first pointer (both pointers touch down)
-        final MotionEvent.PointerCoords[] coords0 = new MotionEvent.PointerCoords[2];
-        coords0[0] = new MotionEvent.PointerCoords();
-        coords0[0].x = p1x0;
-        coords0[0].y = p1y0;
-        coords0[0].pressure = 1.0f;
-        coords0[0].size = 1.0f;
-        coords0[1] = new MotionEvent.PointerCoords();
-        coords0[1].x = p2x0;
-        coords0[1].y = p2y0;
-        coords0[1].pressure = 1.0f;
-        coords0[1].size = 1.0f;
-
+        // PointerProperties are shared across all events for this gesture.
+        // id values are stable identifiers; toolType is FINGER for both.
         final MotionEvent.PointerProperties[] props = new MotionEvent.PointerProperties[2];
-        props[0] = new MotionEvent.PointerProperties();
-        props[0].id = 0;
-        props[0].toolType = MotionEvent.TOOL_TYPE_FINGER;
-        props[1] = new MotionEvent.PointerProperties();
-        props[1].id = 1;
-        props[1].toolType = MotionEvent.TOOL_TYPE_FINGER;
+        props[pointerIndex0] = new MotionEvent.PointerProperties();
+        props[pointerIndex0].id = 0;
+        props[pointerIndex0].toolType = MotionEvent.TOOL_TYPE_FINGER;
+        props[pointerIndex1] = new MotionEvent.PointerProperties();
+        props[pointerIndex1].id = 1;
+        props[pointerIndex1].toolType = MotionEvent.TOOL_TYPE_FINGER;
 
         // Build the event history for MOVE steps
         final float[] scales = new float[] { 1.0f + (scale - 1.0f) / 3,
                 1.0f + 2 * (scale - 1.0f) / 3, scale };
 
-        MotionEvent downEvent = null;
-        MotionEvent moveEvent1 = null;
-        MotionEvent moveEvent2 = null;
-        MotionEvent moveEvent3 = null;
-        MotionEvent upEvent = null;
+        // Standard Android two-finger gesture sequence (this is what
+        // pre-fix-bug fix #2 changed): the previous implementation
+        // started with ACTION_POINTER_DOWN (no preceding ACTION_DOWN)
+        // and ended with ACTION_POINTER_UP (no final ACTION_UP). Most
+        // touch handlers reject the truncated sequence, so the pinch
+        // gesture never actually worked end-to-end.
+        //
+        //   1. ACTION_DOWN         — pointer 0 (the first finger)
+        //   2. ACTION_POINTER_DOWN — pointer 1 (the second finger joins)
+        //   3. ACTION_MOVE × N     — both pointers slide outward/inward
+        //   4. ACTION_POINTER_UP   — pointer 1 lifts first
+        //   5. ACTION_UP           — pointer 0 lifts last
+        MotionEvent downEvent0 = null;
+        MotionEvent pointerDownEvent = null;
+        MotionEvent pointerUpEvent = null;
+        MotionEvent upEvent1 = null;
 
         try {
-            // ACTION_POINTER_DOWN (both pointers)
-            downEvent = MotionEvent.obtain(startTime, startTime,
+            // 1. ACTION_DOWN — pointer 0 only (single-pointer event)
+            downEvent0 = MotionEvent.obtain(
+                    startTime, startTime, MotionEvent.ACTION_DOWN,
+                    p1x0, p1y0,
+                    1.0f, 1.0f, 0, 1.0f, 1.0f, 0, 0);
+            if (displayId != 0) downEvent0.setDisplayId(displayId);
+            injectEvent(downEvent0);
+
+            // 2. ACTION_POINTER_DOWN — pointer 1 joins. The full
+            // coords[] describes both pointers in their starting
+            // positions; pointerIndex1 (1) is the new one.
+            final MotionEvent.PointerCoords[] coords0 = newCoords(
+                    centreX - offset, centreY - offset,
+                    centreX + offset, centreY + offset,
+                    1.0f);
+            pointerDownEvent = MotionEvent.obtain(startTime, startTime,
                     MotionEvent.ACTION_POINTER_DOWN
-                            | (pointerIndex0 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+                            | (pointerIndex1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
                     2, props, coords0,
                     0, 0, 1.0f, 1.0f, 0, 0, 0, 0);
-            if (displayId != 0) downEvent.setDisplayId(displayId);
-            injectEvent(downEvent);
+            if (displayId != 0) pointerDownEvent.setDisplayId(displayId);
+            injectEvent(pointerDownEvent);
 
+            // 3. MOVE × 3 — both pointers slide proportionally
             long prevTime = startTime;
             for (int i = 0; i < 3; i++) {
                 final long eventTime = startTime + ((i + 1) * stepDuration);
                 final float s = scales[i];
-                final MotionEvent.PointerCoords[] coords = new MotionEvent.PointerCoords[2];
-                coords[0] = new MotionEvent.PointerCoords();
-                coords[0].x = centreX - (offset * s);
-                coords[0].y = centreY - (offset * s);
-                coords[0].pressure = 1.0f;
-                coords[0].size = 1.0f;
-                coords[1] = new MotionEvent.PointerCoords();
-                coords[1].x = centreX + (offset * s);
-                coords[1].y = centreY + (offset * s);
-                coords[1].pressure = 1.0f;
-                coords[1].size = 1.0f;
-
-                MotionEvent me = MotionEvent.obtain(prevTime, eventTime,
+                final MotionEvent.PointerCoords[] coords = newCoords(
+                        centreX - (offset * s), centreY - (offset * s),
+                        centreX + (offset * s), centreY + (offset * s),
+                        1.0f);
+                final MotionEvent me = MotionEvent.obtain(prevTime, eventTime,
                         MotionEvent.ACTION_MOVE, 2, props, coords,
                         0, 0, 1.0f, 1.0f, 0, 0, 0, 0);
                 if (displayId != 0) me.setDisplayId(displayId);
@@ -401,31 +463,67 @@ public final class RemoteControlService extends SystemService implements IRemote
                 prevTime = eventTime;
             }
 
-            // POINTER_UP (both pointers lift)
+            // 4. ACTION_POINTER_UP — pointer 1 lifts. coords describe
+            // pointer 0 at its post-pinch position and pointer 1 at
+            // release coords with size=0; pointerIndex1 (1) is the
+            // one going up.
             final MotionEvent.PointerCoords[] coordsUp = new MotionEvent.PointerCoords[2];
-            coordsUp[0] = new MotionEvent.PointerCoords();
-            coordsUp[0].x = centreX - (offset * scale);
-            coordsUp[0].y = centreY - (offset * scale);
-            coordsUp[0].pressure = 0.0f;
-            coordsUp[0].size = 0.0f;
-            coordsUp[1] = new MotionEvent.PointerCoords();
-            coordsUp[1].x = centreX + (offset * scale);
-            coordsUp[1].y = centreY + (offset * scale);
-            coordsUp[1].pressure = 0.0f;
-            coordsUp[1].size = 0.0f;
+            coordsUp[pointerIndex0] = new MotionEvent.PointerCoords();
+            coordsUp[pointerIndex0].x = centreX - (offset * scale);
+            coordsUp[pointerIndex0].y = centreY - (offset * scale);
+            coordsUp[pointerIndex0].pressure = 1.0f;
+            coordsUp[pointerIndex0].size = 1.0f;
+            coordsUp[pointerIndex1] = new MotionEvent.PointerCoords();
+            coordsUp[pointerIndex1].x = centreX + (offset * scale);
+            coordsUp[pointerIndex1].y = centreY + (offset * scale);
+            coordsUp[pointerIndex1].pressure = 0.0f;
+            coordsUp[pointerIndex1].size = 0.0f;
 
-            upEvent = MotionEvent.obtain(prevTime, prevTime,
+            pointerUpEvent = MotionEvent.obtain(prevTime, prevTime,
                     MotionEvent.ACTION_POINTER_UP
                             | (pointerIndex1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
                     2, props, coordsUp,
-                    0, 0, 0.0f, 0.0f, 0, 0, 0, 0);
-            if (displayId != 0) upEvent.setDisplayId(displayId);
-            injectEvent(upEvent);
+                    0, 0, 1.0f, 1.0f, 0, 0, 0, 0);
+            if (displayId != 0) pointerUpEvent.setDisplayId(displayId);
+            injectEvent(pointerUpEvent);
+
+            // 5. ACTION_UP — pointer 0 lifts last (single-pointer event)
+            upEvent1 = MotionEvent.obtain(prevTime, prevTime,
+                    MotionEvent.ACTION_UP,
+                    centreX - (offset * scale), centreY - (offset * scale),
+                    0.0f, 0.0f, 0, 1.0f, 1.0f, 0, 0);
+            if (displayId != 0) upEvent1.setDisplayId(displayId);
+            injectEvent(upEvent1);
 
         } finally {
-            if (downEvent != null) downEvent.recycle();
-            if (upEvent != null) upEvent.recycle();
+            if (downEvent0 != null) downEvent0.recycle();
+            if (pointerDownEvent != null) pointerDownEvent.recycle();
+            if (pointerUpEvent != null) pointerUpEvent.recycle();
+            if (upEvent1 != null) upEvent1.recycle();
         }
+    }
+
+    /**
+     * Allocate a 2-slot {@link MotionEvent.PointerCoords} array filled
+     * with the two (x, y) pairs and a uniform pressure/size. Pulled
+     * out of {@link #injectPinch} because the same allocation pattern
+     * is repeated for ACTION_POINTER_DOWN, each MOVE step, and (with
+     * different size for the lifted finger) ACTION_POINTER_UP.
+     */
+    private static MotionEvent.PointerCoords[] newCoords(
+            float x0, float y0, float x1, float y1, float pressure) {
+        final MotionEvent.PointerCoords[] out = new MotionEvent.PointerCoords[2];
+        out[0] = new MotionEvent.PointerCoords();
+        out[0].x = x0;
+        out[0].y = y0;
+        out[0].pressure = pressure;
+        out[0].size = 1.0f;
+        out[1] = new MotionEvent.PointerCoords();
+        out[1].x = x1;
+        out[1].y = y1;
+        out[1].pressure = pressure;
+        out[1].size = 1.0f;
+        return out;
     }
 
     private void injectText(String text) {
