@@ -604,6 +604,97 @@ ap-southeast-1's public endpoint behavior on this account is
 **not** verified. Before switching, run a 5 MB `ossutil cp` test
 from `macmini2024` first.
 
+### 5.4.7 OSS Transfer Acceleration: UK → cn-guangzhou direct upload (2026-09-19)
+
+OSS Transfer Acceleration routes requests through Alibaba Cloud's global
+access points and internal backbone network, bypassing the public internet
+for the long-haul leg. Reference:
+<https://www.alibabacloud.com/help/en/oss/user-guide/transfer-acceleration>
+
+**Key facts:**
+
+| Item | Value |
+| --- | --- |
+| Acceleration endpoint | `oss-accelerate.aliyuncs.com` (general, all regions) |
+| Bucket-level setting | Enable in OSS console → Bucket Settings → Transfer Acceleration |
+| Propagation delay | ~30 minutes after enabling before it takes effect globally |
+| Cost | Enable is free; accelerated traffic fees apply on top of egress (see billing FAQ) |
+| Endpoint rule | Set endpoint to `oss-accelerate.aliyuncs.com` only — **do NOT prefix with bucket name** (i.e. NOT `<bucket>.oss-accelerate.aliyuncs.com`) |
+
+**Why this matters for qalos:** The §5.4.5 HK relay works (9.4 MiB/s Mac Mini → HK,
+109 MiB/s HK-OSS → HK-ECS), but it's three hops. Transfer acceleration could
+collapse that to a single hop: Mac Mini → Guangzhou bucket directly over Alibaba
+Cloud's backbone, without needing the HK ECS receiver and its associated
+image-copy latency (10–30 min).
+
+**One-time bucket enable (run once per bucket):**
+
+```bash
+# In OSS console: Buckets → qalos-aosp-hk → Bucket Settings → Transfer Acceleration → toggle ON.
+# Or via aliyun CLI if the API supports it.
+# Wait ~30 min for global propagation before testing.
+```
+
+**Upload command with acceleration (replaces §5.4.5 step "Mac Mini → HK OSS public endpoint"):**
+
+```bash
+# UK Mac Mini → cn-guangzhou bucket via acceleration endpoint (single hop).
+# For buckets in cn-guangzhou (e.g. qalos-aosp-hk if copied there):
+ossutil cp -r --jobs 8 --update ~/aosp_volumes/ \
+    oss://qalos-aosp-gz/aosp-source/ \
+    --endpoint oss-accelerate.aliyuncs.com
+
+# For the HK bucket (still useful as an intermediate):
+# The HK bucket's public endpoint (oss-cn-hongkong.aliyuncs.com) is not blocked
+# and already gets 9.4 MiB/s; acceleration adds overhead for short hops.
+# Only use oss-accelerate.aliyuncs.com if the HK public endpoint is also blocked.
+```
+
+**Speed expectation:** Aliyun's documented case (Hangzhou bucket, Tokyo downloader)
+showed ~2.3× speedup (8.7 → 20.2 MiB/s) via the acceleration endpoint vs public.
+For UK → cn-guangzhou the improvement is likely larger since the public internet
+path is longer and more congested. Actual speed depends on ISP quality and
+cross-border conditions at the time.
+
+**Endpoint fallback (required):** Transfer acceleration can return HTTP 502/504
+during path switching on long transfers. Implement retry logic:
+
+```bash
+# Example: retry with public endpoint on acceleration failure
+ossutil cp -r --jobs 8 --update ~/aosp_volumes/ oss://qalos-aosp-gz/aosp-source/ \
+    --endpoint oss-accelerate.aliyuncs.com \
+    --max-redownload 3 \
+    || ossutil cp -r --jobs 8 --update ~/aosp_volumes/ oss://qalos-aosp-gz/aosp-source/ \
+        --endpoint oss-cn-guangzhou.aliyuncs.com
+```
+
+**Limitations:**
+
+- Supports HTTP/HTTPS only (RTMP etc. not supported — not an issue for our use).
+- ~30 min propagation delay after enabling; do not test immediately.
+- If the cn-guangzhou public endpoint is blocked at the account level
+  (`PublicEndpointForbidden` on `oss-cn-guangzhou.aliyuncs.com`), the
+  acceleration endpoint (`oss-accelerate.aliyuncs.com`) routes through
+  Alibaba Cloud's internal network and **may bypass the block** — test this
+  before building the HK relay infrastructure. If it works, the §5.4.5
+  three-hop HK relay can be replaced by a single `ossutil cp` command.
+- Accelerated traffic fees are billed separately from standard egress;
+  monitor the first few runs via the OSS console.
+
+**Verification test before committing:**
+
+```bash
+# Quick 5 MB speed test — compare acceleration vs public endpoint
+time ossutil cp /tmp/test-5mb.bin oss://qalos-aosp-gz/test.bin \
+    --endpoint oss-accelerate.aliyuncs.com
+
+time ossutil cp /tmp/test-5mb.bin oss://qalos-aosp-gz/test.bin \
+    --endpoint oss-cn-guangzhou.aliyuncs.com
+```
+
+If `oss-accelerate` is ≥2× faster and `PublicEndpointForbidden` does not
+appear, replace the §5.4.5 HK upload leg with this single command.
+
 ### 5.5 GCP fallback (Windows)
 
 ```powershell

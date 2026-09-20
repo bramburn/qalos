@@ -56,7 +56,8 @@ public final class RemoteControlService extends SystemService implements IRemote
     static final int DEFAULT_PORT = 9000;
 
     /** Default bind address. See D-004 in the decisions log. */
-    static final boolean DEFAULT_BIND_LOCAL_ONLY = true;
+    // v1 opens the API to LAN/WAN; token auth is the access control.
+    static final boolean DEFAULT_BIND_LOCAL_ONLY = false;
 
     private final Context mContext;
 
@@ -74,6 +75,8 @@ public final class RemoteControlService extends SystemService implements IRemote
 
     private HttpApiServer mHttpServer;
 
+    private static final String TOKEN_PATH = "/data/local/tmp/qalos_token";
+
     public RemoteControlService(Context context) {
         super(context);
         mContext = context;
@@ -81,6 +84,7 @@ public final class RemoteControlService extends SystemService implements IRemote
 
     @Override
     public void onStart() {
+        ensureTokenExists();
         // The HTTP server is the only v0 client; it holds a direct
         // reference to this instance. We do not publish the service
         // over Binder (no AIDL in v0).
@@ -133,6 +137,41 @@ public final class RemoteControlService extends SystemService implements IRemote
     @Override
     public void keyEvent(int keyCode, boolean down) {
         injectKey(keyCode, down);
+    }
+
+    // ------------------------------------------------------------------
+    // IRemoteControl — gestures
+    // ------------------------------------------------------------------
+
+    @Override
+    public void longPress(int x, int y, int durationMs, int displayId) {
+        if (durationMs <= 0) {
+            throw new IllegalArgumentException("durationMs must be positive");
+        }
+        enforceCoordinatesOnDisplay(x, y, displayId);
+        injectLongPress(x, y, durationMs, displayId);
+    }
+
+    @Override
+    public void swipe(int x1, int y1, int x2, int y2, int durationMs, int displayId) {
+        if (durationMs <= 0) {
+            throw new IllegalArgumentException("durationMs must be positive");
+        }
+        enforceCoordinatesOnDisplay(x1, y1, displayId);
+        enforceCoordinatesOnDisplay(x2, y2, displayId);
+        injectSwipe(x1, y1, x2, y2, durationMs, displayId);
+    }
+
+    @Override
+    public void pinch(float x, float y, float scale, int durationMs, int displayId) {
+        if (scale <= 0) {
+            throw new IllegalArgumentException("scale must be positive");
+        }
+        // No-op for identity scale — same as a tap, nothing to zoom.
+        if (Math.abs(scale - 1.0f) < 0.001f) {
+            return;
+        }
+        injectPinch(x, y, scale, durationMs, displayId);
     }
 
     // ------------------------------------------------------------------
@@ -211,6 +250,181 @@ public final class RemoteControlService extends SystemService implements IRemote
             // leak a MotionEvent allocation.
             down.recycle();
             up.recycle();
+        }
+    }
+
+    private void injectLongPress(int x, int y, int durationMs, int displayId) {
+        final long now = SystemClock.uptimeMillis();
+        final MotionEvent down = MotionEvent.obtain(
+                now, now, MotionEvent.ACTION_DOWN, x, y,
+                1.0f, 1.0f, 0, 1.0f, 1.0f, 0, 0);
+        final MotionEvent up = MotionEvent.obtain(
+                now, now + durationMs, MotionEvent.ACTION_UP, x, y,
+                0.0f, 0.0f, 0, 1.0f, 1.0f, 0, 0);
+        if (displayId != 0) {
+            down.setDisplayId(displayId);
+            up.setDisplayId(displayId);
+        }
+        try {
+            injectEvent(down);
+            Thread.sleep(durationMs);
+            injectEvent(up);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            Log.w(TAG, "longPress interrupted");
+        } finally {
+            down.recycle();
+            up.recycle();
+        }
+    }
+
+    private void injectSwipe(int x1, int y1, int x2, int y2,
+            int durationMs, int displayId) {
+        final long startTime = SystemClock.uptimeMillis();
+        final int steps = Math.max(1, durationMs / 50);
+        final long stepDuration = durationMs / steps;
+
+        // DOWN at start position
+        final MotionEvent down = MotionEvent.obtain(
+                startTime, startTime, MotionEvent.ACTION_DOWN, x1, y1,
+                1.0f, 1.0f, 0, 1.0f, 1.0f, 0, 0);
+        if (displayId != 0) down.setDisplayId(displayId);
+
+        MotionEvent prev = down;
+        try {
+            injectEvent(down);
+            for (int i = 1; i <= steps; i++) {
+                final long eventTime = startTime + (i * stepDuration);
+                final float t = (float) i / steps;
+                final int cx = (int) (x1 + (x2 - x1) * t);
+                final int cy = (int) (y1 + (y2 - y1) * t);
+                final int action = (i == steps)
+                        ? MotionEvent.ACTION_UP
+                        : MotionEvent.ACTION_MOVE;
+                final MotionEvent me = MotionEvent.obtain(
+                        startTime, eventTime, action, cx, cy,
+                        1.0f, 1.0f, 0, 1.0f, 1.0f, 0, 0);
+                if (displayId != 0) me.setDisplayId(displayId);
+                try {
+                    injectEvent(me);
+                } finally {
+                    me.recycle();
+                }
+            }
+        } finally {
+            down.recycle();
+        }
+    }
+
+    private void injectPinch(float centreX, float centreY, float scale,
+            int durationMs, int displayId) {
+        final long startTime = SystemClock.uptimeMillis();
+        final long stepDuration = durationMs / 3;
+
+        final float offset = 50.0f;
+        // Pointer positions at scale=1.0: centred on (centreX, centreY)
+        final float p1x0 = centreX - offset;
+        final float p1y0 = centreY - offset;
+        final float p2x0 = centreX + offset;
+        final float p2y0 = centreY + offset;
+
+        // Pointer indices: 0 and 1
+        final int pointerIndex0 = 0;
+        final int pointerIndex1 = 1;
+
+        // POINTER_DOWN for first pointer (both pointers touch down)
+        final MotionEvent.PointerCoords[] coords0 = new MotionEvent.PointerCoords[2];
+        coords0[0] = new MotionEvent.PointerCoords();
+        coords0[0].x = p1x0;
+        coords0[0].y = p1y0;
+        coords0[0].pressure = 1.0f;
+        coords0[0].size = 1.0f;
+        coords0[1] = new MotionEvent.PointerCoords();
+        coords0[1].x = p2x0;
+        coords0[1].y = p2y0;
+        coords0[1].pressure = 1.0f;
+        coords0[1].size = 1.0f;
+
+        final MotionEvent.PointerProperties[] props = new MotionEvent.PointerProperties[2];
+        props[0] = new MotionEvent.PointerProperties();
+        props[0].id = 0;
+        props[0].toolType = MotionEvent.TOOL_TYPE_FINGER;
+        props[1] = new MotionEvent.PointerProperties();
+        props[1].id = 1;
+        props[1].toolType = MotionEvent.TOOL_TYPE_FINGER;
+
+        // Build the event history for MOVE steps
+        final float[] scales = new float[] { 1.0f + (scale - 1.0f) / 3,
+                1.0f + 2 * (scale - 1.0f) / 3, scale };
+
+        MotionEvent downEvent = null;
+        MotionEvent moveEvent1 = null;
+        MotionEvent moveEvent2 = null;
+        MotionEvent moveEvent3 = null;
+        MotionEvent upEvent = null;
+
+        try {
+            // ACTION_POINTER_DOWN (both pointers)
+            downEvent = MotionEvent.obtain(startTime, startTime,
+                    MotionEvent.ACTION_POINTER_DOWN
+                            | (pointerIndex0 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+                    2, props, coords0,
+                    0, 0, 1.0f, 1.0f, 0, 0, 0, 0);
+            if (displayId != 0) downEvent.setDisplayId(displayId);
+            injectEvent(downEvent);
+
+            long prevTime = startTime;
+            for (int i = 0; i < 3; i++) {
+                final long eventTime = startTime + ((i + 1) * stepDuration);
+                final float s = scales[i];
+                final MotionEvent.PointerCoords[] coords = new MotionEvent.PointerCoords[2];
+                coords[0] = new MotionEvent.PointerCoords();
+                coords[0].x = centreX - (offset * s);
+                coords[0].y = centreY - (offset * s);
+                coords[0].pressure = 1.0f;
+                coords[0].size = 1.0f;
+                coords[1] = new MotionEvent.PointerCoords();
+                coords[1].x = centreX + (offset * s);
+                coords[1].y = centreY + (offset * s);
+                coords[1].pressure = 1.0f;
+                coords[1].size = 1.0f;
+
+                MotionEvent me = MotionEvent.obtain(prevTime, eventTime,
+                        MotionEvent.ACTION_MOVE, 2, props, coords,
+                        0, 0, 1.0f, 1.0f, 0, 0, 0, 0);
+                if (displayId != 0) me.setDisplayId(displayId);
+                try {
+                    injectEvent(me);
+                } finally {
+                    me.recycle();
+                }
+                prevTime = eventTime;
+            }
+
+            // POINTER_UP (both pointers lift)
+            final MotionEvent.PointerCoords[] coordsUp = new MotionEvent.PointerCoords[2];
+            coordsUp[0] = new MotionEvent.PointerCoords();
+            coordsUp[0].x = centreX - (offset * scale);
+            coordsUp[0].y = centreY - (offset * scale);
+            coordsUp[0].pressure = 0.0f;
+            coordsUp[0].size = 0.0f;
+            coordsUp[1] = new MotionEvent.PointerCoords();
+            coordsUp[1].x = centreX + (offset * scale);
+            coordsUp[1].y = centreY + (offset * scale);
+            coordsUp[1].pressure = 0.0f;
+            coordsUp[1].size = 0.0f;
+
+            upEvent = MotionEvent.obtain(prevTime, prevTime,
+                    MotionEvent.ACTION_POINTER_UP
+                            | (pointerIndex1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+                    2, props, coordsUp,
+                    0, 0, 0.0f, 0.0f, 0, 0, 0, 0);
+            if (displayId != 0) upEvent.setDisplayId(displayId);
+            injectEvent(upEvent);
+
+        } finally {
+            if (downEvent != null) downEvent.recycle();
+            if (upEvent != null) upEvent.recycle();
         }
     }
 
@@ -413,6 +627,25 @@ public final class RemoteControlService extends SystemService implements IRemote
             if (c != '.' && !Character.isJavaIdentifierPart(c)) {
                 throw new IllegalArgumentException("invalid packageName: " + packageName);
             }
+        }
+    }
+
+    private void ensureTokenExists() {
+        java.io.File tokenFile = new java.io.File(TOKEN_PATH);
+        if (tokenFile.exists()) return;
+        try {
+            java.security.SecureRandom sr = new java.security.SecureRandom();
+            byte[] bytes = new byte[32];
+            sr.nextBytes(bytes);
+            String hex = javax.xml.bind.DatatypeConverter.printHexBinary(bytes);
+            java.nio.file.Files.writeString(
+                    tokenFile.toPath(), hex,
+                    java.nio.file.StandardOpenOption.CREATE,
+                    java.nio.file.StandardOpenOption.EXCLUSIVE);
+            tokenFile.setReadable(true, false);  // 0644 world-readable
+            Log.i(TAG, "generated new bearer token at " + TOKEN_PATH);
+        } catch (java.io.IOException e) {
+            Log.e(TAG, "failed to generate bearer token", e);
         }
     }
 }

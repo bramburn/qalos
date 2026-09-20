@@ -33,6 +33,11 @@ interface IRemoteControl {
     void typeText(String text);
     void keyEvent(int keyCode, boolean down);
 
+    // --- Gestures ---
+    void longPress(int x, int y, int durationMs, int displayId);
+    void swipe(int x1, int y1, int x2, int y2, int durationMs, int displayId);
+    void pinch(float x, float y, float scale, int durationMs, int displayId);
+
     // --- App lifecycle ---
     void launchApp(String packageName);
     void forceStop(String packageName);
