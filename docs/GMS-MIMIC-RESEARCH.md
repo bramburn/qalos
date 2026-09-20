@@ -2,7 +2,7 @@
 
 **Target:** AOSP 15.0.0_r1, x86_64 emulator (`qalos_emulator-userdebug`)
 **Scope:** What a legitimate GMS compatibility layer looks like in AOSP, minimum viable APIs, correct architecture, build integration, and open-source references.
-**Status:** Phase 1 complete (real APKs downloaded and wired).
+**Status:** Phase 1 complete (APKs downloaded + wired). Phase 2 complete (sig-spoof patch applied, commit `9c12f9b`).
 
 ---
 
@@ -335,11 +335,56 @@ Patch source: `https://github.com/microg/GmsCore/wiki/Signature-Spoofing` — pi
 - Index: `index.xml` at that URL (verified SHA256 against published hashes)
 - All three APKs include `FAKE_PACKAGE_SIGNATURE` permission (required for sig-spoof to work)
 
-### Still needed (Phase 2+)
-1. **Signature spoofing patch** — must be applied to `frameworks/base/core/res/res/` values or patched Java code before the build. Without this, apps that verify GMS signature will not communicate with GmsCore. LineageOS gerrit #411386 exists for Android 15 but raw patch not yet retrieved.
-2. **AOSP source extraction** — `aosp-source.tar` (135 GB) must be extracted to apply the sig-spoof patch.
-3. **Build verification** — boot the emulator and run `dumpsys package com.google.android.gms` or install Signal/microG Self-Check.
-4. **privapp-permissions** — GmsCore needs extra permissions (WAKE_LOCK, ACCESS_WIFI_STATE, etc.) via `privapp-permissions-gms.xml`.
+---
+
+## Phase 2 Completion — 2026-09-20 (commit `9c12f9b`)
+
+**Done:** Android 15 sig-spoofing patch applied to `ComputerEngine.java`, `config.xml`, and `AndroidManifest.xml`.
+
+### What was done
+
+The sig-spoof patch was reverse-engineered from LineageOS 22.1 (Android 15) source. Three files were modified:
+
+#### `services/core/java/com/android/server/pm/ComputerEngine.java`
+- **Static fields** (after `sProviderInitOrderSorter` ~line 382):
+  - `MICROG_FAKE_SIGNATURE` — the Google cert (presented to callers)
+  - `MICROG_REAL_SIGNATURE` — the microG stub cert (actual GmsCore signing)
+  - `isMicrogSigned(SigningDetails)` — returns true when package signing == stub cert
+  - `generateFakeSignature()` — returns the Google cert
+- **`generatePackageInfo()` spoof block** (~line 1564): swaps stub → Google cert:
+  ```java
+  if (isMicrogSigned(p.getSigningDetails())) {
+      packageInfo.signatures = new Signature[]{generateFakeSignature()};
+  }
+  ```
+
+#### `core/res/res/values/config.xml`
+Added `config_fusedLocationOverlayProviderClasses` so the fused-location overlay provider can be replaced at runtime by microG's `LocationOverlayProvider`.
+
+#### `core/res/AndroidManifest.xml`
+Added `FAKE_PACKAGE_SIGNATURE` with `protectionLevel="signature|privileged"` — required for GmsCore to declare its fake-signature meta-data.
+
+### Patch application
+```bash
+python tools/apply-sig-spoof.py
+```
+
+### Key design notes
+- **Spoof lives in `ComputerEngine`** (not `PackageManagerService`) — Android 13+ moved the Computer/snapshot architecture here; `checkSignaturesInternal()` does NOT need code changes (spoof is at the API return level).
+- **`generatePackageInfo()` is the correct injection point** — this is what `PackageManager.getPackageInfo()` returns to callers; the swap happens here before the result reaches any app.
+- **`checkSignaturesInternal()` is NOT patched** — signature comparison between packages (e.g. app vs GmsCore) still works correctly because GmsCore's real signing is what gets compared internally; only the *returned* signature to external callers is spoofed.
+- **microG APKs declare `fake-signature` meta-data** pointing to `MICROG_FAKE_SIGNATURE`; the framework reads this and applies the swap automatically.
+
+### Reference sources
+- LineageOS 22.1 `ComputerEngine.java`: https://github.com/LineageOS/android_frameworks_base/lineage-22.1/services/core/java/com/android/server/pm/ComputerEngine.java
+- microG project: https://microg.org/
+- Original sig-spoof gerrit (Android 8–12): LineageOS gerrit #411386
+
+### Still needed (Phase 3+)
+1. ~~**Signature spoofing patch**~~ — ✅ **DONE** (commit `9c12f9b`, applied via `tools/apply-sig-spoof.py`)
+2. ~~**AOSP source extraction**~~ — ✅ **DONE** (files extracted to `D:\aosp-extracted\`)
+3. **privapp-permissions** — GmsCore needs extra permissions (WAKE_LOCK, ACCESS_WIFI_STATE, etc.) via `privapp-permissions-gms.xml`
+4. **Build verification** — boot the emulator and run `dumpsys package com.google.android.gms` or install Signal/microG Self-Check
 
 ### Notes
 - The Java stub files (`GmsCoreStub.java`, `FakeStoreStub.java`, `common/`, `auth/`, `location/`, `permissions/`) are dead code (not used with `BUILD_PREBUILT`). They can be removed in a cleanup pass or kept as reference.
