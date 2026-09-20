@@ -581,16 +581,91 @@ public final class RemoteControlService extends SystemService implements IRemote
         if (quality < 1 || quality > 100) {
             throw new IllegalArgumentException("quality must be in [1, 100]");
         }
-        // AOSP 15 removed SurfaceControl.screenshot(Display, Rect, int) entirely.
-        // The modern path is android.window.ScreenCapture.captureDisplay(...) which
-        // returns a ScreenshotHardwareBuffer (HardwareBuffer-backed), not a Bitmap.
-        // Wiring that up properly is non-trivial: we need a CaptureListener
-        // callback, color space negotiation, and Bitmap.wrapHardwareBuffer(...)
-        // conversion. Deferred to v1 per the v0 PRD (screenshot is listed as
-        // v0.5 / Phase 2). The HTTP layer translates this exception into a
-        // 501 Not Implemented so the client can degrade gracefully.
-        throw new UnsupportedOperationException(
-                "screenshot is not implemented in v0; deferred to v1");
+        // AOSP 15 path (synchronous — see D-018):
+        //   ScreenCapture.captureDisplay(int)  →  ScreenshotHardwareBuffer
+        //     →  Bitmap.wrapHardwareBuffer(hw, colorSpace)
+        //     →  optional aspect-ratio-preserving scale via Bitmap.createScaledBitmap
+        //     →  PNG (lossless; the `quality` param is a JPEG-style knob we accept
+        //            but ignore because PNG has no quality axis)
+        //     →  Base64.NO_WRAP
+        //
+        // The capture call is synchronous on AOSP 15 (no CountDownLatch / Executor
+        // needed). It must be invoked from a thread that is allowed to take a
+        // display buffer — a per-connection HTTP handler thread on
+        // system_server is fine (WindowManager allows system_server reads).
+        final android.window.ScreenCapture.ScreenshotHardwareBuffer hwBuf =
+                android.window.ScreenCapture.captureDisplay(displayId);
+        if (hwBuf == null) {
+            throw new IllegalStateException("ScreenCapture.captureDisplay returned null");
+        }
+        final android.hardware.HardwareBuffer buffer = hwBuf.getHardwareBuffer();
+        if (buffer == null) {
+            hwBuf.close();
+            throw new IllegalStateException("ScreenshotHardwareBuffer has no HardwareBuffer");
+        }
+        final android.graphics.ColorSpace colorSpace = hwBuf.getColorSpace();
+        android.graphics.Bitmap bitmap = null;
+        android.graphics.Bitmap scaledBitmap = null;
+        final java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+        try {
+            bitmap = android.graphics.Bitmap.wrapHardwareBuffer(
+                    buffer,
+                    colorSpace != null ? colorSpace : android.graphics.ColorSpace.get(
+                            android.graphics.ColorSpace.Named.SRGB));
+            if (bitmap == null) {
+                throw new IllegalStateException("Bitmap.wrapHardwareBuffer returned null");
+            }
+            // Aspect-ratio-preserving scale if the caller asked for a
+            // specific size. width == height == 0 means "native display
+            // size", in which case we skip the scale step entirely.
+            if (width > 0 && height > 0
+                    && (bitmap.getWidth() != width || bitmap.getHeight() != height)) {
+                final float srcAspect = (float) bitmap.getWidth() / bitmap.getHeight();
+                final float dstAspect = (float) width / height;
+                final int targetW;
+                final int targetH;
+                if (srcAspect > dstAspect) {
+                    // Source is wider than target → fit width, height letter-boxes.
+                    targetW = width;
+                    targetH = Math.round(width / srcAspect);
+                } else {
+                    // Source is taller than target (or equal) → fit height.
+                    targetH = height;
+                    targetW = Math.round(height * srcAspect);
+                }
+                scaledBitmap = android.graphics.Bitmap.createScaledBitmap(
+                        bitmap, targetW, targetH, /* filter */ true);
+                if (scaledBitmap != bitmap) {
+                    // createScaledBitmap returns the source Bitmap unchanged when the
+                    // dimensions already match — we already checked that, so this
+                    // branch is the expected one. Belt-and-braces recycle below.
+                    bitmap.recycle();
+                    bitmap = scaledBitmap;
+                } else {
+                    scaledBitmap = null;
+                }
+            }
+            // PNG is lossless; the `quality` argument is part of the API contract
+            // but ignored for PNG output. Bitmap.compress treats PNG quality as
+            // a hint (it can affect compression effort at the cost of CPU).
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, baos);
+            return android.util.Base64.encodeToString(baos.toByteArray(),
+                    android.util.Base64.NO_WRAP);
+        } finally {
+            try {
+                baos.close();
+            } catch (java.io.IOException ignored) {
+                // ByteArrayOutputStream.close is a no-op; can't fail.
+            }
+            if (scaledBitmap != null && scaledBitmap != bitmap) {
+                scaledBitmap.recycle();
+            }
+            if (bitmap != null) {
+                bitmap.recycle();
+            }
+            buffer.close();
+            hwBuf.close();
+        }
     }
 
     // ------------------------------------------------------------------
