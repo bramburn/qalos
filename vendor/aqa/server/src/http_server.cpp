@@ -19,6 +19,8 @@ const char* reasonPhrase(int status) {
     switch (status) {
         case 200: return "OK";
         case 400: return "Bad Request";
+        case 401: return "Unauthorized";
+        case 403: return "Forbidden";
         case 404: return "Not Found";
         case 405: return "Method Not Allowed";
         case 500: return "Internal Server Error";
@@ -87,10 +89,14 @@ bool readRequest(int fd, HttpRequest& req) {
             }
         }
 
-        // Strip any query string so routing matches on path alone
-        // (/v1/screenshot?cachebust=1 still routes).
+        // Strip the query string so routing matches on path alone
+        // (/v1/screenshot?raw=1 still routes), but keep it for handlers that
+        // need the parameters.
         size_t q = req.path.find('?');
-        if (q != std::string::npos) req.path.erase(q);
+        if (q != std::string::npos) {
+            req.query = req.path.substr(q + 1);
+            req.path.erase(q);
+        }
 
         req.body = buf.substr(header_end, content_length);
         return true;
@@ -172,6 +178,18 @@ void HttpServer::acceptLoop() {
         }
         HttpRequest req;
         if (readRequest(cfd, req)) {
+            char addr[INET_ADDRSTRLEN] = {0};
+            if (inet_ntop(AF_INET, &client.sin_addr, addr, sizeof(addr)) != nullptr) {
+                req.client_addr = addr;
+            }
+
+            // Loopback detection must be done on the real peer address, not on
+            // a header — this is the same rule RemoteControlService applies, so
+            // both APIs accept a shared bearer token from off-box and skip auth
+            // only for same-device clients.
+            const uint32_t peer = ntohl(client.sin_addr.s_addr);
+            req.client_is_loopback = ((peer >> 24) == 127);
+
             HttpResponse res = handler_(req);
             writeResponse(cfd, res);
         }

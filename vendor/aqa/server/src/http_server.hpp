@@ -27,8 +27,11 @@ namespace aqa {
 struct HttpRequest {
     std::string method;
     std::string path;  // query string is stripped
+    std::string query; // raw query string, without the '?'
     std::map<std::string, std::string> headers;
     std::string body;
+    std::string client_addr;          // dotted-quad of the peer
+    bool client_is_loopback = false;  // drives the same auth rule as RemoteControlService
 };
 
 struct HttpResponse {

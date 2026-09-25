@@ -82,10 +82,27 @@ Outputs land in `out/target/product/aqa_cheetah_<full|slim>/`.
 
 ## Security
 
-`aqa_server` runs as **root** under `seclabel u:r:su:s0`, with **no
-authentication**, and can launch/force-stop arbitrary packages and read the
-SMS inbox. QA images also set `androidboot.selinux=permissive`.
+`aqa_server` runs as **root** under `seclabel u:r:su:s0` and can launch or
+force-stop arbitrary packages, read the SMS inbox, and dump the UI hierarchy.
 
-This is intentional for a private test network and is **not shippable in a
-production image**. Restrict with iptables or keep the device on an isolated
-VLAN. See `server/README.md`.
+Access control matches the framework-level `RemoteControlService`: a shared
+bearer token at `/data/local/tmp/qalos_token`, loopback trusted, `Bearer`
+required from anything off-box, constant-time comparison, and **reject-all
+when the token file is missing**.
+
+QA images additionally set `androidboot.selinux=permissive`, so the daemon does
+not have to negotiate a policy for every shell-out.
+
+This is still **not shippable in a production image**: there is no TLS, no
+rate limiting, and the token crosses the wire in clear text. Keep the device
+on an isolated VLAN or restrict both ports with iptables. See
+`server/README.md`.
+
+## Two control planes (open item)
+
+An AQA image runs **both** this daemon (port 8080) and the framework-level
+`RemoteControlService` (port 9000), because the latter is patched into
+`frameworks/base` and therefore present in every product. Their auth and error
+contracts are deliberately aligned, but the duplication is a known open item —
+see root `AGENTS.md` §2.11. Collapsing to one plane is deferred because it
+changes the audit-log story in `legal/AGENTS.md` §2.9.

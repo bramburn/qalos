@@ -258,6 +258,30 @@ Verified 2026-09-23 with `minimax/MiniMax-M3`:
 - `effort="on"` slightly more structured; `effort="off"` marginally faster.
 - See the skill file for the exact `task()` call patterns and parameter table.
 
+### 2.11 Two REST control planes — keep them consistent or collapse them
+
+A qalos image built from a tree that ran `tools/apply-qalos.sh` can end up
+with **two** HTTP APIs for the same job:
+
+| | `RemoteControlService` | `aqa_server` |
+| --- | --- | --- |
+| Lives in | `system_server` (Java) | init service, `user root` (C++) |
+| Path | `packages/apps/RemoteControlService/` | `vendor/aqa/server/` |
+| Port | 9000 | 8080 |
+| Shipped in | **every** product (patched into `frameworks/base`) | only `aqa_cheetah_full` / `aqa_cheetah_slim` |
+| Audit | native event capture (§2.9) | logcat tag `aqa_audit` |
+
+They **must not drift**. Both read the same bearer token
+(`/data/local/tmp/qalos_token`), both trust loopback and require `Bearer` off
+box, and both return the `{code,message,field}` error envelope. If you add an
+endpoint or change an error shape in one, change the other.
+
+This duplication is a known, deliberate open item — it is *not* the intended
+end state. Collapsing to a single plane is deferred because removing either
+service changes the audit-log story in `legal/AGENTS.md` §2.9, which is a
+legal-framework change and needs a release note (§2.9.5). Until then: do not
+add a third API, and do not weaken the auth on either one.
+
 ## 3. CI: what runs on every PR
 
 The CI workflow at `.github/workflows/ci.yml` runs **static checks only**. AOSP builds are NOT run on GitHub Actions — they take 2-6 hours and would burn the free tier in a single build. AOSP builds happen locally or on the cloud fallbacks (user's own resources, not GH Actions minutes).
