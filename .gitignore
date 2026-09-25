@@ -24,6 +24,49 @@ desktop.ini
 *.elf
 *.img
 *.zip
+*.apk
+*.idsig
+
+# APK research and decompilation work (Redbook, Instagram, etc.)
+apks/
+instagram-mod/
+docs/apk/
+pyapktool_tools/
+debug_controller/
+manifest_inspect/
+redbook_decoded2/
+redbook_decoded_base/
+redbook_decoded_v7/
+redbook_extract_temp/
+redbook_extract_v3/
+redbook_built_aligned.apk
+redbook_built_final.apk
+redbook_built_final_aligned.apk
+redbook_built_merged_unsigned.apk
+redbook_built_signed.apk
+redbook_built_unsigned.apk
+redbook_merged_v3.apk
+redbook_merged_v4.apk
+redbook_merged_v5.apk
+redbook_rebuilt_no_splits.apk
+redbook_v*.apk
+redbook_screen_initial.png
+redbook_ui_dump.xml
+redbook_maps_capture.txt
+redbook_v*_after_agree.png
+redbook_v9_ui.xml
+instagram_apk.zip
+redbook_apk.zip
+
+# APK tool scripts and binaries
+tools/apk-signer.jar
+tools/apktool.jar
+tools/decode_instagram_all.ps1
+tools/decode_instagram_all.py
+tools/analyze_instagram.py
+extract_splits.ps1
+merge_splits.ps1
+merge_splits_v2.ps1
 
 # Local-only artifacts that should never be committed:
 #  - .repo-sync.log / .build.log are produced by `tee` in the brief's step 6/9

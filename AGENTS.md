@@ -235,6 +235,15 @@ changes the risk profile of the project, the framework must be
 reviewed and updated, and the update must be communicated to all
 known commercial customers.
 
+### 2.10 Parallel subagent patterns
+
+For A/B comparisons (e.g. `effort="on"` vs `effort="off"`) or fan-out research,
+use the skill at [`tools/subagent-parallel.md`](tools/subagent-parallel.md).
+Verified 2026-09-23 with `minimax/MiniMax-M3`:
+- Both agents fired simultaneously, identical prompts → convergent facts on MyInsta.
+- `effort="on"` slightly more structured; `effort="off"` marginally faster.
+- See the skill file for the exact `task()` call patterns and parameter table.
+
 ## 3. CI: what runs on every PR
 
 The CI workflow at `.github/workflows/ci.yml` runs **static checks only**. AOSP builds are NOT run on GitHub Actions — they take 2-6 hours and would burn the free tier in a single build. AOSP builds happen locally or on the cloud fallbacks (user's own resources, not GH Actions minutes).
@@ -798,6 +807,28 @@ content here):
 Read the diagnosis + recipe pages **before** repeating any boot
 experiment — the old "kernel hangs at zonelists" theory is
 disproven (log truncation on force-kill faked it).
+
+## 5.7. Local LAN Ubuntu access — see `docs/ssh-access.md`
+
+Local Linux boxes on the LAN (`192.168.0.44`, `.45`, `.46`, `.132`)
+are used as AOSP sync gateways and ad-hoc dev hosts. Connecting from
+Windows has a recurring PATH gotcha (`ssh` is not in cmd.exe's PATH by
+default) and a stale `~/.ssh/config` that points the wrong key at
+`.45`.
+
+**Full reference:** [`docs/ssh-access.md`](docs/ssh-access.md). Read
+that file before connecting — it has the verified-key inventory, the
+recommended config snippet, the PATH-fix one-liner, and a pitfall
+list. No secrets are duplicated here.
+
+Key facts (mirror for quick scan):
+
+- User on every box: `bramburn`.
+- Verified-working key on `.45`: `id_ed25519_qalos`. Legacy `.44` /
+  `.132` entries still use `timetracker_deploy_new` — verify before
+  relying on them.
+- One-liner from PowerShell:
+  `ssh -i "$env:USERPROFILE\.ssh\id_ed25519_qalos" bramburn@192.168.0.45`.
 
 ## 6. Cost rules
 
