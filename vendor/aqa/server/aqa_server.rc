@@ -1,0 +1,21 @@
+# vendor/aqa/server/aqa_server.rc
+#
+# init.rc fragment for the aqa_server automation daemon.
+# Started on boot. Restarted automatically on crash.
+# Runs as root with `su` SELinux label (privileged domain) so it can:
+#   - inject touch events via /dev/uinput
+#   - launch/force-stop arbitrary packages via /system/bin/am
+#   - read SMS inbox via /system/bin/content query
+#
+# This is INTENDED for QA testbed images only. Do NOT enable in production.
+
+service aqa_server /system/bin/aqa_server
+    class main
+    user root
+    group root system input
+    seclabel u:r:su:s0
+    writepid /dev/cpuset/system-background/tasks
+    onrestart restart aqa_server
+
+on boot
+    start aqa_server
