@@ -1,4 +1,4 @@
-# device.mk — qalos-specific additions layered on Google's cheetah tree.
+# device.mk — qalos-specific additions layered on AOSP's cheetah product.
 #
 # IMPORTANT: the build system does NOT auto-load device.mk (nothing in
 # build/make/core references it). This file only takes effect because
@@ -6,14 +6,11 @@
 # device/qalos/qalos_emulator uses. The previous comment claiming it was
 # "loaded after BoardConfig.mk during the build configuration phase" was
 # wrong: as written, the overlay and the audit property were dead config.
-
-# Google's cheetah device makefile (vendored under device/google/cheetah/).
-# Duplicate inheritance is safe: AOSP's import-nodes dedupes
-# already-imported nodes ("skipping already-imported",
-# build/make/core/node_fns.mk), so forks whose aosp_cheetah.mk already
-# inherits this file are unaffected, and forks that don't still get the
-# device config.
-$(call inherit-product, device/google/cheetah/device.mk)
+#
+# No Google device makefile is inherited here: qalos_cheetah.mk inherits
+# device/google/pantah/aosp_cheetah.mk, which already inherits
+# device/google/pantah/device-cheetah.mk (verified verbatim in AOSP
+# 15.0.0_r1). This file is therefore ONLY qalos additions.
 
 # qalos-specific overlay packages (signing keys, branding, etc.).
 # overlay/ is not populated yet, so only register it once it exists.

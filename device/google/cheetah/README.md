@@ -1,54 +1,67 @@
-# device/google/cheetah — Pixel 7 Pro device tree (VENDORED STUB)
+# device/google/cheetah — Pixel 7 Pro docs anchor (NO DEVICE TREE HERE)
 
-**This directory is intentionally empty in the qalos repo.** It is a
-placeholder for Google's cheetah (Pixel 7 Pro) device tree, which must be
-populated from a community fork before building.
+**This directory intentionally contains only documentation.** The real
+Pixel 7 Pro (cheetah) device tree is **already public in AOSP 15** and is
+fetched by `repo sync` via the qalos manifest (`default.xml` →
+`upstream.xml`):
 
-## Why it's empty
+| What | Where (after `repo sync`) |
+| --- | --- |
+| Cheetah product makefile | `device/google/pantah/aosp_cheetah.mk` |
+| Cheetah device config | `device/google/pantah/device-cheetah.mk` |
+| Cheetah board config | `device/google/pantah/cheetah/BoardConfig.mk` |
+| Shared GS201 (Tensor G2) platform | `device/google/gs201/` |
+| Sepolicy | `device/google/pantah-sepolicy/`, `device/google/gs201-sepolicy/` |
+| Kernel 5.10 prebuilts | `device/google/pantah-kernels/5.10/` |
 
-Google's Pixel device trees are in their **private** Android repo at
-`https://cs.android.com/android/_/android/platform/device/google/cheetah/`
-(not publicly accessible). For AOSP, Google moved Pixel trees out of the
-public AOSP manifest around AOSP 14. The qalos manifest inherits
-`upstream.xml` (a verbatim copy of AOSP's default.xml at
-android-15.0.0_r1), which no longer references cheetah.
+The qalos products consume these directly:
+`device/qalos/qalos_cheetah/qalos_cheetah.mk` inherits
+`device/google/pantah/aosp_cheetah.mk`, and its `BoardConfig.mk`
+`-include`s `device/google/pantah/cheetah/BoardConfig.mk`.
 
-## How to populate
+> Historical note: an earlier version of this README claimed Pixel trees
+> were private and had to come from a community fork (LineageOS,
+> PixelExperience, nickel-jn). That was wrong for AOSP 15 — `pantah` was
+> never removed from the public manifest, and the PixelExperience /
+> nickel-jn repos no longer exist. LineageOS's
+> `android_device_google_cheetah` is also just a 4-file extraction stub;
+> its real content lives in `android_device_google_pantah`. Verified
+> 2026-09-25 against `android-15.0.0_r1`.
 
-Pick ONE of these community sources and clone into this directory:
+## What is still missing: proprietary blobs
 
-### Option A — LineageOS device tree (recommended)
+AOSP ships no proprietary binaries. `device-cheetah.mk` pulls them in via
+`$(call inherit-product-if-exists, …)`, so the build configures without
+them, but a device image without blobs has no camera/audio/radio HALs.
+
+Populate `vendor/google_devices/` (NOT this directory) with **one** of:
+
+### Option A — Google's driver zips (recommended)
+Download the "Pixel 7 Pro binaries for Android 15.0.0" package matching
+your AOSP release from
+<https://developers.google.com/android/drivers> and run the extracted
+self-extracting scripts at the top of the AOSP tree. They populate
+`vendor/google_devices/pantah/` and `vendor/google_devices/gs201/` —
+exactly the paths `device-cheetah.mk` and `cheetah/BoardConfig.mk`
+reference.
+
+### Option B — LineageOS extraction tooling (from a device or factory image)
 ```bash
 cd /home/bramburn/aosp
-git clone https://github.com/LineageOS/android_device_google_cheetah \
-    device/google/cheetah
+git clone -b lineage-22.1 https://github.com/LineageOS/android_device_google_pantah \
+    device/google/pantah-lineage   # anywhere; it is tooling + lineage deltas
+# then follow its README / extract-files.py to pull blobs from a stock
+# Pixel 7 Pro or a factory image.
 ```
+This is only needed if you can't use the Google driver zips (e.g.
+license constraints). Note the LineageOS flow also expects its own gs201
+fork (`lineage.dependencies`) and writes lineage-flavoured vendor
+makefiles; the qalos products are tested against the plain-AOSP flow.
 
-This gives you `BoardConfig.mk`, `device.mk`, `aosp_cheetah.mk`, kernel
-config, and `extract-files.sh` for proprietary blobs.
+## After populating blobs
 
-### Option B — PixelExperience
-```bash
-cd /home/bramburn/aosp
-git clone https://github.com/PixelExperience-Devices/device_google_cheetah \
-    device/google/cheetah
-```
-
-### Option C — Generic community fork (nickel-jn, etc.)
-```bash
-cd /home/bramburn/aosp
-git clone https://github.com/nickel-jn/cheetah device/google/cheetah
-```
-
-## After populating
-
-1. Verify the `aosp_cheetah.mk` product makefile exists.
-2. Run `./extract-files.sh` from inside `device/google/cheetah/` to pull
-   proprietary blobs into `vendor/google/cheetah/` and
-   `vendor/google/raviole/` (downloads from
-   https://developers.google.com/android/drivers, requires the build
-   fingerprint).
-3. Then `lunch qalos_cheetah-userdebug` should configure successfully.
+`lunch qalos_cheetah-userdebug` (or `qalos_cheetah_slim-userdebug`)
+should configure and build. See "How the qalos layer is wired" below.
 
 ## How the qalos layer is wired (IMPORTANT)
 
@@ -59,28 +72,16 @@ The qalos products use `TARGET_DEVICE=qalos_cheetah` /
 (`build/make/core/board_config.mk`), so:
 
 - `device/qalos/qalos_cheetah/BoardConfig.mk` is what gets loaded; it
-  `-include`s this tree's `BoardConfig.mk` for the real board config.
-- This tree's own `BoardConfig.mk` must NOT be the only match for the
-  `qalos_cheetah` search path — two matches abort the build with
-  "Multiple board config files".
+  `-include`s `device/google/pantah/cheetah/BoardConfig.mk` for the real
+  board config.
 - Build output lands in `out/target/product/qalos_cheetah/` (not
   `.../cheetah/`).
 - Build fingerprints are computed by AOSP as
   `qalos/qalos_cheetah/qalos_cheetah:<version>/<id>/<num>:<variant>/<tags>`.
 
-### Vendor-blob caveat
-
-Some extraction tooling generates `vendor/*/Android.mk` files gated on
-`ifeq ($(TARGET_DEVICE),cheetah)`. With the qalos products
-`TARGET_DEVICE` is `qalos_cheetah[_slim]`, so such gates would silently
-skip every blob module (broken vendor image). If the first build is
-missing `/vendor` content, check the generated makefiles for
-`TARGET_DEVICE` conditionals and relax the gate (or add the qalos device
-names to it).
-
 ## Manifest
 
-Once populated, you may also want to add this as a `<project>` entry in
-`default.xml` (with a custom remote pointing to the community fork
-instead of Google) so subsequent `repo sync` re-fetches the source. See
-`default.xml` for the existing pattern.
+No manifest change is needed for the device tree (pantah/gs201 are
+already in `upstream.xml`). If you adopt the LineageOS flow you may add
+its repos as `<project>` entries with a custom remote; see `default.xml`
+for the existing pattern.

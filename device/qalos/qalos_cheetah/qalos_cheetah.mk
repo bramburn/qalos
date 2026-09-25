@@ -1,11 +1,13 @@
 # qalos Pixel 7 Pro (cheetah) — vanilla build
 #
-# Inherits from Google's cheetah device tree (vendored under
-# device/google/cheetah/ — see that directory's README.md for how to
-# populate it from a community fork) and layers qalos branding, packages,
-# and QA-lab configuration on top.
+# Inherits the official AOSP cheetah product. In AOSP 15 the Pixel 7 Pro
+# config is public and ships in the manifest: the product/board/device
+# makefiles live under device/google/pantah/ (cheetah is the GS201-based
+# "pantah" platform), and `repo sync` already fetches them — no community
+# fork needed for the device tree itself. Only the proprietary blobs are
+# missing (see device/google/cheetah/README.md).
 
-$(call inherit-product, device/google/cheetah/aosp_cheetah.mk)
+$(call inherit-product, device/google/pantah/aosp_cheetah.mk)
 # qalos additions (overlay, audit-logging property). device.mk is NOT
 # auto-loaded by the build system — it only takes effect because it is
 # inherited here (same explicit pattern as device/qalos/qalos_emulator).
@@ -16,10 +18,9 @@ PRODUCT_NAME := qalos_cheetah
 # AndroidProducts.mk. AOSP 15 discovers BoardConfig.mk by searching
 # device/ and vendor/ for '*/$(TARGET_DEVICE)/BoardConfig.mk'
 # (build/make/core/board_config.mk). With PRODUCT_DEVICE := cheetah the
-# search matches the vendored device/google/cheetah/BoardConfig.mk and
-# this entire qalos layer is silently ignored; before the tree is
-# populated, lunch fails with "No config file found for TARGET_DEVICE
-# cheetah". TARGET_DEVICE=qalos_cheetah also gives the product its own
+# search matches AOSP's own device/google/pantah/cheetah/BoardConfig.mk
+# and this entire qalos layer is silently ignored. TARGET_DEVICE=qalos_cheetah
+# also gives the product its own
 # output directory (PRODUCT_OUT := out/target/product/$(TARGET_DEVICE),
 # build/make/core/envsetup.mk), so vanilla and slim never collide.
 PRODUCT_DEVICE := qalos_cheetah

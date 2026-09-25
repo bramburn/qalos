@@ -11,7 +11,7 @@
 
 ## 0. Quick orientation
 
-- **What this is:** an AOSP fork (`android-15.0.0_r1`) for QA Lab use. First target is the x86_64 emulator (`qalos_emulator-userdebug`).
+- **What this is:** an AOSP fork (`android-15.0.0_r1`) for QA Lab use. First target is the x86_64 emulator (`qalos_emulator-userdebug`); second target is Pixel 7 Pro (`qalos_cheetah-userdebug` / `qalos_cheetah_slim-userdebug`, device tree is AOSP-public `device/google/pantah`, blobs from driver zips — see `device/google/cheetah/README.md`).
 - **Three build paths:** Local Linux box (primary), DigitalOcean droplet (fallback #1), Aliyun ECS (fallback #2), GCP Compute Engine (fallback #3).
 - **Cloud SSH transport:** All three cloud paths use **native SSH** to talk to the build instance. The GCP path uses Windows OpenSSH (`C:\Windows\System32\OpenSSH\ssh.exe`) on the host because the gcloud SDK hardcodes PuTTY/Plink which fails against modern Linux VMs (see §7.6).
 - **Single source of truth for on-host build steps:** `tools/do-build.sh`. Both cloud orchestrators invoke it.
@@ -51,6 +51,12 @@ qalos/
 ├── upstream.xml                   ← verbatim copy of AOSP's default.xml
 │
 ├── device/qalos/qalos_emulator/   ← qalos product makefile (branding, build id)
+├── device/qalos/qalos_cheetah/    ← qalos Pixel 7 Pro (vanilla) product + board layer
+├── device/qalos/qalos_cheetah_slim/ ← same device, stripped package set (~30% faster build)
+├── device/google/cheetah/         ← DOCS ANCHOR ONLY — real tree is AOSP-public device/google/pantah (in upstream.xml)
+├── device/google/cheetah-kernels/ ← DOCS ANCHOR ONLY — kernel ships via device/google/pantah-kernels/5.10
+├── vendor/google/cheetah/         ← DOCS ANCHOR ONLY — blobs go to vendor/google_devices/… (driver zips)
+├── vendor/google/raviole/         ← DOCS ANCHOR ONLY — raviole = Pixel 6 (GS101), NOT used by cheetah
 ├── packages/apps/QaLab/           ← the only first-party qalos app
 │
 ├── tools/                         ← WINDOWS ORCHESTRATORS (.ps1) + ON-HOST (.sh) + LLM-DRIVEN DOCS
