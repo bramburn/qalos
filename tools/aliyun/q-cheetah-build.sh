@@ -135,6 +135,11 @@ du -sh /root/aosp_new 2>/dev/null | tail -1
 # (verified 2026-09-26); fetch + checkout is <30s.
 log "STEP 4a: switching .repo/manifests to feat/qa-lab-os-v1"
 cd /root/aosp_new/.repo/manifests
+# Clean untracked files from previous runs (apply-qalos.sh copies files
+# into the working tree; they conflict with branch checkout otherwise).
+log "  cleaning untracked files in .repo/manifests/"
+git clean -fdx 2>&1 | tail -3
+git reset --hard 2>&1 | tail -3
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 log "  current branch: $CURRENT_BRANCH"
 if [ "$CURRENT_BRANCH" != "feat/qa-lab-os-v1" ]; then
@@ -148,10 +153,16 @@ else
   git merge --ff-only origin/feat/qa-lab-os-v1 2>&1 | tail -3
 fi
 log "  HEAD now at: $(git rev-parse --short HEAD) on $(git rev-parse --abbrev-ref HEAD)"
+# Set upstream so apply-qalos.sh's `git pull` works without arguments
+git branch --set-upstream-to=origin/feat/qa-lab-os-v1 feat/qa-lab-os-v1 2>&1 | tail -2
+cd /root/aosp_new
+
+# Ensure qalos tools/ scripts are executable (tar preserves 644 from git)
+log "STEP 4a.5: chmod +x qalos tools/"
+chmod +x /root/aosp_new/.repo/manifests/tools/*.sh /root/aosp_new/.repo/manifests/tools/*.py 2>/dev/null || true
 
 # ---- step 4b: apply qalos patches ------------------------------------------
 log "STEP 4b: applying qalos patches (apply-qalos.sh)"
-cd /root/aosp_new
 .repo/manifests/tools/apply-qalos.sh
 
 # ---- step 5: build env ------------------------------------------------------
