@@ -11,6 +11,6 @@ PRODUCT_MAKEFILES := \
     $(LOCAL_DIR)/qalos_cheetah_slim.mk
 
 COMMON_LUNCH_CHOICES := \
-    qalos_cheetah_slim-userdebug \
-    qalos_cheetah_slim-user \
-    qalos_cheetah_slim-eng
+    qalos_cheetah_slim-trunk_staging-userdebug \
+    qalos_cheetah_slim-trunk_staging-user \
+    qalos_cheetah_slim-trunk_staging-eng

@@ -15,6 +15,6 @@ PRODUCT_MAKEFILES := \
 
 # Build variants
 COMMON_LUNCH_CHOICES := \
-    qalos_cheetah-userdebug \
-    qalos_cheetah-user \
-    qalos_cheetah-eng
+    qalos_cheetah-trunk_staging-userdebug \
+    qalos_cheetah-trunk_staging-user \
+    qalos_cheetah-trunk_staging-eng
