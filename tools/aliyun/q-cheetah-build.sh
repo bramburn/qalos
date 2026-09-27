@@ -27,7 +27,12 @@ QALOS_BUILD_ID="${QALOS_BUILD_ID:-qalos-cheetah-$(date +%Y%m%d-%H%M%S)}"
 HK_OSS_BUCKET="${HK_OSS_BUCKET:-qalos-aosp-hk}"
 HK_OSS_ENDPOINT="${HK_OSS_ENDPOINT:-oss-cn-hongkong.aliyuncs.com}"
 MAX_RUNTIME_MINUTES="${MAX_RUNTIME_MINUTES:-360}"  # 6h; download + 3 builds + uploads
+# The tar.zst was created on macmini2024 from /home/bramburn/aosp_new/ and so
+# extracts preserving the directory name. When extracted to /root, it lands
+# at /root/aosp_new/. We then symlink /root/aosp -> /root/aosp_new so the
+# rest of the script can use the standard /root/aosp path.
 AOSP_SRC=/root/aosp
+AOSP_TREE=/root/aosp_new
 OSS_OPTS="--endpoint $HK_OSS_ENDPOINT --part-size=104857600 --parallel=8 --bigfile-threshold=104857600"
 LOG=/var/log/q-cheetah-build.log
 STATE_DIR=/tmp/q_state
@@ -80,11 +85,12 @@ upload_image_set() {
 
 # ---- step 1: free up stale source from warm image ---------------------------
 log "STEP 1: cleaning stale source (free disk for fresh extract)"
-# Don't delete aosp_new.tar.zst if a download is already in progress or done.
-if [ -f /tmp/q_state/OSSUTIL_DONE ] && [ -s /root/aosp_new.tar.zst ]; then
-  log "  SKIP: aosp_new.tar.zst already exists and OSSUTIL_DONE marker set"
+# Skip cleanup if tar.zst is already at expected size (download finished).
+EXPECTED_SIZE=112876345779
+if [ "$(stat -c %s /root/aosp_new.tar.zst 2>/dev/null || echo 0)" -eq "$EXPECTED_SIZE" ]; then
+  log "  SKIP: aosp_new.tar.zst already at expected size (105.124 GiB)"
 else
-  rm -rf /root/aosp /root/aosp_new.tar.zst /root/.ccache /root/aosp_new.tar.zst.temp
+  rm -rf /root/aosp /root/aosp_new /root/aosp_new.tar.zst /root/.ccache /root/aosp_new.tar.zst.temp
 fi
 sync
 df -h /root
@@ -110,11 +116,16 @@ ls -lh /root/aosp_new.tar.zst
 
 # ---- step 3: extract --------------------------------------------------------
 log "STEP 3: extracting tar.zst"
-mkdir -p /root/aosp
-tar --use-compress-program=unzstd -xf /root/aosp_new.tar.zst -C /root/aosp
+mkdir -p /root
+tar --use-compress-program=unzstd -xf /root/aosp_new.tar.zst -C /root
+# tar created /root/aosp_new/ on disk; symlink /root/aosp to it for the rest
+# of the script's standard path.
+if [ ! -e /root/aosp ]; then
+  ln -s /root/aosp_new /root/aosp
+fi
 log "extraction complete"
 df -h /root
-du -sh /root/aosp 2>/dev/null | tail -1
+du -sh /root/aosp_new 2>/dev/null | tail -1
 
 # ---- step 4: switch .repo/manifests to feat/qa-lab-os-v1 ------------------
 # The tar.zst was synced from `main`, but our cheetah + aqa overlays live
@@ -123,7 +134,7 @@ du -sh /root/aosp 2>/dev/null | tail -1
 # exist when the script runs. github.com is reachable from cn-guangzhou-b
 # (verified 2026-09-26); fetch + checkout is <30s.
 log "STEP 4a: switching .repo/manifests to feat/qa-lab-os-v1"
-cd /root/aosp/.repo/manifests
+cd /root/aosp_new/.repo/manifests
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 log "  current branch: $CURRENT_BRANCH"
 if [ "$CURRENT_BRANCH" != "feat/qa-lab-os-v1" ]; then
@@ -140,7 +151,7 @@ log "  HEAD now at: $(git rev-parse --short HEAD) on $(git rev-parse --abbrev-re
 
 # ---- step 4b: apply qalos patches ------------------------------------------
 log "STEP 4b: applying qalos patches (apply-qalos.sh)"
-cd /root/aosp
+cd /root/aosp_new
 .repo/manifests/tools/apply-qalos.sh
 
 # ---- step 5: build env ------------------------------------------------------

@@ -62,7 +62,7 @@ fi
 7z | head -1
 
 # ---- step 2: 7z -mx=9 on the AOSP source tree -----------------------------
-AOSP_SRC=/root/aosp
+AOSP_SRC=/root/aosp_new
 ARCHIVE=/root/aosp_new.7z
 log "STEP 2: 7z a -mx=9 $ARCHIVE $AOSP_SRC"
 log "  source tree size:"
