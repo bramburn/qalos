@@ -7,6 +7,36 @@
 # fork needed for the device tree itself. Only the proprietary blobs are
 # missing (see device/google/cheetah/README.md).
 
+# --- Kernel prebuilts: point cheetah at the 5.10 tree that is actually synced ---
+#
+# The public manifest at android-15.0.0_r1 ships only
+# device/google/pantah-kernels/5.10 (tag 24Q3-12115410), but the release
+# config asks for 6.1:
+#   build/release/flag_values/trunk_staging/RELEASE_KERNEL_CHEETAH_DIR.textproto
+#     string_value: "device/google/pantah-kernels/6.1/trunk-11970169"
+#
+# device/google/pantah/device-cheetah.mk:22-23 then does
+#   TARGET_KERNEL_DIR ?= $(RELEASE_KERNEL_CHEETAH_DIR)
+#   TARGET_BOARD_KERNEL_HEADERS ?= $(RELEASE_KERNEL_CHEETAH_DIR)/kernel-headers
+# so the missing 6.1 tree surfaces as a ninja failure on the one target that
+# needs the prebuilt image:
+#   FAILED: ninja: 'device/google/pantah-kernels/6.1/trunk-11970169/Image.lz4',
+#     needed by 'out/target/product/qalos_cheetah/kernel', missing and no
+#     known rule to make it
+#
+# Override RELEASE_KERNEL_CHEETAH_DIR BEFORE the inherit so device-cheetah.mk's
+# `?=` picks up the tree we actually have. The 5.10 dir contains Image.lz4,
+# System.map, the vendor_kernel_boot.modules.load and the .ko modules, so it is
+# a complete enough prebuilt set to build against.
+# Set before the inherit, not after -- `?=` only honours a pre-set value.
+_qalos_kernel_dir := $(firstword $(wildcard device/google/pantah-kernels/5.10/*))
+ifneq ($(_qalos_kernel_dir),)
+RELEASE_KERNEL_CHEETAH_DIR := $(_qalos_kernel_dir)
+TARGET_KERNEL_DIR := $(_qalos_kernel_dir)
+TARGET_BOARD_KERNEL_HEADERS := $(_qalos_kernel_dir)/kernel-headers
+endif
+# End kernel prebuilt override.
+
 $(call inherit-product, device/google/pantah/aosp_cheetah.mk)
 # qalos additions (overlay, audit-logging property). device.mk is NOT
 # auto-loaded by the build system â€” it only takes effect because it is
