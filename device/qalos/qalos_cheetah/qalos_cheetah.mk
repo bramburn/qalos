@@ -1,31 +1,18 @@
-# qalos Pixel 7 Pro (cheetah) — vanilla build
+# qalos Pixel 7 Pro (cheetah) â€” vanilla build
 #
 # Inherits the official AOSP cheetah product. In AOSP 15 the Pixel 7 Pro
 # config is public and ships in the manifest: the product/board/device
 # makefiles live under device/google/pantah/ (cheetah is the GS201-based
-# "pantah" platform), and `repo sync` already fetches them — no community
+# "pantah" platform), and `repo sync` already fetches them â€” no community
 # fork needed for the device tree itself. Only the proprietary blobs are
 # missing (see device/google/cheetah/README.md).
 
 $(call inherit-product, device/google/pantah/aosp_cheetah.mk)
 # qalos additions (overlay, audit-logging property). device.mk is NOT
-# auto-loaded by the build system — it only takes effect because it is
+# auto-loaded by the build system â€” it only takes effect because it is
 # inherited here (same explicit pattern as device/qalos/qalos_emulator).
 $(call inherit-product, device/qalos/qalos_cheetah/device.mk)
 
-# --- Release config ---------------------------------------------------------
-# AOSP 15 refuses to build when TARGET_RELEASE is unset:
-#   build/make/core/release_config.mk:270
-#   error: No release config set for target; please set TARGET_RELEASE ...
-#   where release is one of: $(ALL_RELEASE_CONFIGS_FOR_PRODUCT)
-# and for this product that list came back empty, so even the 3-part
-# `lunch qalos_cheetah-trunk_staging-userdebug` did not populate it.
-#
-# trunk_staging is a valid release in this tree (qalos_emulator builds with
-# it), and release_config.mk:263-276 explicitly supports setting
-# TARGET_RELEASE in the product. Pin it here so the build does not depend on
-# lunch resolving the release for us.
-TARGET_RELEASE := trunk_staging
 
 PRODUCT_NAME := qalos_cheetah
 # PRODUCT_DEVICE MUST equal the directory name containing this
@@ -43,11 +30,11 @@ PRODUCT_MODEL := qalos for Pixel 7 Pro
 
 # qalos-specific apps.
 #
-# Do NOT add "AuditLogger" here — no such module exists in the tree and an
+# Do NOT add "AuditLogger" here â€” no such module exists in the tree and an
 # unknown PRODUCT_PACKAGES entry aborts the build. Audit capture is
 # implemented by RemoteControlService, which tools/apply-qalos.sh injects
 # into frameworks/base as a patch (it is not a PRODUCT_PACKAGES module);
-# see legal/AGENTS.md §2.9 and packages/apps/RemoteControlService/.
+# see legal/AGENTS.md Â§2.9 and packages/apps/RemoteControlService/.
 PRODUCT_PACKAGES += QaLab
 
 # Do NOT set BUILD_FINGERPRINT. AOSP computes it as
