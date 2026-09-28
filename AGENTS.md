@@ -604,6 +604,86 @@ ap-southeast-1's public endpoint behavior on this account is
 **not** verified. Before switching, run a 5 MB `ossutil cp` test
 from `macmini2024` first.
 
+### 5.4.7 Clean AOSP source snapshot in cn-guangzhou (added 2026-09-14)
+
+After build attempt 11 succeeded for the build itself but failed at the
+Windows emulator boot step (see recent commit history), the cn-guangzhou
+ECS that had been carrying the AOSP source tree was **released** and
+replaced by a self-contained snapshot of the cleaned source tree. This
+is the unit of restoration for any future Aliyun build that needs the
+exact AOSP source captured on 2026-09-14.
+
+**What is in the snapshot (cn-guangzhou, snapshot id
+`s-7xv3yfag0rlyz5dgvu43`, custom image id `m-7xv7h5qzkbvbrw7qmcty`):**
+
+| Item | Size | Notes |
+|---|---|---|
+| Cleaned AOSP source (`/aosp-extracted/aosp`) | ~98 GB | `out/`, `out.stale.*/`, `.repo/project-objects/` removed. Source tree + prebuilts intact. |
+| Compressed source (`/aosp-source-20260914.tar.gz`) | 35 GB | `tar.gz` of the cleaned source, `.repo` excluded. Extracts back to the same tree. |
+| Source disk | 500 GB ESSD PL1 | The original system disk that held the build attempt. |
+
+**What was thrown away** (intentionally — these are regen-on-build):
+
+- `out/` (93 GB active build output)
+- `out.stale.*` (~50 GB of older failed builds)
+- `.repo/project-objects/` (30 GB of git fetch cache, re-downloaded by `repo sync`)
+- The instance itself (`i-7xvdd8coriz1err9ykr6`) — was Stopped + KeepCharging,
+  now released so we don't pay ~¥250/month for a parked 500 GB ESSD.
+
+**Why a snapshot AND a custom image (two artifacts, same data):**
+
+- **Snapshot** (`s-7xv3yfag0rlyz5dgvu43`) — cheap (~¥35–50/month), keeps
+  the source tree recoverable verbatim. Use this for long-term archival
+  and to seed a new build disk.
+- **Custom image** (`m-7xv7h5qzkbvbrw7qmcty`, status `Available`) — lets
+  you skip the ~30–50 GB download / extract / disk-format step on a new
+  instance launch. `RunInstances --ImageId m-7xv7h5qzkbvbrw7qmcty` gives
+  you a working build VM in 1–2 min instead of 30–60 min. Image storage
+  on top of the snapshot is essentially free until you actually use it.
+
+**Restore / reuse recipes (verified 2026-09-14):**
+
+```bash
+# A) Launch a new build VM directly from the custom image (fastest).
+aliyun ecs RunInstances --region cn-guangzhou \
+  --ImageId m-7xv7h5qzkbvbrw7qmcty \
+  --InstanceType ecs.u1-c1m8.2xlarge \
+  --InstanceChargeType PostPaid \
+  --VSwitchId vsw-7xvvy64syomut0vdu6iin \
+  --SecurityGroupId sg-7xv0xvsywi6cm82ea65c \
+  --KeyPairName qalos-aosp-key-ed25519 \
+  --SystemDisk.Category cloud_essd --SystemDisk.Size 500
+
+# B) Create a new disk from the snapshot, attach to any instance.
+aliyun ecs CreateDisk --region cn-guangzhou \
+  --SnapshotId s-7xv3yfag0rlyz5dgvu43 \
+  --Size 500 --Category cloud_essd
+aliyun ecs AttachDisk --region cn-guangzhou \
+  --InstanceId i-<your-instance> \
+  --DiskId d-<new-disk>
+
+# C) Extract the tarball once the disk is mounted (inside the VM).
+cd /
+tar -xzf /aosp-source-20260914.tar.gz
+# Restores /aosp-extracted/aosp/ exactly as it was on 2026-09-14.
+```
+
+**Cost to keep both artifacts in cn-guangzhou idle:**
+
+| Artifact | Standing cost | Notes |
+|---|---|---|
+| Snapshot `s-7xv3yfag0rlyz5dgvu43` (500 GB source, ~315 GB actual after dedup) | ~¥35–50/month | Pay-as-you-go. Cheapest long-term storage. |
+| Custom image `m-7xv7h5qzkbvbrw7qmcty` | ~¥0 (while unused) | Image storage is free until first use, then billed by size. |
+| Instance + 500 GB disk (if recreated from snapshot/image) | ~¥250–300/month when stopped; ~¥450–550/month running | Don't keep a parked instance — restore on demand. |
+
+**Do NOT use this snapshot for the warm-image fast path.** The warm
+image pattern (see §2.2) is a small image with prebuilts + AOSP source
+ready to `repo sync` and build. This snapshot is a **clean-source**
+artifact, not a warm image. If you want a warm image, build one from
+this snapshot first (`RunInstances` from `m-7xv7h5qzkbvbrw7qmcty`,
+run `tools/do-build.sh --phase preflight` to warm ccache, then
+`StopInstance` + `CreateImage`).
+
 ### 5.5 GCP fallback (Windows)
 
 ```powershell
@@ -700,6 +780,7 @@ scp /tmp/qalos-aosp.tar.gz <aliyun-user>@<aliyun-ip>:/path/to/aosp.tar.gz
 | DO Spaces | $5/mo | (storage for build artifacts) |
 | DO build droplet (`c-8`) | $0 | $0.50-0.80 |
 | Aliyun `qalos-build-warm` custom image (8-12 GB ESSD PL1) | **~¥8-12/mo** (corrected 2026-09-09) | — |
+| Aliyun `aosp-source-clean-20260914` snapshot (cn-guangzhou, snapshot `s-7xv3yfag0rlyz5dgvu43`, image `m-7xv7h5qzkbvbrw7qmcty`, 500 GB source / ~315 GB actual after dedup) | **~¥35-50/mo** (added 2026-09-14, see §5.4.7) | — |
 | Aliyun build ECS (`g7a.16xlarge` spot, 1.5 h) | $0 | ~¥9 (compute + disk + egress) |
 | Aliyun egress (scp 3 GB to UK) | $0 | ~¥0.4 (only 3 GB; not 10) |
 | GCP `qalos-build-warm` snapshot (incremental, ~1 GB actual data on 200 GB disk) | ~$0.03/mo | — |
@@ -708,7 +789,7 @@ scp /tmp/qalos-aosp.tar.gz <aliyun-user>@<aliyun-ip>:/path/to/aosp.tar.gz
 
 **Idle project cost if you only use the local box: $0.**
 **Idle project cost if you maintain the DO fallback: ~$5.40/month.**
-**Idle project cost if you maintain the Aliyun fallback: ~¥8-12/month** (was quoted as ~¥6/month; corrected — the warm image at ESSD PL1 ¥1/GB/month on 8-12 GB is ¥8-12, not ¥1).
+**Idle project cost if you maintain the Aliyun fallback: ~¥45-65/month** (warm image ¥8-12 + clean-source snapshot ¥35-50, both kept as of 2026-09-14; warm image at ESSD PL1 ¥1/GB/month on 8-12 GB is ¥8-12, not ¥1).
 **Idle project cost if you maintain the GCP fallback: ~$0.03/month (warm snapshot is incremental — only ~1 GB of actual data, not the full 200 GB disk).**
 
 See [`tools/aliyun/build-cost.md`](tools/aliyun/build-cost.md) for
@@ -1117,6 +1198,7 @@ Linux instance.
 - **The on-host build is `do-build.sh`.** All three cloud paths invoke it. Don't fork it.
 - **The Aliyun path is LLM-driven** as of 2026-09-09. The agent calls `aliyun ecs ...` via Bash, sets up a `mavis cron` to own teardown, and the build runs as a detached `systemd-run` unit on the instance. See [`tools/aliyun/AGENTS.md`](tools/aliyun/AGENTS.md).
 - **AOSP source ships to Aliyun via the HK relay (§5.4.5).** Mac Mini → HK OSS (public) → HK ECS via HK OSS internal endpoint → extract 127 GB → `CreateImage` → `CopyImage` → cn-guangzhou. Direct UK → cn-guangzhou is unusable (~1 KB/s SSH, public OSS endpoint blocked at account level).
+- **There is a clean-AOSP snapshot parked in cn-guangzhou (§5.4.7).** Snapshot `s-7xv3yfag0rlyz5dgvu43` + custom image `m-7xv7h5qzkbvbrw7qmcty` capture the exact AOSP source tree (sans `out/`, sans `out.stale.*`, with `aosp-source-20260914.tar.gz` at the root) from build attempt 11. To start a new build, launch directly from the image — don't redo the source upload.
 - **Four safety nets** prevent orphaned cloud resources. Every new build script MUST implement them.
 - **The warm image is the unit of cost optimization.** Pay ~¥8-12/month for the Aliyun image, ~$0.40/month for the DO snapshot, save 30 min per build.
 - **GCP: use Spot with a retry mindset.** 30-second preemption notice means a mid-build reclaim costs one extra `m` round — `repo sync` and `ccache` survive it.
