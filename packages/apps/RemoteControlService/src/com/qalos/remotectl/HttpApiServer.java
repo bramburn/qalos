@@ -82,8 +82,13 @@ public final class HttpApiServer extends Thread {
         void handle(Socket socket, String body, JSONObject query) throws IOException;
     }
 
-    private static final Map<String, RouteHandler> ROUTES = new HashMap<>();
-    static {
+    // Per-instance, NOT static: the route lambdas call instance methods
+    // (handleTap, handleScreenshot, ...) which need mService and the cached
+    // token. A `static { }` initialiser referencing them does not compile:
+    //   HttpApiServer.java:87: error: non-static method handleHealth(OutputStream)
+    //   cannot be referenced from a static context
+    private final Map<String, RouteHandler> ROUTES = new HashMap<>();
+    {
         ROUTES.put("GET /health",     (sock, body, query) -> handleHealth(sock.getOutputStream()));
         ROUTES.put("GET /display",   (sock, body, query) -> handleDisplay(sock.getOutputStream()));
         ROUTES.put("GET /screenshot",(sock, body, query) -> handleScreenshot(sock.getOutputStream(), query));

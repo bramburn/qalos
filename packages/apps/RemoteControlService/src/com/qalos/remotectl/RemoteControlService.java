@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 /*
- * qalos — Remote Control Service.
+ * qalos â€” Remote Control Service.
  *
  * System service that runs inside system_server. The HttpApiServer
  * (same process) drives the service through a plain Java interface,
@@ -94,7 +94,7 @@ public final class RemoteControlService extends SystemService implements IRemote
         // HTTP server. This eliminates the per-request disk read
         // (review item #6) and means the token path lives in one
         // place (review item #5). If the token file is missing or
-        // unreadable we still start the HTTP server — but token
+        // unreadable we still start the HTTP server â€” but token
         // validation will fail for every non-loopback request, which
         // is the safe failure mode (operators see auth errors, not
         // silent data leaks).
@@ -142,10 +142,10 @@ public final class RemoteControlService extends SystemService implements IRemote
     // Note: AOSP 15 removed SystemService.onDestroy(); the lifecycle ends
     // when system_server exits. The HTTP server is a daemon thread
     // (set via HttpApiServer.setDaemon(true)) so it dies with
-    // system_server automatically — no shutdown hook needed.
+    // system_server automatically â€” no shutdown hook needed.
 
     // ------------------------------------------------------------------
-    // IRemoteControl — input
+    // IRemoteControl â€” input
     // ------------------------------------------------------------------
 
     @Override
@@ -172,7 +172,7 @@ public final class RemoteControlService extends SystemService implements IRemote
     }
 
     // ------------------------------------------------------------------
-    // IRemoteControl — gestures
+    // IRemoteControl â€” gestures
     // ------------------------------------------------------------------
 
     @Override
@@ -199,7 +199,7 @@ public final class RemoteControlService extends SystemService implements IRemote
         if (scale <= 0) {
             throw new IllegalArgumentException("scale must be positive");
         }
-        // No-op for identity scale — same as a tap, nothing to zoom.
+        // No-op for identity scale â€” same as a tap, nothing to zoom.
         if (Math.abs(scale - 1.0f) < 0.001f) {
             return;
         }
@@ -207,7 +207,7 @@ public final class RemoteControlService extends SystemService implements IRemote
     }
 
     // ------------------------------------------------------------------
-    // IRemoteControl — app lifecycle
+    // IRemoteControl â€” app lifecycle
     // ------------------------------------------------------------------
 
     @Override
@@ -223,7 +223,7 @@ public final class RemoteControlService extends SystemService implements IRemote
     }
 
     // ------------------------------------------------------------------
-    // IRemoteControl — queries
+    // IRemoteControl â€” queries
     // ------------------------------------------------------------------
 
     @Override
@@ -382,7 +382,7 @@ public final class RemoteControlService extends SystemService implements IRemote
         // Pointer indices into the coords[] / props[] arrays. The
         // ACTION_POINTER_INDEX_SHIFT bits on POINTER_DOWN / POINTER_UP
         // identify which array slot holds the *new* (or *lifting*)
-        // pointer — not the pointer's id.
+        // pointer â€” not the pointer's id.
         final int pointerIndex0 = 0;
         final int pointerIndex1 = 1;
 
@@ -407,18 +407,18 @@ public final class RemoteControlService extends SystemService implements IRemote
         // touch handlers reject the truncated sequence, so the pinch
         // gesture never actually worked end-to-end.
         //
-        //   1. ACTION_DOWN         — pointer 0 (the first finger)
-        //   2. ACTION_POINTER_DOWN — pointer 1 (the second finger joins)
-        //   3. ACTION_MOVE × N     — both pointers slide outward/inward
-        //   4. ACTION_POINTER_UP   — pointer 1 lifts first
-        //   5. ACTION_UP           — pointer 0 lifts last
+        //   1. ACTION_DOWN         â€” pointer 0 (the first finger)
+        //   2. ACTION_POINTER_DOWN â€” pointer 1 (the second finger joins)
+        //   3. ACTION_MOVE Ã— N     â€” both pointers slide outward/inward
+        //   4. ACTION_POINTER_UP   â€” pointer 1 lifts first
+        //   5. ACTION_UP           â€” pointer 0 lifts last
         MotionEvent downEvent0 = null;
         MotionEvent pointerDownEvent = null;
         MotionEvent pointerUpEvent = null;
         MotionEvent upEvent1 = null;
 
         try {
-            // 1. ACTION_DOWN — pointer 0 only (single-pointer event)
+            // 1. ACTION_DOWN â€” pointer 0 only (single-pointer event)
             downEvent0 = MotionEvent.obtain(
                     startTime, startTime, MotionEvent.ACTION_DOWN,
                     p1x0, p1y0,
@@ -426,7 +426,7 @@ public final class RemoteControlService extends SystemService implements IRemote
             if (displayId != 0) downEvent0.setDisplayId(displayId);
             injectEvent(downEvent0);
 
-            // 2. ACTION_POINTER_DOWN — pointer 1 joins. The full
+            // 2. ACTION_POINTER_DOWN â€” pointer 1 joins. The full
             // coords[] describes both pointers in their starting
             // positions; pointerIndex1 (1) is the new one.
             final MotionEvent.PointerCoords[] coords0 = newCoords(
@@ -441,7 +441,7 @@ public final class RemoteControlService extends SystemService implements IRemote
             if (displayId != 0) pointerDownEvent.setDisplayId(displayId);
             injectEvent(pointerDownEvent);
 
-            // 3. MOVE × 3 — both pointers slide proportionally
+            // 3. MOVE Ã— 3 â€” both pointers slide proportionally
             long prevTime = startTime;
             for (int i = 0; i < 3; i++) {
                 final long eventTime = startTime + ((i + 1) * stepDuration);
@@ -462,7 +462,7 @@ public final class RemoteControlService extends SystemService implements IRemote
                 prevTime = eventTime;
             }
 
-            // 4. ACTION_POINTER_UP — pointer 1 lifts. coords describe
+            // 4. ACTION_POINTER_UP â€” pointer 1 lifts. coords describe
             // pointer 0 at its post-pinch position and pointer 1 at
             // release coords with size=0; pointerIndex1 (1) is the
             // one going up.
@@ -486,7 +486,7 @@ public final class RemoteControlService extends SystemService implements IRemote
             if (displayId != 0) pointerUpEvent.setDisplayId(displayId);
             injectEvent(pointerUpEvent);
 
-            // 5. ACTION_UP — pointer 0 lifts last (single-pointer event)
+            // 5. ACTION_UP â€” pointer 0 lifts last (single-pointer event)
             upEvent1 = MotionEvent.obtain(prevTime, prevTime,
                     MotionEvent.ACTION_UP,
                     centreX - (offset * scale), centreY - (offset * scale),
@@ -624,7 +624,7 @@ public final class RemoteControlService extends SystemService implements IRemote
         try {
             // Use the AIDL binder directly. The app-side
             // `ActivityManager.getRunningTasks(int)` was deprecated in API
-            // 21 and hard-removed in API 35 (Android 15) — the public
+            // 21 and hard-removed in API 35 (Android 15) â€” the public
             // shim no longer exposes it. The system_server-side
             // `IActivityManager.getTasks(int maxNum)` is the supported
             // replacement and is callable from system_server without a
@@ -651,7 +651,7 @@ public final class RemoteControlService extends SystemService implements IRemote
             throw new IllegalArgumentException("display not found: " + displayId);
         }
         // Use the fetched `display` (not `mContext.getDisplay()`, which
-        // is always the default display) — otherwise `displayId` is
+        // is always the default display) â€” otherwise `displayId` is
         // validated and then ignored. Caught by the v0.1 review: the
         // previous code called `mContext.getDisplay().getRealSize(size)`,
         // which made `enforceCoordinatesOnDisplay` validate coordinates
@@ -678,26 +678,37 @@ public final class RemoteControlService extends SystemService implements IRemote
         if (quality < 1 || quality > 100) {
             throw new IllegalArgumentException("quality must be in [1, 100]");
         }
-        // AOSP 15 path (synchronous — see D-018):
-        //   ScreenCapture.captureDisplay(int)  →  ScreenshotHardwareBuffer
-        //     →  Bitmap.wrapHardwareBuffer(hw, colorSpace)
-        //     →  optional aspect-ratio-preserving scale via Bitmap.createScaledBitmap
-        //     →  PNG (lossless; the `quality` param is a JPEG-style knob we accept
+        // AOSP 15 path (synchronous â€” see D-018):
+        //   ScreenCapture.captureDisplay(int)  â†’  ScreenshotHardwareBuffer
+        //     â†’  Bitmap.wrapHardwareBuffer(hw, colorSpace)
+        //     â†’  optional aspect-ratio-preserving scale via Bitmap.createScaledBitmap
+        //     â†’  PNG (lossless; the `quality` param is a JPEG-style knob we accept
         //            but ignore because PNG has no quality axis)
-        //     →  Base64.NO_WRAP
+        //     â†’  Base64.NO_WRAP
         //
         // The capture call is synchronous on AOSP 15 (no CountDownLatch / Executor
         // needed). It must be invoked from a thread that is allowed to take a
-        // display buffer — a per-connection HTTP handler thread on
+        // display buffer â€” a per-connection HTTP handler thread on
         // system_server is fine (WindowManager allows system_server reads).
+        // AOSP 15 removed the captureDisplay(int) overload. The supported route
+        // is DisplayManagerInternal.userScreenshot(int), which returns the same
+        // ScreenCapture.ScreenshotHardwareBuffer and takes a plain display id:
+        //   frameworks/base/core/java/android/hardware/display/
+        //     DisplayManagerInternal.java:131
+        //   userScreenshot(int displayId) -> ScreenshotHardwareBuffer
+        // It is @hide "only for use within the system server" and is published
+        // via publishLocalService(), so LocalServices.get() reaches it from here.
+        // Avoids the DisplayCaptureArgs builder, which would need an IBinder
+        // display token we have no public way to obtain.
+        final android.hardware.display.DisplayManagerInternal dmi =
+                LocalServices.get(android.hardware.display.DisplayManagerInternal.class);
         final android.window.ScreenCapture.ScreenshotHardwareBuffer hwBuf =
-                android.window.ScreenCapture.captureDisplay(displayId);
+                dmi.userScreenshot(displayId);
         if (hwBuf == null) {
-            throw new IllegalStateException("ScreenCapture.captureDisplay returned null");
+            throw new IllegalStateException("userScreenshot returned null");
         }
         final android.hardware.HardwareBuffer buffer = hwBuf.getHardwareBuffer();
         if (buffer == null) {
-            hwBuf.close();
             throw new IllegalStateException("ScreenshotHardwareBuffer has no HardwareBuffer");
         }
         final android.graphics.ColorSpace colorSpace = hwBuf.getColorSpace();
@@ -722,11 +733,11 @@ public final class RemoteControlService extends SystemService implements IRemote
                 final int targetW;
                 final int targetH;
                 if (srcAspect > dstAspect) {
-                    // Source is wider than target → fit width, height letter-boxes.
+                    // Source is wider than target â†’ fit width, height letter-boxes.
                     targetW = width;
                     targetH = Math.round(width / srcAspect);
                 } else {
-                    // Source is taller than target (or equal) → fit height.
+                    // Source is taller than target (or equal) â†’ fit height.
                     targetH = height;
                     targetW = Math.round(height * srcAspect);
                 }
@@ -734,7 +745,7 @@ public final class RemoteControlService extends SystemService implements IRemote
                         bitmap, targetW, targetH, /* filter */ true);
                 if (scaledBitmap != bitmap) {
                     // createScaledBitmap returns the source Bitmap unchanged when the
-                    // dimensions already match — we already checked that, so this
+                    // dimensions already match â€” we already checked that, so this
                     // branch is the expected one. Belt-and-braces recycle below.
                     bitmap.recycle();
                     bitmap = scaledBitmap;
@@ -761,7 +772,6 @@ public final class RemoteControlService extends SystemService implements IRemote
                 bitmap.recycle();
             }
             buffer.close();
-            hwBuf.close();
         }
     }
 
@@ -809,11 +819,15 @@ public final class RemoteControlService extends SystemService implements IRemote
             java.security.SecureRandom sr = new java.security.SecureRandom();
             byte[] bytes = new byte[32];
             sr.nextBytes(bytes);
-            String hex = javax.xml.bind.DatatypeConverter.printHexBinary(bytes);
-            java.nio.file.Files.writeString(
-                    tokenFile.toPath(), hex,
-                    java.nio.file.StandardOpenOption.CREATE,
-                    java.nio.file.StandardOpenOption.EXCLUSIVE);
+            // javax.xml.bind (JAXB) is not on the Android platform and
+            // java.nio.file.Files.writeString is a Java 11 API absent from
+            // android.jar. android.util.Base64 is already imported.
+            final String hex = Base64.encodeToString(
+                    bytes, Base64.NO_WRAP | Base64.NO_PADDING);
+            try (java.io.FileOutputStream fos =
+                    new java.io.FileOutputStream(tokenFile)) {
+                fos.write(hex.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
             tokenFile.setReadable(true, false);  // 0644 world-readable
             Log.i(TAG, "generated new bearer token at " + TOKEN_PATH);
         } catch (java.io.IOException e) {
