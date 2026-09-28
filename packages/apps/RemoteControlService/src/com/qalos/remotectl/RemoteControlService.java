@@ -33,7 +33,6 @@ import android.util.Base64;
 import android.util.Log;
 import android.util.Size;
 import android.view.Display;
-import android.window.ScreenshotHardwareBuffer;
 import android.window.ScreenCapture;
 import android.view.InputDevice;
 import android.view.KeyCharacterMap;
