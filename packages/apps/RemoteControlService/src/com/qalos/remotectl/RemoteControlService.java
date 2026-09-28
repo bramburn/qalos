@@ -701,7 +701,7 @@ public final class RemoteControlService extends SystemService implements IRemote
         // Avoids the DisplayCaptureArgs builder, which would need an IBinder
         // display token we have no public way to obtain.
         final android.hardware.display.DisplayManagerInternal dmi =
-                LocalServices.get(android.hardware.display.DisplayManagerInternal.class);
+                LocalServices.getService(android.hardware.display.DisplayManagerInternal.class);
         final android.window.ScreenCapture.ScreenshotHardwareBuffer hwBuf =
                 dmi.userScreenshot(displayId);
         if (hwBuf == null) {

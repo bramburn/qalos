@@ -79,7 +79,8 @@ public final class HttpApiServer extends Thread {
          *               values parsed as int/bool/string); empty JSONObject if
          *               the request had no query string
          */
-        void handle(Socket socket, String body, JSONObject query) throws IOException;
+        void handle(Socket socket, String body, JSONObject query)
+                throws IOException, JSONException;
     }
 
     // Per-instance, NOT static: the route lambdas call instance methods
