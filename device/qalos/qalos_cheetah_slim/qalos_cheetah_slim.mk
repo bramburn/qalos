@@ -1,4 +1,4 @@
-# qalos Pixel 7 Pro (cheetah) — slim build
+# qalos Pixel 7 Pro (cheetah) â€” slim build
 #
 # Inherits from qalos_cheetah (vanilla), then strips non-essential packages
 # and forces the slim keep-list. Keeps:
@@ -10,11 +10,17 @@
 
 $(call inherit-product, device/qalos/qalos_cheetah/qalos_cheetah.mk)
 
+# --- Release config ---------------------------------------------------------
+# Same pin as qalos_cheetah: AOSP 15 aborts with "No release config set for
+# target" (build/make/core/release_config.mk:270) when TARGET_RELEASE is unset
+# and ALL_RELEASE_CONFIGS_FOR_PRODUCT is empty for this product.
+TARGET_RELEASE := trunk_staging
+
 PRODUCT_NAME := qalos_cheetah_slim
 # Same physical device as qalos_cheetah, but a DISTINCT value so the slim
 # product gets its own TARGET_DEVICE_DIR (this directory, via the
 # */$(TARGET_DEVICE)/BoardConfig.mk search in board_config.mk) and its own
-# PRODUCT_OUT (out/target/product/qalos_cheetah_slim) — otherwise vanilla
+# PRODUCT_OUT (out/target/product/qalos_cheetah_slim) â€” otherwise vanilla
 # and slim builds would overwrite each other in
 # out/target/product/qalos_cheetah. See qalos_cheetah.mk for the full
 # rationale.
@@ -26,14 +32,14 @@ PRODUCT_MODEL := qalos slim for Pixel 7 Pro
 #
 # $(filter-out ...) is a no-op for any name not currently in
 # $(PRODUCT_PACKAGES), so defensive entries (e.g. Browser2, which AOSP 15
-# no longer ships) cost nothing — the same convention documented in
+# no longer ships) cost nothing â€” the same convention documented in
 # device/qalos/qalos_emulator/device.mk.
 #
 # WebViewGoogle and Bluetooth are deliberately NOT in this list: they are
 # force-kept below, so filtering them here would be a misleading no-op.
 #
 # NOTE: removing SystemUI means no status bar, notification shade, or
-# keyguard — the device still boots (to a blank fullscreen) and is driven
+# keyguard â€” the device still boots (to a blank fullscreen) and is driven
 # over adb. That is intentional for headless QA rigs, but the slim image
 # is NOT suitable as an interactive daily driver. Removing
 # Launcher3QuickStep likewise leaves no home app (launch via
@@ -80,5 +86,5 @@ PRODUCT_PACKAGES += \
     WebViewGoogle \
     Bluetooth
 
-# No BUILD_FINGERPRINT override — AOSP computes it with the real variant
+# No BUILD_FINGERPRINT override â€” AOSP computes it with the real variant
 # and tags (see qalos_cheetah.mk for the rule and rationale).

@@ -13,6 +13,20 @@ $(call inherit-product, device/google/pantah/aosp_cheetah.mk)
 # inherited here (same explicit pattern as device/qalos/qalos_emulator).
 $(call inherit-product, device/qalos/qalos_cheetah/device.mk)
 
+# --- Release config ---------------------------------------------------------
+# AOSP 15 refuses to build when TARGET_RELEASE is unset:
+#   build/make/core/release_config.mk:270
+#   error: No release config set for target; please set TARGET_RELEASE ...
+#   where release is one of: $(ALL_RELEASE_CONFIGS_FOR_PRODUCT)
+# and for this product that list came back empty, so even the 3-part
+# `lunch qalos_cheetah-trunk_staging-userdebug` did not populate it.
+#
+# trunk_staging is a valid release in this tree (qalos_emulator builds with
+# it), and release_config.mk:263-276 explicitly supports setting
+# TARGET_RELEASE in the product. Pin it here so the build does not depend on
+# lunch resolving the release for us.
+TARGET_RELEASE := trunk_staging
+
 PRODUCT_NAME := qalos_cheetah
 # PRODUCT_DEVICE MUST equal the directory name containing this
 # AndroidProducts.mk. AOSP 15 discovers BoardConfig.mk by searching
