@@ -12,6 +12,26 @@
 android_app {
     name: "QaLab",
 
+    // Install into the product partition, not system.
+    //
+    // Pixel products (pantah/cheetah) use a system/product/system_ext split and
+    // enforce it: build/make/core/artifact_path_requirements.mk rejects any
+    // module that drops a file into system/ without a matching entry in
+    // build/make/target/product/generic_system.mks. With no such entry this
+    // fails the build at the end of soong bootstrap:
+    //
+    //   artifact_path_requirements.mk:31: error: device/qalos/qalos_cheetah/
+    //     qalos_cheetah.mk produces files inside generic_system.mks artifact
+    //     path requirement.
+    //   Offending entries:
+    //   system/app/QaLab/QaLab.apk
+    //
+    // product_specific: true moves the APK to product/app/QaLab/. This is the
+    // same property upstream uses for the same reason -- see
+    // packages/apps/Camera2/Android.bp and pantah's overlay_packages/*.Android.bp
+    // (device/google/pantah/panther/overlay_packages/*/Android.bp:7).
+    product_specific: true,
+
     // `LOCAL_CERTIFICATE := platform` in the old Android.mk.
     certificate: "platform",
 

@@ -8,6 +8,16 @@
 
 cc_binary {
     name: "aqa_server",
+
+    // Install into the product partition. A cc_binary with no partition hint
+    // lands in /system/bin, which Pixel products reject the same way they
+    // reject system/app: build/make/core/artifact_path_requirements.mk fails
+    // the build unless the path is declared in
+    // build/make/target/product/generic_system.mks. product_specific: true puts
+    // the binary in product/bin and init_rc: in product/etc/init, both of which
+    // are valid init search paths in AOSP 15.
+    product_specific: true,
+
     srcs: [
         "src/main.cpp",
         "src/uinput_injector.cpp",
