@@ -231,6 +231,28 @@ event; an incremental ninja run over a warm tree took **37 minutes**
 
 **Keep the host until the images are out and byte-verified.**
 
+### 6a. And: pull the logs *before* you delete it
+
+Done correctly on images, done wrong on logs. The instance was deleted
+with `b13.log` and `b14.log` still sitting in `/home/bramburn/`, so the
+complete build record — every patch status line, the metalava error in
+full, the ninja progress — was destroyed with the VM and is now
+unrecoverable without a full rebuild.
+
+**The deliverable is the images *and* the evidence.** A build you cannot
+explain afterwards is a build you have to re-run to understand.
+
+```powershell
+# BEFORE gcloud compute instances delete
+& $scp -i $key -r 'bramburn@<ip>:/home/bramburn/*.log' 'D:\qalos\.pi\build-logs\'
+& $scp -i $key -r 'bramburn@<ip>:/home/bramburn/*.sh' 'D:\qalos\.pi\build-logs\'
+```
+
+**Pre-deletes checklist:** images MD5-verified everywhere · `*.log` and
+the build driver `*.sh` pulled · GCS copy confirmed. If the VM is
+already gone, say the logs are lost — do not reconstruct them from
+memory or from chat excerpts.
+
 ---
 
 ## 7. Windows operator traps (this host)

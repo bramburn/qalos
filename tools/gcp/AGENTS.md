@@ -241,6 +241,35 @@ gcloud storage cp --recursive 'D:\qalos\.pi\out\cheetah' 'gs://qalos-aosp-eu/ima
         'bramburn@192.168.0.46:/home/bramburn/qalos_images/'
 ```
 
+### 6.1 PULL THE LOGS **BEFORE** TEARDOWN
+
+**This is not optional. The logs exist only on the instance, and the
+instance is the first thing you delete.** On 2026-09-28 the VM was torn
+down with the build logs still on it and `b13.log` / `b14.log` were lost
+with it. The build has to be repeated to regenerate them.
+
+```powershell
+New-Item -ItemType Directory -Force -Path 'D:\qalos\.pi\build-logs' | Out-Null
+& $scp -i $key -r 'bramburn@34.105.204.203:/home/bramburn/*.log' 'D:\qalos\.pi\build-logs\'
+& $scp -i $key 'bramburn@34.105.204.203:/home/bramburn/*.sh' 'D:\qalos\.pi\build-logs\'
+```
+
+Grab at minimum: every `bNN.log` (one per build attempt), the shared
+`build.log` (`m` output tee'd by the build script), and the build driver
+script itself. The `bNN.log` files are the **attempt record** — they are
+the only evidence of *why* an attempt failed, and a failed attempt is
+usually the one worth keeping.
+
+**Checklist before `gcloud compute instances delete`:**
+
+- [ ] images MD5-verified on every destination
+- [ ] `*.log` and `*.sh` pulled off the instance
+- [ ] GCS copy confirmed (`gcloud storage ls`)
+
+If the instance is already gone, the logs are unrecoverable — the next
+build regenerates them. Say so plainly rather than reconstructing from
+memory.
+
 **Byte-verify on every destination before teardown:**
 
 ```powershell
