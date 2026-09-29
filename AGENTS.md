@@ -12,9 +12,13 @@
 ## 0. Quick orientation
 
 - **What this is:** an AOSP fork (`android-15.0.0_r1`) for QA Lab use. First target is the x86_64 emulator (`qalos_emulator-userdebug`); second target is Pixel 7 Pro (`qalos_cheetah-userdebug` / `qalos_cheetah_slim-userdebug`, device tree is AOSP-public `device/google/pantah`, blobs from driver zips — see `device/google/cheetah/README.md`). Two further Pixel 7 Pro variants bundle the `aqa_server` REST/automation daemon: `aqa_cheetah_full-userdebug` and `aqa_cheetah_slim-userdebug` — see [`vendor/aqa/README.md`](vendor/aqa/README.md).
+
 - **Three build paths:** Local Linux box (primary), DigitalOcean droplet (fallback #1), Aliyun ECS (fallback #2), GCP Compute Engine (fallback #3).
+
 - **Cloud SSH transport:** All three cloud paths use **native SSH** to talk to the build instance. The GCP path uses Windows OpenSSH (`C:\Windows\System32\OpenSSH\ssh.exe`) on the host because the gcloud SDK hardcodes PuTTY/Plink which fails against modern Linux VMs (see §7.6).
+
 - **Single source of truth for on-host build steps:** `tools/do-build.sh`. Both cloud orchestrators invoke it.
+
 - **Repo:** <https://github.com/bramburn/qalos> · **Docs site:** <https://bramburn.github.io/qalos/> · **License:** MIT (qalos) + Apache 2.0 (AOSP) · **Legal framework:** see [`legal/`](legal/README.md) — the licence covers copying, not use; KYC + audit logging are mandatory for any commercial distribution (see §2.9).
 
 ## 1. Folder layout
@@ -117,8 +121,11 @@ These are non-negotiable. If a future change violates one, it should be a delibe
 ### 2.1 Local first, cloud only when justified
 
 The local Linux box is the primary build path because:
+
 - $0 marginal cost.
+
 - Fast iteration (no instance boot, no SSH round-trip).
+
 - No rate limits or quota ceilings.
 
 Cloud is for clean-room CI and sharing, not for everyday dev. Don't put a 5-minute turnaround on a 3-minute cloud build.
@@ -126,8 +133,11 @@ Cloud is for clean-room CI and sharing, not for everyday dev. Don't put a 5-minu
 ### 2.2 The warm-image pattern
 
 **Never reinstall build dependencies on every run.** Both cloud paths create a "warm" base image once and then launch every subsequent build from that image. The cost of the warm artefact:
+
 - DO snapshot: $0.10/GB/month, ~3-4 GB → ~$0.40/month.
+
 - Aliyun custom image: ~¥1/GB/month at ESSD PL1, ~8-12 GB → **~¥8-12/month** (the previous ¥1/month figure was based on the deprecated snapshot-pricing tier; corrected 2026-09-09 in [`tools/aliyun/build-cost.md`](tools/aliyun/build-cost.md)).
+
 - GCP persistent disk snapshot (pd-ssd): ~$0.10/GB/month, ~8-15 GB → ~$1-1.50/month.
 
 All three are cheaper than one wasted build cycle. The Aliyun
@@ -141,8 +151,11 @@ takes ~10 min).
 Every on-demand build script must guarantee the build instance is destroyed, even on parent process death, hard kill, network loss, or uncaught exception. All three cloud paths (DO, Aliyun, GCP) implement all four:
 
 1. **`trap` for cleanup** in the shell / `try/finally` in PowerShell.
+
 2. **Background watchdog** (nohup'd shell process / `Start-Job`) that force-deletes the instance if the parent dies.
+
 3. **On-host bash watchdog** that calls `shutdown -h now` after `MAX_RUNTIME_MINUTES`. Catches orchestrator-unreachable.
+
 4. **GH Actions `if: always()` cleanup step** (DO path only). Catches GH Actions runner timeouts, runner crash, network partition.
 
 **The worst possible failure mode** is leaving a ¥15/hour build instance running overnight. The safety nets are why that doesn't happen.
@@ -156,8 +169,11 @@ Don't use spot for the warm image store itself — that's a custom image / snaps
 ### 2.5 Provider is a parameter, not a hard-coded choice
 
 `do-build.sh` is provider-agnostic. The orchestrator (PowerShell for Windows, shell for macOS/Linux) is what knows about DO, Aliyun, or GCP. The cloud primitives differ:
+
 - DO has `droplet create/delete`, `snapshot create`, `compute action`.
+
 - Aliyun has `RunInstances`, `DeleteInstance`, `CreateImage`, `StopInstance`, with VPC/vSwitch/SG/KeyPair as separate resources.
+
 - GCP has `instances create/delete`, `instances stop`, `snapshots create`, managed via `gcloud compute`.
 
 But the **shape** is the same: launch → wait → run on-host script → pull artifacts → destroy. If you ever add a fourth provider (Hetzner? Azure?), the existing scripts are the template.
@@ -219,27 +235,32 @@ controls (KYC, audit logging) on any commercial distribution, and
    support goes through the KYC process in [`legal/KYC.md`](legal/KYC.md).
    No exceptions. The alternative is the project becoming an
    attractive nuisance for fraud.
+
 2. **Audit logging is mandatory for any commercial fleet.** The
    spec in [`legal/AUDIT_LOGGING.md`](legal/AUDIT_LOGGING.md) is
    the minimum; the `RemoteControlService` in
    `packages/apps/RemoteControlService/` is intended to implement
    the event-capture part natively. A device that runs a prebuilt
    image in a commercial context MUST keep an audit log.
+
 3. **The AUP cannot be relaxed by a PR.** The list in
    [`legal/ACCEPTABLE_USE_POLICY.md`](legal/ACCEPTABLE_USE_POLICY.md)
    is the floor. Adding a new permitted use requires a documented
    PR that explicitly addresses the new use case against the
    framework principles (fraud risk, regulator exposure, audit-log
    sufficiency).
+
 4. **Contributors accept the CLA.** The CLA in [`legal/CLA.md`](legal/CLA.md)
    is accepted by conduct (submitting a PR). The CLA is the
    project's only defence against an IP-claim from a third party
    about a contribution.
+
 5. **Material changes to the legal framework require a release
    note.** A change to a legal document is a breaking change for
    users who have accepted the prior version. PRs that change a
    legal document MUST add a release-note entry and, for
    commercial customers, MUST trigger a direct-notice workflow.
+
 6. **The legal framework is DRAFT.** Every document in `legal/`
    carries a "DRAFT — not legal advice" banner. None of it has
    been reviewed by a solicitor. A PR that moves any of the
@@ -259,8 +280,11 @@ known commercial customers.
 For A/B comparisons (e.g. `effort="on"` vs `effort="off"`) or fan-out research,
 use the skill at [`tools/subagent-parallel.md`](tools/subagent-parallel.md).
 Verified 2026-09-23 with `minimax/MiniMax-M3`:
+
 - Both agents fired simultaneously, identical prompts → convergent facts on MyInsta.
+
 - `effort="on"` slightly more structured; `effort="off"` marginally faster.
+
 - See the skill file for the exact `task()` call patterns and parameter table.
 
 ### 2.11 Two REST control planes — keep them consistent or collapse them
@@ -310,19 +334,23 @@ opposite was done and it cost real time or money:**
    `apply-qalos.sh` never landed. Verify the overlay *inside*
    `system.img` (`strings -a system.img | grep -c 'com/qalos/remotectl'`
    must be > 0) before calling any build good.
+
 2. **Never stage a compressed tree to a build host.** Let the host
    `repo sync` itself: 179 GB in ~32 min direct, versus 95+ min to
    compress 33 GB of the same tree on a spinning disk, because 84 GB of
    it is `.repo/project-objects` and already zlib-compressed at 1.011:1.
+
 3. **Never destroy the build host on a build failure.** It holds the
    179 GB sync (32 min, ~$0.30). A failure is diagnose → patch →
    relaunch; an incremental ninja run over a warm tree is ~37 min versus
    98 min cold. Teardown happens only after the images are delivered
    **and** byte-verified on every destination.
+
 4. **Read the tree before fixing AOSP.** Five fixes written from memory
    (`c3-highmem-32`, `release_config_map.textproto`, a read-only
    `TARGET_RELEASE` pin, a 3-argument `lunch`, `LocalServices.get`) all
    had to be walked back. Quote the file and line you based it on.
+
 5. **A patch's "already applied" is a claim, not a fact.** Patch 0005
    reported success on every run while its idempotency regex
    (`[\s\S]*?` spanning a 9,000-line manifest) matched an unrelated
@@ -506,7 +534,7 @@ These are exported as non-interactive env vars so any agent that lands on the Ma
 
 **Symptom** (this Aliyun account, observed 2026-09-11 and 2026-09-25):
 
-```
+```text
 Error: operation error PutObject: Error returned by Service.
 Http Status Code: 400.
 Error Code: PublicEndpointForbidden.
@@ -530,17 +558,21 @@ Bucket management (`mb`, `stat`, `get-acl`) works fine. `ossutil cp` and `ossuti
 - This is a **platform-wide Aliyun policy**, not a RAM-user permission issue
   or an account-specific block. It applies to every Aliyun account activated
   after 2025-03-20.
+
 - The block covers **every Chinese-mainland bucket** (cn-hangzhou, cn-shanghai,
   cn-beijing, cn-shenzhen, cn-guangzhou, cn-chengdu, etc.) on the affected
   account. Non-mainland buckets (`cn-hongkong`, `ap-southeast-1`, `us-west-1`,
   etc.) are **not** blocked.
+
 - The block covers **both the public endpoint and the accelerate endpoint**
   — the Aliyun console popup appears when you select "Accelerated Domain
   Name" for upload, explicitly warning that the default accelerate endpoint
   (which uses `BucketName.oss-cn-Region.aliyuncs.com` underneath) is also
   blocked.
+
 - The block covers **all clients**: console GUI, ossutil, aliyun CLI, all
   SDKs, REST API. No client-side bypass exists.
+
 - The only documented workaround is to **CNAME a custom domain** (with
   ICP filing — a Chinese government filing process that takes weeks and
   requires a Chinese entity). Impractical for a UK-based individual.
@@ -563,13 +595,19 @@ pattern (§5.4.5) is not a workaround for an outage — it's the **canonical
 and only proven path on this account**. Use it for every build.
 
 **Verified 2026-09-25:**
+
 - HK public endpoint (9.4 MiB/s, 35 GB → ~60 min) — §5.4.5 baseline
+
 - HK accelerate endpoint (16.073 MiB/s, 35 GB → ~37 min) — §5.4.7
   optimization, drop-in (change the endpoint flag, keep everything else)
+
 - HK internal endpoint (109 MiB/s, intra-HK) — used by the HK ECS
   receiver to pull source out of the bucket after upload
+
 - HK → GZ CreateImage + CopyImage: free, 10-30 min
+
 - **End-to-end HK relay wall time: ~2.5-3.5 hours** (proven 2026-09-11)
+
 - With §5.4.7 acceleration on the first leg: ~2-3 hours
 
 **AOSP git mirror connectivity from Chinese-mainland ECS (verified 2026-09-10
@@ -589,8 +627,11 @@ not region-specific.
 
 **Practical throughput from cn-chengdu** (verified 2026-09-25, fresh Spot
 instance, 60-second timeout windows):
+
 - `external/selinux` (37 MB): USTC 7.2 s = **5 KB/s**, TUNA 1.9 s = **18 KB/s**
+
 - `system/sepolicy` (30 MB): USTC 9.5 s = **3 KB/s**, TUNA 1.3 s = **22 KB/s**
+
 - `frameworks/base` (~1.2 GB at --depth=1): **timed out at 60 s** (clone never finished — extrapolated throughput < 5 KB/s sustained)
 
 **Chengdu verdict: same throttling profile as cn-hangzhou.** TUNA is ~2-4× faster than USTC for actual data transfer (not the smart-HTTP probe), but both are in single-digit KB/s for sustained transfer. A 100 GB AOSP source tree at 22 KB/s = 52 days; at 5 KB/s = 231 days. **Neither region is usable for `repo sync` of a full AOSP tree.** The HK relay pattern (§5.4.5) — UK home box → HK OSS public endpoint (9.4 MiB/s proven) → HK ECS receiver → CreateImage + CopyImage to GZ — is still ~100× faster than any direct mainland sync.
@@ -608,6 +649,7 @@ and upload directly from `macmini2024` (UK) to a small ECS receiver
 in `cn-guangzhou` over SSH. Concrete recipe:
 
 1. Create the receiver ECS (Ubuntu 24.04, `ecs.u1-c1m2.large` is fine, public IP required):
+
    ```bash
    aliyun ecs RunInstances --RegionId cn-guangzhou \
      --ImageId ubuntu_24_04_x64_20G_alibase_<YYYYMMDD>.vhd \
@@ -619,9 +661,13 @@ in `cn-guangzhou` over SSH. Concrete recipe:
      --InternetChargeType PayByTraffic --InternetMaxBandwidthOut 100 \
      --SystemDisk.Category cloud_essd --SystemDisk.Size 40
    ```
+
 2. Resize the system disk to ≥300 GB **while stopped** (online resize fails for this image; need `StopInstance` → `ResizeDisk` → `StartInstance`), then SSH in and run `growpart /dev/vda 3 && resize2fs /dev/vda3`.
+
 3. SSH the receiver from `macmini2024`, install `p7zip-full`.
+
 4. Upload via rsync (resumable):
+
    ```bash
    rsync -av --progress --partial --inplace \
      -e 'ssh -i ~/.ssh/id_ed25519_qalos -o StrictHostKeyChecking=no -o ServerAliveInterval=30' \
@@ -634,7 +680,8 @@ Expected wall time for 34 GB: 2–10 hours depending on UK home upstream.
 level — see §5.4.4): upload to a cn-hongkong bucket via public or
 accelerate endpoint (HK is exempt from the policy above), then transfer
 the source from HK to the GZ ECS via the HK receiver ECS + CreateImage
-+ CopyImage pattern. See §5.4.5 for the full recipe. With §5.4.7
+
+- CopyImage pattern. See §5.4.5 for the full recipe. With §5.4.7
 verified, the first-leg upload uses the accelerate endpoint
 (`oss-accelerate.aliyuncs.com`) for a 1.58× speedup.
 
@@ -643,8 +690,11 @@ verified, the first-leg upload uses the accelerate endpoint
 **Do NOT trust the 2-10 hour estimate above.** On 2026-09-11 the actual measured throughput was ~1-12 KB/s — a 64-minute rsync transferred only 5.3 MB of 100 MB (~1.4 KB/s avg), and a 5 MB scp test hung past the 120s timeout. At that rate, 34 GB would take 281 days.
 
 **Symptoms:**
+
 - TCP handshake to cn-guangzhou ECS port 22: ✅ fast (0.26s)
+
 - SSH auth / key exchange: ✅ works
+
 - Bulk data on port 22: ❌ ~1-12 KB/s sustained, parallel streams don't help
 
 **Diagnosis:** Looks like GFW DPI throttling per-flow SSH data once it detects a sustained large transfer. The throttle is per-connection, not total bandwidth — running 4 parallel rsyncs didn't increase throughput.
@@ -696,7 +746,7 @@ section is the recipe.
 
 **Topology:**
 
-```
+```text
 macmini2024 (UK, 192.168.0.46)
        │  ossutil cp via oss-cn-hongkong.aliyuncs.com (port 443)
        │  9.4 MiB/s avg, 60 min for 35.5 GB
@@ -727,13 +777,16 @@ macmini2024 (UK, 192.168.0.46)
    This Aliyun account can `ossutil cp` to `oss-cn-hongkong.aliyuncs.com`
    without hitting `PublicEndpointForbidden`. (cn-guangzhou's public
    endpoint is blocked at the account level — see §5.4.2.)
+
 2. **HK internal OSS endpoint is free and 5× faster** than the public
    one. Using `oss-cn-hongkong-internal.aliyuncs.com` from inside
    HK is on Aliyun's internal backbone — no internet egress charge,
    100+ MB/s for parallel multipart downloads.
+
 3. **HK OSS → HK ECS download is intra-region, no DPI**, no SSH
    port-22 throttling, no public-endpoint block. 35.5 GB lands
    in 5 minutes.
+
 4. **HK ECS can run `do-build.sh`** — same way as cn-guangzhou would,
    but you don't have to ship the source tree from UK to cn-hangzhou
    over a 1 KB/s throttled SSH pipe. You build the image in HK
@@ -895,6 +948,7 @@ during path switching on long transfers. The fallback chain is:
 
 1. **Accelerate with retry.** `ossutil cp --update` plus built-in multipart
    retry handles 502/504 path-switch blips on its own; no extra flags needed.
+
 2. **If accelerate is persistently blocked** (propagation not complete,
    `PublicEndpointForbidden` from the accelerate endpoint, or path-switch
    storm): fall back to the **three-hop HK relay at §5.4.5**. Do NOT fall
@@ -916,33 +970,41 @@ ossutil cp -r --jobs 8 --update ~/aosp_volumes/ \
 **Limitations:**
 
 - Supports HTTP/HTTPS only (RTMP etc. not supported — not an issue for our use).
+
 - ~30 min propagation delay after enabling; do not test immediately.
+
 - **Access logs may show HTTPS even when the client used HTTP** — the internal
   hop between the Aliyun access point and your bucket is encrypted. Don't
   mistake this for a misconfiguration when reading the OSS access log.
+
 - If the cn-guangzhou public endpoint is blocked at the account level
   (`PublicEndpointForbidden` on `oss-cn-guangzhou.aliyuncs.com`), the
   acceleration endpoint (`oss-accelerate.aliyuncs.com`) routes through
   Alibaba Cloud's internal network and **may bypass the block** — test this
   before relying solely on accelerate. The §5.4.5 HK relay is the documented
   fallback (see "Endpoint fallback" above).
+
 - Accelerated traffic fees are billed separately from standard egress;
   monitor the first few runs via the OSS console. When using the acceleration
   endpoint, **both** accelerated-traffic fees AND public-internet-outbound
   fees apply — the accelerate endpoint is the more expensive of the two
   (see §5.4.6 for the HK-relay cost comparison).
+
   - **Billable item code for our case:** `AccO2MIn` (accelerated upload
     from a client outside the Chinese mainland to a bucket in the Chinese
     mainland). For artifact download from the build VM (UK → Guangzhou
     bucket), the code is `AccO2MOut`. Reference:
     <https://www.alibabacloud.com/help/en/oss/transfer-acceleration-fees>
     (last updated 2026-09-07, reviewed 2026-09-25).
+
   - **Actual per-GB rates** are on the OSS pricing page, not in the
     billing-rule doc: <https://www.alibabacloud.com/product/oss/pricing>.
     Fill the cost row below from there once we have a number.
+
   - **Resource plan available:** the `M2O / O2M` plan covers both our
     upload and download directions and is cheaper per-GB than pay-as-you-go
     if we exceed ~1 build/month. Not worth it for one-off builds.
+
 - **CDN + accelerate** (not used by qalos today): point CDN origins at
   `oss-accelerate.aliyuncs.com` for cache-miss origin pulls. Useful when
   qalos ships prebuilt images via CDN in the future.
@@ -987,8 +1049,10 @@ time ossutil cp /tmp/qalos-accel-test-5mb.bin \
 - If Step 1 (Guangzhou accelerate) succeeds AND is ≥2× the §5.4.5 Mac-Mini→HK
   baseline of 9.4 MiB/s, promote §5.4.7 to primary and demote §5.4.5 to
   "documented fallback" (already done 2026-09-25).
+
 - If Step 1 fails with `PublicEndpointForbidden`, accelerate does not bypass
   the account-level block — keep §5.4.5 as primary.
+
 - If Step 1 succeeds but is slower than 9.4 MiB/s, accelerate works but HK
   public is still faster for this path — keep §5.4.5 as primary and treat
   §5.4.7 as a "block-bypass" option for if/when §5.4.5 also breaks.
@@ -1013,12 +1077,14 @@ cn-guangzhou. Source: <https://www.alibabacloud.com/help/en/oss/transfer-acceler
   were created via the BH8 AK from `macmini2024`. They did not exist
   under this AK before; the §5.4.5 build series either used the
   Windows-side ZGd AK or the buckets were torn down during cleanup.
+
 - 5 MB `ossutil cp` via `--endpoint oss-accelerate.aliyuncs.com`
   reached Aliyun and returned a structured error:
   `OSS Transfer Acceleration is not configured on this bucket` (HTTP 400,
   `InvalidRequest`). This confirms the accelerate endpoint is
   **reachable from the UK** — the request hit Aliyun's edge, not a
   network failure — and TA just needs to be toggled in the OSS console.
+
 - **Next action:** enable Transfer Acceleration on both buckets via
   <https://oss.console.alibabacloud.com/bucket> (Bucket Settings →
   Transfer Acceleration → toggle ON), wait ≥30 min for global
@@ -1047,6 +1113,7 @@ Two possible explanations:
    (TCP + TLS handshake, OSS request setup, auth, multipart initiation).
    The 9.4 MiB/s number was averaged over ~8 hours of streaming.
    A 100 MB sample would amortise that overhead.
+
 2. **Network conditions have changed** since 2026-09-11 — UK ISP
    upstream, Aliyun's HK edge, or cross-border congestion can all
    vary hour-to-hour.
@@ -1087,6 +1154,7 @@ feature delivers real speedup — at least on the cn-hongkong edge.
   the bucket config is Enabled, but the accelerate endpoint routing
   for cn-guangzhou isn't there yet. Per the cron prompt rule, waiting
   10 more min and re-running once.
+
 - **Step 5 (HK accelerate @100 MB = 16.073 MiB/s) > Step 4b (HK public
   @100 MB = 10.158 MiB/s)** → the §5.4.7 promotion criterion
   (accelerate beats public) is met **for the cn-hongkong path**.
@@ -1104,7 +1172,8 @@ feature delivers real speedup — at least on the cn-hongkong edge.
 If §5.4.7 (GZ accelerate) delivers the same ~16 MiB/s once propagation
 completes, the wall-time saving on the 35 GB upload leg alone is ~21
 min vs current §5.4.5. Adding the saved HK receiver ECS + CreateImage
-+ CopyImage steps (10-30 min total), the §5.4.7 path saves roughly
+
+- CopyImage steps (10-30 min total), the §5.4.7 path saves roughly
 **30-50 min** before the build even starts.
 
 **Retry scheduled:** cron `qalos-accel-retry` will run in ~10 min,
@@ -1199,11 +1268,14 @@ ossutil cp -r --jobs 8 --update \
 **Decision (final):**
 
 - §5.4.5 stays as the **primary path** for cn-guangzhou builds.
+
 - §5.4.7 (HK accelerate) is **an optimization to §5.4.5** —
   apply it by changing the §5.4.5 first-leg endpoint from
   `oss-cn-hongkong.aliyuncs.com` to `oss-accelerate.aliyuncs.com`.
+
 - GZ, CD, and all other Chinese-mainland buckets are blocked at the
   OSS platform policy level. No workaround short of ICP-filed CNAME.
+
 - HK infra stays provisioned per the 2026-09-25 user decision
   (cheap insurance, ¥10–20/month).
 
@@ -1212,14 +1284,17 @@ ossutil cp -r --jobs 8 --update \
 1. **Sample-size lesson for ossutil benchmarks:** 5 MB samples are
    overhead-dominated. Use ≥100 MB for any throughput number that's
    going into a doc or comparison.
+
 2. **The §5.4.2 block is a platform policy, not a misconfiguration.**
    When you see `PublicEndpointForbidden` on Chinese-mainland buckets,
    check the OSS console upload UI for the explicit policy popup
    before chasing RAM-user or firewall rabbit holes.
+
 3. **HK is the OSS policy mainland/non-mainland boundary**, not the
    `cn-` prefix. `cn-hongkong` is outside the mainland for OSS policy
    purposes — the only viable target on a post-2025-03-20 Aliyun
    account without ICP filing.
+
 4. **Bucket creation works even when data ops are blocked** — the
    policy is selective on data ops only.
 
@@ -1241,18 +1316,23 @@ served no purpose and cost ~¥1/month. The HK bucket
 (`qalos-aosp-hk`) stays provisioned per the established fallback
 policy. Current bucket inventory under BH8 AK
 (`LTAI5tC9qUFDa6FWKT5hzBH8`):
+
 - `qalos-aosp-hk` (cn-hongkong) — §5.4.5 / §5.4.7 primary
+
 - `qalos-aosp-gz` (cn-guangzhou) — present but unusable until ICP
 
 **ICP filing — what to expect when the user pursues it:**
+
 - ICP is the Chinese government's Internet Content Provider registration
   for any domain hosting content in mainland China. Without ICP, the
   custom domain can be CNAMEd to `oss-cn-<region>.aliyuncs.com` but
   the registrar will reject the resolution.
+
 - Practical path for a UK-based individual: partner with a Chinese
   entity that holds an ICP licence, OR use Aliyun's
   "ICP-filing-as-a-service" partner list. Lead time is typically
   2-6 weeks for a first-time filing.
+
 - Once ICP lands on a custom domain (e.g.
   `qalos.oss-cn-guangzhou.example.com` CNAMed to
   `qalos-aosp-gz.oss-cn-guangzhou.aliyuncs.com`), the
@@ -1260,8 +1340,10 @@ policy. Current bucket inventory under BH8 AK
   the `qalos-aosp-gz` bucket becomes usable for direct uploads from
   the UK. The `qalos-aosp-hk` bucket can then be either repurposed
   or kept as documented fallback.
+
 - This is a multi-week project with a non-trivial cost (filing fees
-  + ongoing ICP licence renewal + domain registration). Worth doing
+
+  - ongoing ICP licence renewal + domain registration). Worth doing
   only if the §5.4.5 HK-relay pattern becomes a sustained bottleneck
   (i.e. multiple AOSP builds per month for several months). For
   occasional builds, §5.4.5 + §5.4.7 (HK accelerate) is cheaper
@@ -1364,7 +1446,9 @@ under diagnosis. The full record lives in the website docs —
 content here):
 
 - [`website/docs/qa-lab-os/aosp-15-build-journal.md`](website/docs/qa-lab-os/aosp-15-build-journal.md) — the 11-attempt build history, fix-commit chain, artifact contract, and the corrected boot-failure narrative.
+
 - [`website/docs/qa-lab-os/emulator-boot-diagnosis.md`](website/docs/qa-lab-os/emulator-boot-diagnosis.md) — boot-failure evidence trail, hypothesis verdicts (WHPX / cmdline / initrd ruled out), most-plausible cause (paravirt bare hardware → LAPIC-timer window; kernel-version secondary), ranked experiments, do-not-try list.
+
 - [`website/docs/qa-lab-os/emulator-loading-recipe.md`](website/docs/qa-lab-os/emulator-loading-recipe.md) — the minimal file set (kernel / ramdisk / system / userdata; no super/vbmeta/boot), verified qalos sysdir state, AVD config fixes, cold-boot command, verification steps.
 
 Read the diagnosis + recipe pages **before** repeating any boot
@@ -1387,9 +1471,11 @@ list. No secrets are duplicated here.
 Key facts (mirror for quick scan):
 
 - User on every box: `bramburn`.
+
 - Verified-working key on `.45`: `id_ed25519_qalos`. Legacy `.44` /
   `.132` entries still use `timetracker_deploy_new` — verify before
   relying on them.
+
 - One-liner from PowerShell:
   `ssh -i "$env:USERPROFILE\.ssh\id_ed25519_qalos" bramburn@192.168.0.45`.
 
@@ -1445,6 +1531,7 @@ Always `StopInstance` first, wait for `Stopped`, then `DeleteInstance`. The scri
 **The hardcoded Plink path:** `C:\Program Files (x86)\Google\Cloud SDK\google-cloud-sdk\lib\googlecloudsdk\command_lib\util\ssh\ssh.py:206-210`. As of SDK 583.0.0 (core 2026.08.31) it's still PuTTY-on-Windows, hardcoded. Two symptoms:
 
 1. **IAP tunneling fails**: `gcloud compute ssh --tunnel-through-iap ...` → Plink's TLS handshake to `tunnel.googleapis.com:443` is rejected with "Remote side unexpectedly closed network connection". Affects Windows hosts behind corporate firewalls, TLS-inspection proxies, or where Plink's TLS version mismatch doesn't match the IAP proxy.
+
 2. **Direct SSH fails against Debian 12 / OpenSSH 8.8+**: "Server refused public-key signature despite accepting key! (server sent: publickey)". Plink 0.83's SHA-1 RSA signature isn't in the server's `PubkeyAcceptedAlgorithms`. Affects every modern Linux distro: Debian 12, Ubuntu 22.04+, RHEL 9, etc.
 
 **Why the build scripts don't use `gcloud compute ssh`:** both errors above manifest in any gcloud-based SSH call. The orchestrator scripts (`gcp-smoke-test.ps1`, `gcp-setup-base.ps1`, `gcp-build.ps1`) instead call Windows OpenSSH directly:
@@ -1493,7 +1580,9 @@ Do not attempt `repo init`/`repo sync` directly on the Aliyun ECS — it will ha
 public one. The internal endpoint is on Aliyun's private backbone, so:
 
 - **No internet egress charge** for the download.
+
 - **5–10× higher throughput** because it doesn't traverse the public internet.
+
 - **No DPI throttling** — port 443 between Aliyun ECS and OSS internal is unmetered.
 
 Measured 2026-09-11 on cn-hongkong, downloading 35.5 GB across 339 files
@@ -1529,10 +1618,12 @@ effectively unresponsive (every `du` or `ls -la` times out).
 
 - **For just downloading the source** (no extraction): ecs.u1-c1m2.large
   is fine — the bottleneck is network, not CPU/RAM.
+
 - **For extracting and snapshotting the source**: at least
   ecs.u1-c1m4.large (4 vCPU / 8 GB RAM) — or 4 vCPU / 16 GB to be safe.
   The cat + zstd + tar phases are all single-process and memory-hungry,
   and 2 GB triggers constant swap.
+
 - **For the actual build** (running `m -jN`): at least 64 GB RAM
   (see `tools/aliyun/build-cost.md`). 2 vCPU / 2 GB will not start
   soong bootstrap without OOMing.
@@ -1558,12 +1649,15 @@ like `cat aosp.zst.* | zstd -d | tar -xf -`.
    this fine, but `tar -cf -` invoked via subprocess from another shell
    sometimes truncates at the first SIGPIPE. Explicit `cat aosp.zst.* > aosp.tar`
    is unambiguous.
+
 2. **Debuggability**: each phase has a measurable output file. If
    phase 2 fails at 80%, you can resume from phase 2 without
    re-doing phase 1. If you have a single pipe, you restart from zero.
+
 3. **Resource isolation**: phase 1 (cat) is I/O-bound, phase 2 (zstd)
    is CPU-bound (single-threaded, no `-T0`), phase 3 (tar) is I/O+metadata
    bound. A single pipe mixes all three so you can't tell which one is slow.
+
 4. **Failure visibility**: if zstd errors with "invalid frame", you'll
    see it in phase 2's output. In a single pipe, the error appears
    at the tail of a 127 GB tar failure and is much harder to diagnose.
@@ -1634,13 +1728,18 @@ ssh -i "$env:USERPROFILE\.ssh\id_ed25519_qalos" `
 **What lives on macmini2024 that the orchestrator needs:**
 
 - `ossutil` + `aliyun` CLIs at `/usr/local/bin/`.
+
 - AK config at `~/.aliyun/config.json` — `LTAI5tC9qUFDa6FWKT5hzBH8`
   (the **BH8** identity from §5.4.1). The Windows-side `aliyun configure list`
   shows a different AK (`...ZGd`); don't use that for qalos.
+
 - `~/.bashrc` and `~/.profile` persist `ALIYUN_RAM_USER` and
   `ALIYUN_ACCOUNT_ID` so any non-interactive shell is auth-ready.
+
 - AOSP source tree at `~/aosp/` (after `repo sync`).
+
 - Staging dir `~/aosp_volumes/` (the 339 × 100 MB zstd-split tarballs).
+
 - Any prior build outputs at `~/aosp/out/`.
 
 **Use cases:**
@@ -1648,12 +1747,16 @@ ssh -i "$env:USERPROFILE\.ssh\id_ed25519_qalos" `
 1. **Run the §5.4.7 verification test** (5 MB `ossutil cp` against
    `oss-accelerate.aliyuncs.com` vs the public endpoints) — see
    §5.4.7 "Verification test before committing".
+
 2. **Probe Aliyun bucket / ECS state** without launching an SSH
    session from this Windows box (which would need its own aliyun CLI
-   + AK + region config).
+
+   - AK + region config).
+
 3. **Stage the AOSP source tree** (compress + split) before shipping
    to Aliyun. The §5.4.5 / §5.4.7 recipes assume `~/aosp_volumes/`
    already exists on macmini2024.
+
 4. **Pull build artifacts** from the build VM via the
    `qalos-serve-artifacts.py` token-gated HTTP server, after the LLM
    monitor cron reports the artifact URL.
@@ -1664,9 +1767,11 @@ ssh -i "$env:USERPROFILE\.ssh\id_ed25519_qalos" `
   cn-guangzhou ECS**, NOT between this Windows host and macmini2024.
   SSH from `icelabz.net` → `192.168.0.46` is unmetered LAN
   throughput (~50 MB/s sustained).
+
 - **macmini2024 can't run soong bootstrap in reasonable time**
   (existing agent memory entry, 2026-09-11) — it is a **staging**
   host, not a build host. The build runs on the cn-guangzhou ECS.
+
 - **Don't run long-running build commands over this SSH.** The
   §5.4.2 / §5.4.5 / §5.4.7 flows always launch the build on the
   cloud VM (cn-guangzhou ECS), not on macmini2024.
@@ -1679,7 +1784,6 @@ ssh -i "$env:USERPROFILE\.ssh\id_ed25519_qalos" `
 | `Connection timed out` | macmini2024 may be rebooting or off the LAN. `Test-Connection 192.168.0.46 -Count 1 -Quiet` first; if False, the user needs to wake it. |
 | `Host key verification failed` | Add `-o StrictHostKeyChecking=accept-new` (already in the recipe). |
 | SSH hangs after key exchange | Unusual on the LAN path. If it happens, fall back to the user's existing tunnels. |
-
 
 **Disk budget for the extraction:** 35 GB compressed + 35 GB
 intermediate tar + 127 GB decompressed + 127 GB extracted = 324 GB
@@ -1699,11 +1803,17 @@ compressed volumes after phase 1.
   workflow; see [`tools/aliyun/AGENTS.md`](tools/aliyun/AGENTS.md).
   The smoke test and setup-base scripts (which don't have the
   SSH-blocking bug) remain on disk.
+
 - **`do-build.sh` uploads to DO Spaces.** This is wrong for the Aliyun and GCP paths. Both pull artifacts via `scp` (Aliyun incurs ~¥0.4 egress per build for 3 GB; GCP pulls via native `scp.exe` at no egress cost within the region). The clean fix is a `BUILD_UPLOAD_BACKEND=scp|spaces|oss|gcs|none` env var. Now done for the GCP path — `do-build.sh` skips upload when `SPACES_BUCKET` is empty.
+
 - **`default.xml`'s `aosp` remote — FIXED 2026-09-04.** The qalos default.xml used to include `upstream.xml` (a verbatim copy of AOSP's default.xml) which defined `<remote name="aosp" fetch=".."/>`. Under AOSP that resolves to `https://android.googlesource.com/`, but under qalos (`https://github.com/bramburn/qalos.git`) it resolves to `https://github.com/bramburn/`. `repo sync` on a fresh clone of qalos therefore tried to fetch every AOSP project from this fork and failed with "Unable to fully sync the tree / Downloading network changes failed". The fix: removed the duplicate `<remote name="aosp">` from `upstream.xml` and added the canonical definition to `default.xml` with an absolute `fetch="https://android.googlesource.com/"` URL. The `repo` include parser accepts this (the comment that said it rejected duplicates was referring to redefining a remote with different attributes in the same file; the include gets a fresh namespace, so a single canonical definition in the parent manifest is fine).
+
 - **No GH Actions path for Aliyun or GCP.** `.github/workflows/build.yml` is DO-only. Adding parallel `build-aliyun.yml` and `build-gcp.yml` workflows is straightforward but requires GitHub secrets to be set first.
-- **GCP SSH workaround is local to the orchestrator scripts.** The right long-term fix is patching `gcloud/.../ssh.py` (see §7.6) so the gcloud CLI uses OpenSSH on Windows. The patch needs admin and is a one-line change. Until then, the `gcp-*.ps1` scripts carry their own `Invoke-Ssh` / `Invoke-ScpUpload` / `Invoke-ScpDownload` helpers using Windows OpenSSH. The [manual agent-driven build guide](website/docs/qa-lab-os/agent-build-shell.md) documents the same primitives for use outside the orchestrator.
+
+- **GCP SSH workaround is local to the orchestrator scripts.** The right long-term fix is patching `gcloud/.../ssh.py` (see §7.6) so the gcloud CLI uses OpenSSH on Windows. The patch needs admin and is a one-line change. Until then, the `gcp-*.ps1` scripts carry their own `Invoke-Ssh` / `Invoke-ScpUpload` / `Invoke-ScpDownload` helpers using Windows OpenSSH. The same primitives are documented for use outside the orchestrator in [`tools/gcp/AGENTS.md`](tools/gcp/AGENTS.md) §2 (Transport) — including the PowerShell `$(...)` and quote-stripping traps that make inline remote commands unreliable.
+
 - **`docs/` legacy folder is not yet removed.** Old links may still point to `docs/local-build.md`, `docs/setup.md`, `docs/agent-brief.md`. They redirect to the new docs site (see `docs/README.md`). Will be removed in a follow-up commit.
+
 - **Docusaurus site preview requires Node 18+ locally.** The `deploy-docs.yml` workflow handles this on the GH Actions runner. For local preview (`cd website && npm install && npm run start`), you need Node 18+ on your own machine.
 
 ## 8.1. QA Lab OS v0 followup work
@@ -1717,15 +1827,20 @@ v1 / Phase 2 is recorded in detail at
 - **Bugs caught by the AOSP-15 download-and-dry-run** (all fixed in
   `fix-ups-2`, but the same review pattern caught them — see
   `website/docs/qa-lab-os/lessons-learned.md`):
+
   - M-A — `len(sys.argv > 1)` typo in patch 0004 → `len(sys.argv) > 1`.
+
   - M-B — URL-decode missing in mock `_parse_query` → added
     `urllib.parse.unquote_plus`.
+
   - M-C — `mActivityManager` field was dead → now used by `forceStop`
     for real `IActivityManager.forceStopPackage` (replaces the
     silently-broken `ActivityManager.killBackgroundProcesses`).
+
   - Patch 0001 was unnecessary because the `services.core-sources`
     filegroup's `srcs: ["java/**/*.java"]` glob already covers our
     copied `com/qalos/remotectl/*.java` → deleted.
+
   - Patch 0004's anchor was wrong for AOSP 15 (referenced the
     removed `traceBeginAndSlog` static method and bare `traceEnd()`)
     → rewritten to match the actual AOSP 15 pattern
@@ -1733,18 +1848,25 @@ v1 / Phase 2 is recorded in detail at
 
 - **Should-fix items from the v0 second-pass review**, deferred
   until v1:
+
   - S-A — `ActivityManager.getLaunchIntentForPackage` is deprecated
     in API 33+; migrate to `PackageManager.getLaunchIntentForPackage`.
+
   - S-B — `Display.getRealSize(Point)` is deprecated in API 30+;
     migrate to `WindowManager.getCurrentWindowMetrics().getBounds()`.
+
   - S-D — `getDisplayWidth` + `getDisplayHeight` make two Binder
     round-trips; combine into one `getDisplaySize` AIDL call.
+
   - S-E — `Bitmap.compress` runs on the binder thread for 100-200 ms;
     move to a worker `ExecutorService`.
+
   - S-F — `MotionEvent.recycle()` is also deprecated in API 28+;
     drop the call.
+
   - S-H — `apply-qalos.sh` silently ignores unknown flags; add a
     default arm to the case statement.
+
   - S-I — patch 0004's regex still requires a literal
     `InputManagerService` class name; broaden the anchor so a
     future rename does not break the patch.
@@ -1760,20 +1882,28 @@ v1 / Phase 2 is recorded in detail at
 
 - **v1 features** (per the original PRD Phase 1.5+, scoped by
   `decisions.md#d-005a`):
+
   - `long_press`, `swipe`, `pinch` gesture endpoints.
+
   - LLM agent loop template (Python skeleton) that consumes the
     agent-developer-guide pattern.
+
   - Multi-device orchestration helpers (the Python client is
     thread-safe; just need a barrier-sync helper).
 
 - **Phase 2** (explicitly deferred per D-006, D-007, and the PRD's
   "What's NOT in v0" list):
+
   - KernelSU-Next + SuSFS kernel hiding on physical Pixel 7.
+
   - GPS spoofing (Smali patch on `services.jar` or custom
     `LocationProvider` HAL).
+
   - Play Integrity bypass (TrickyStore + keybox injection; the
     ethical-grey-zone path).
+
   - iOS support (XCUITest + WebDriverAgent on a Mac).
+
   - Sensor injection (accel / gyro / barometer) for a navigation
     test rig.
 
@@ -1797,12 +1927,16 @@ version:
 1. **Fetch** the real upstream file from
    `https://android.googlesource.com/platform/frameworks/base/+/refs/tags/<AOSP-tag>/<path>?format=TEXT`
    (base64, no newlines).
+
 2. **Decode** with `[Convert]::FromBase64String` (PowerShell) or
    `base64 -d` (bash).
+
 3. **Drop** it into a fake AOSP working tree at the right relative
    path.
+
 4. **Run** the patch script against the tree. If `check-patches.py`
    exits non-zero, the anchor is wrong; fix it.
+
 5. **Diff** the result against the pristine copy. The diff IS
    the patch; if it surprises you, the patch is wrong.
 
@@ -1863,6 +1997,7 @@ Linux instance.
 ## 9. Tactical next steps (for whoever picks this up)
 
 1. **GCP is the cheapest and fastest new-account path right now.** The Aliyun account is blocked at 4 vCPU / 8 GB by risk-control gates.
+
    ```powershell
    .\tools\gcp-install.ps1                    # verify gcloud is working
    .\tools\gcp-setup-base.ps1                 # one-time: warm snapshot (~10 min)
@@ -1879,14 +2014,18 @@ Linux instance.
    scripts.
 
 3. **Enable GitHub Pages** for the Docusaurus site: go to repo **Settings > Pages**, select **GitHub Actions** as the source. The next push to `main` will deploy.
+
 4. **Apply branch protection** with the `gh api` command in `BRANCH_PROTECTION.md`.
+
 5. **Add GH Actions paths** for Aliyun and GCP by copying `.github/workflows/build.yml` and following the pattern.
+
 6. **The artifact-download path is now HTTP, not `scp`.** `do-build.sh`
    writes `/tmp/qalos-artifacts-url.txt`; the systemd unit's
    `ExecStartPost=` starts [`tools/aliyun/qalos-serve-artifacts.py`](tools/aliyun/qalos-serve-artifacts.py);
    the cron and the user download via `curl` or a browser.
    No `BUILD_UPLOAD_BACKEND` refactor needed for the Aliyun
    path; the `SPACES_BUCKET` DO path still uses `s3cmd`.
+
 7. **AOSP source migration to Aliyun uses the HK relay** (proven
    2026-09-11). Don't try to ship 35 GB from the UK to
    `cn-guangzhou` directly — SSH is DPI-throttled to ~1 KB/s
@@ -1901,14 +2040,25 @@ Linux instance.
 ## 10. TL;DR
 
 - **Build locally.** 16 GB+ RAM, 200+ GB disk, Ubuntu 22.04+.
+
 - **Cloud is a fallback.** DO has the battle-tested scripts (`doctl-*.ps1`); Aliyun is the LLM-driven path (read [`tools/aliyun/AGENTS.md`](tools/aliyun/AGENTS.md)) for China-region runs; GCP is the cheapest and fastest new-account path (`gcp-*.ps1`, ~$0.76 for a 6h build, no gates).
+
 - **The on-host build is `do-build.sh`.** All three cloud paths invoke it. Don't fork it.
+
 - **The Aliyun path is LLM-driven** as of 2026-09-09. The agent calls `aliyun ecs ...` via Bash, sets up a `mavis cron` to own teardown, and the build runs as a detached `systemd-run` unit on the instance. See [`tools/aliyun/AGENTS.md`](tools/aliyun/AGENTS.md).
+
 - **AOSP source ships to Aliyun via the HK relay (§5.4.5).** Mac Mini → HK OSS (public) → HK ECS via HK OSS internal endpoint → extract 127 GB → `CreateImage` → `CopyImage` → cn-guangzhou. Direct UK → cn-guangzhou is unusable (~1 KB/s SSH, public OSS endpoint blocked at account level).
+
 - **Four safety nets** prevent orphaned cloud resources. Every new build script MUST implement them.
+
 - **The warm image is the unit of cost optimization.** Pay ~¥8-12/month for the Aliyun image, ~$0.40/month for the DO snapshot, save 30 min per build.
+
 - **GCP: use Spot with a retry mindset.** 30-second preemption notice means a mid-build reclaim costs one extra `m` round — `repo sync` and `ccache` survive it.
+
 - **Aliyun: use `SpotAsPriceGo`** the same way. The build instance is destroyed on any exit; `do-build.sh`'s `MAX_RUNTIME_MINUTES` watchdog is the hard upper bound.
+
 - **Read the gotchas (§7) before you debug Aliyun.** The CLI's error messages are useless; the gotchas are where the real signal is. New in 2026-09-11: §7.8 (OSS internal endpoint speed), §7.9 (ECS sizing for extraction), §7.10 (three-phase extraction).
+
 - **The legal framework in `legal/` is the project's liability shield.** KYC + audit logging are mandatory for any commercial distribution. Contributors accept the CLA by submitting a PR. See §2.9 for the non-negotiables. Every document in `legal/` is currently DRAFT and must be reviewed by a solicitor before reliance.
+
 - **The docs site is at <https://bramburn.github.io/qalos/>** and is the human-facing mirror of this file. Update both when you change architecture.

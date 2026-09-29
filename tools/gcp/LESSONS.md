@@ -59,7 +59,7 @@ only an image-drop destination and the flashing host.
 
 ---
 
-## 2. Read the tree before fixing AOSP. Every time.
+## 2. Read the tree before fixing AOSP. Every time
 
 Five fixes on this project were written from memory. All five were
 wrong and had to be reverted.
@@ -85,7 +85,7 @@ constraint.
 
 **Symptom.** `qalos-b13` reached 98% (136,034/138,691) and exited 1:
 
-```
+```text
 out/srcjars/android/Manifest.java:6769: error: New API must be flagged with
 @FlaggedApi: field android.Manifest.permission.REMOTE_CONTROL [UnflaggedApi]
 ```
@@ -99,7 +99,7 @@ annotate our signature permission as `@SystemApi @hide` in
 `AndroidManifest.xml` — exactly what metalava requires. Its log line
 said:
 
-```
+```text
 [0005] already applied (idempotent skip)
 ```
 
@@ -171,7 +171,7 @@ marker in the XML comment immediately above the element:
 `@FlaggedApi("com.qalos.flags.remote_control")` plus
 `android:featureFlag=...`. Metalava accepted it; **aapt2** then failed:
 
-```
+```text
 error: attribute 'android:featureFlag' has flag 'com.qalos.flags.remote_control'
 not found in flags from --feature_flags parameter
 ```
@@ -281,9 +281,12 @@ Observed on the successful b14 build:
   (`libbinder`, `libcutils`, `libc++`, `libdmabufheap`) — **no Google
   vendor blobs**, as expected from the blob-less design
   (`inherit-product-if-exists` makes the blob makefiles optional).
+
 - **No `vendor.img` produced.**
+
 - **No `super.img` produced.** `super_empty.img` (4,976 bytes) exists
   as a placeholder only.
+
 - `PRODUCT_NAME := aosp_cheetah`, `PRODUCT_DEVICE := cheetah`.
 
 A stock Pixel 7 Pro (cheetah) ships with **virtual-A/B dynamic
@@ -301,9 +304,11 @@ partition's HALs. Flashing as-is is likely to fail or boot-loop.
    `inherit-product-if-exists` optionality and source the driver zips
    described in `device/google/cheetah/README.md`. Different build, not
    a different flash command.
+
 2. Build with `PRODUCT_USE_DYNAMIC_PARTITIONS := true` and a
    `BOARD_SUPER_PARTITION_GROUP_LIST` matching the device, producing a
    real `super.img` via `lpmake`.
+
 3. Test on the **emulator** target (`qalos_emulator-userdebug`), which
    is the first-class target in the root `AGENTS.md` and exercises
    RemoteControlService end to end without any of this.

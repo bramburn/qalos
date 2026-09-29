@@ -43,6 +43,7 @@ the agent's session.
 
 1. **Aliyun account** in good standing. RAM ≥ 64 GB is required for
    the AOSP build; the `g7a.16xlarge` has 256 GB.
+
 2. **Quota bump filed** at
    `https://ecs.console.aliyun.com → 配额管理 (Quota Management) →
    提交配额申请 (Submit Quota Application)`, for the `ecs.g7a`
@@ -51,20 +52,26 @@ the agent's session.
    are risk-limited to 8 GB by default — the smoke test will
    fail with `Forbidden.RiskControl` on any 16+ GB instance type
    until the quota is approved.
+
 3. **Aliyun CLI** installed and configured. On Windows: run
    `.\tools\aliyun-install.ps1` then `aliyun configure`. Verify
    with `aliyun version` (expect 3.4.x) and `aliyun configure list`
    (expect a `default *` profile).
+
 4. **SSH key** imported to Aliyun. The LLM uses Windows OpenSSH
    (`C:\Windows\System32\OpenSSH\ssh.exe`) for both `ssh` and
    `scp`. The key is the one referenced by
    `%USERPROFILE%\.ssh\id_rsa.pub` (or `id_ed25519_*`); `ssh-keygen`
    generates one if missing.
+
 5. **Repo state**:
+
    - `D:\qalos\.pi\aliyun-state.json` does NOT exist on first
      run. The smoke test creates it.
+
    - `D:\qalos\.pi\out\aliyun-build\` is where build artifacts
      land; create it before the first build.
+
 6. **Time budget**: ~1.5–2 hours for the full first build (sync +
    preflight + full `m` + artifact download). Sync-only preflight
    takes ~1 hour.
@@ -137,12 +144,15 @@ it), which makes the infra state easier to reason about.
 1. **Created at Phase 4 launch start** (status: `preparing`), before
    `aliyun ecs RunInstances`. Password is generated; `instance.id` is
    `null` until `RunInstances` returns.
+
 2. **Updated after every state transition.** Each transition appends
    to `stateTransitions[]` with `at`, `to`, and a `note`. The next
    agent (or a human reading the file) sees the full history.
+
 3. **Read by the mavis cron** on every tick. The cron's prompt
    embeds the `instance.id`, `publicIp`, and `artifact.url` from
    the state file so the cron does not re-discover them.
+
 4. **Read by any follow-up agent** if the original session dies
    mid-build. The `nextAgentActions[]` array is the recovery
    checklist: where the build is, what the cron expects, how to
@@ -259,11 +269,14 @@ True; the file has all 9 keys; `aliyun ecs DescribeInstances
 --InstanceIds "[$instance_id]"` returns 0 instances.
 
 **Failure modes:**
+
 - `Forbidden.RiskControl` on `RunInstances`: the account is
   risk-limited. The LLM reports the quota-bump URL and stops.
   Phases 3-5 are blocked.
+
 - `SDK.ServerError` (transient): retry 4× with 3s backoff (the
   `aliyon()` pattern). If still failing, exit cleanly.
+
 - SSH never comes up: the `trap` deletes the instance and the
   LLM reports the failure to the user.
 
@@ -367,13 +380,19 @@ an optimization to §5.4.5's first leg.
 This is the main event. The LLM:
 
 1. Reads the state file.
+
 2. `RunInstances` for the build ECS (64 vCPU / 256 GB / Spot /
    500 GB ESSD PL2).
+
 3. Waits for Running + public IP.
+
 4. `scp` do-build.sh, qalos-env.sh to the instance.
+
 5. Writes the systemd unit on the instance and starts it detached
    via `systemd-run --unit=qalos-build`.
+
 6. Sets up a `mavis cron` to own teardown.
+
 7. Disconnects. The cron takes over.
 
 ### 4.1 Launch the build ECS
@@ -620,11 +639,14 @@ the build instance. The server:
 
 - listens on `0.0.0.0:8080` (or whatever port the systemd unit
   passes via `--port`)
+
 - serves files from `/root/aosp/out/target/product/qalos_emulator`
   (the AOSP build output) under a single URL prefix `/<token>/`,
   where `<token>` is a uuid4 generated at start
+
 - writes the public URL to `/tmp/qalos-artifacts-url.txt` (e.g.
   `http://114.215.200.49:8080/3f2a-4b1c-.../`)
+
 - 404s anything that does not start with the token
 
 **Download via `curl` (the cron, or an automated script):**
@@ -640,9 +662,11 @@ curl -fSL "$URL/var/log/qalos-build.log" -o build.log
 **Download via a browser (the user):**
 
 1. SSH into the instance and read the URL:
+
    ```bash
    ssh root@$IP "cat /tmp/qalos-artifacts-url.txt"
    ```
+
 2. Paste the URL into a browser. The browser shows a directory
    listing (if the token prefix matches); click any file to
    download it. The browser also lets you download a single file
@@ -673,21 +697,26 @@ The cron should:
 1. **Never block.** Read `systemctl is-active qalos-build` first;
    if `active`, return immediately. The build takes 1-1.5 hours;
    the cron should not interfere.
+
 2. **Download everything on success.** The build log AND the
    three `*.img` files, via the token-gated URL (see
    "Downloading artifacts" above). The `curl -fSL` pattern
    handles redirects and 404s gracefully.
+
 3. **Tear down the instance ALWAYS** on inactive/failed/stopped.
    The on-host watchdog only calls `shutdown -h now`; the
    instance is in `Stopped` state, not deleted. The cron must
    call `DeleteInstance` to avoid standing cost.
+
 4. **Self-delete** with `mavis cron delete $CRON_ID` once the
    instance is gone. Crons do not persist across builds.
+
 5. **6-hour hard cap.** If the cron has been ticking for 6 hours
    and the build is still running, leave the instance running
    for the user to inspect (the on-host watchdog should have
    killed it by 3 hours; 6 hours is "something else is wrong"
    territory). Delete the cron, alert the user.
+
 6. **Surface the URL to the user.** When the build finishes,
    the cron's final report to the user should include the
    artifacts URL — the user can then re-download any file in
@@ -733,15 +762,20 @@ it calls are correct for `android-15.0.0_r1`:
 
 1. `repo init -u <manifest> -b main` (line 111). The qalos repo IS
    the manifest.
+
 2. `repo sync -c -j$REPO_SYNC_JOBS --no-tags --no-clone-bundle`
    (line 139). With `QALOS_USE_TUNA_MIRROR=1`, `REPO_SYNC_JOBS=4`
    (TUNA rate-limits at 4 concurrent git fetches).
+
 3. `apply-qalos.sh` (line 173-180). The 3 qalos patches apply
    cleanly against real AOSP 15 source.
+
 4. `lunch qalos_emulator-trunk_staging-userdebug` (line 189).
    AOSP 15 requires 3-part combos.
+
 5. `m -jN frameworks/base/api:api-stubs-docs-non-updatable` (line
    202). The preflight metalava target.
+
 6. `m -jN` (line 216). The full build.
 
 `QALOS_USE_TUNA_MIRROR=1` and `QALOS_STOP_AFTER_PREFLIGHT=1` are

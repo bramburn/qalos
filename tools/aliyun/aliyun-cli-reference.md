@@ -3,7 +3,6 @@
 > Concise reference of every `aliyun ecs ...` command the
 > [LLM runbook](AGENTS.md) uses. Format: command, JSON parse shape,
 > the most common error codes, and the fix for each.
-
 > **Read alongside:** [AGENTS.md](AGENTS.md) for the high-level
 > flow, [build-cost.md](build-cost.md) for the cost numbers.
 
@@ -12,9 +11,11 @@
 - The aliyun CLI prints JSON on stdout and a one-line `ERROR: SDK.ServerError`
   on stderr when something fails. **Always parse stdout; the stderr is
   useless** (see root AGENTS.md §7.5).
+
 - The Bash pattern in the runbook is `cmd | jq -r '.path.to.field'`.
   If the JSON is missing, `jq` exits non-zero and the runbook's
   `if ...; then ...; else exit 1; fi` catches it.
+
 - The Bash retry pattern (mirrors `aliyon()` in the .sh twins) is:
 
   ```bash
@@ -48,6 +49,7 @@ aliyun ecs DescribeAvailableResource \
 ```
 
 JSON parse:
+
 ```json
 {
   "AvailableZones": {
@@ -73,6 +75,7 @@ JSON parse:
 ```
 
 jq filter for the in-stock IDs:
+
 ```bash
 ... | jq -r '.AvailableZones.AvailableZone[].AvailableResources
               .AvailableResource[].SupportedResources.SupportedResource[]
@@ -92,6 +95,7 @@ aliyun ecs DescribeInstanceTypes --InstanceTypes '["ecs.g7a.large","ecs.g7a.xlar
 ```
 
 JSON parse:
+
 ```json
 {
   "InstanceTypes": {
@@ -115,6 +119,7 @@ aliyun ecs DescribeImages \
 ```
 
 jq filter for the latest Ubuntu 22.04:
+
 ```bash
 ... | jq -r '.Images.Image
               | map(select(.OSName | test("ubuntu";"i") and
@@ -188,6 +193,7 @@ aliyun ecs RunInstances \
 ```
 
 JSON parse:
+
 ```json
 {
   "InstanceIdSets": { "InstanceIdSet": ["i-bp1xxxxxxxxxxxx"] }
@@ -210,6 +216,7 @@ PL1, 40 GB is enough; the Java compile phase runs ~20 % slower.
 hit this. Fix: file a quota increase at
 `https://ecs.console.aliyun.com → 配额管理 → 提交配额申请`. The
 CLI response will look like:
+
 ```json
 {
   "Code": "Forbidden.RiskControl",
@@ -232,6 +239,7 @@ aliyun ecs DescribeInstances \
 ```
 
 JSON parse:
+
 ```json
 {
   "Instances": {
@@ -247,6 +255,7 @@ JSON parse:
 ```
 
 jq filter for status + IP:
+
 ```bash
 ... | jq -r '.Instances.Instance[0] | "\(.Status)|\(.PublicIpAddress.IpAddress[0] // empty)"'
 ```
@@ -302,6 +311,7 @@ aliyun ecs CreateImage \
 ```
 
 JSON parse:
+
 ```json
 { "ImageId": "m-bp1xxxxxxxxxxxx" }
 ```

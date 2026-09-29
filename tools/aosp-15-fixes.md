@@ -20,6 +20,7 @@ Two upstream AOSP 15.0.0_r1 issues, both surfaced by the
    each to a concrete method that throws
    `UnsupportedOperationException`, matching the pattern of
    `setMaxVariable(int)` in the same file.
+
 2. **`external/conscrypt/api/intra/last-api.txt`** — the
    checked-in `last-api.txt` baseline predates AOSP 15's `patch_module:
    "java.base"` setup for conscrypt. The stub generator (eventually)
@@ -36,7 +37,8 @@ immediately after `repo sync` and `apply-qalos.sh`.
 ## Issue 1: Collator.java HiddenAbstractMethod
 
 ### Symptom
-```
+
+```text
 external/icu/android_icu4j/src/main/java/android/icu/text/Collator.java:1253:
   error: getRawCollationKey cannot be hidden and abstract when Collator has
   a visible constructor [HiddenAbstractMethod]
@@ -53,6 +55,7 @@ The metalava build fails the preflight with these three
 calls `shutdown_droplet`, and the instance is destroyed.
 
 ### Why
+
 The methods already have `@SuppressWarnings("HiddenAbstractMethod")`
 on them, but AOSP 15's metalava does not respect that annotation.
 Likely the annotation was correct for the older metalava in AOSP 14
@@ -60,6 +63,7 @@ or earlier. In AOSP 15 the annotation is silently ignored, the
 check still runs, and the build fails.
 
 ### Fix
+
 Convert each of the 3 methods from `public abstract` to a concrete
 implementation that throws `UnsupportedOperationException`. The
 class has a non-abstract sibling (`setMaxVariable(int)`) that uses
@@ -77,9 +81,11 @@ calling them on a non-RuleBasedCollator throws an exception, which
 is the right behavior.
 
 ### Where to apply
+
 `external/icu/android_icu4j/src/main/java/android/icu/text/Collator.java`
 
 ### How to apply
+
 Run [`fix-aosp-15-issues.sh`](fix-aosp-15-issues.sh), which calls
 [`fix_collator.py`](fix_collator.py). The Python script is
 targeted — it replaces only the 3 specific methods by their
@@ -94,7 +100,8 @@ A blanket fix would break RuleBasedCollator at runtime.
 ## Issue 2: conscrypt `last-api.txt` baseline mismatch
 
 ### Symptom
-```
+
+```text
 external/conscrypt/repackaged/common/src/main/java/com/android/org/conscrypt/OpenSSLMessageDigestJDK.java:30:
   error: Class com.android.org.conscrypt.OpenSSLMessageDigestJDK no longer
   implements java.lang.Cloneable [RemovedInterface]
@@ -108,6 +115,7 @@ external/conscrypt/repackaged/common/src/main/java/com/android/org/conscrypt/Ope
 ```
 
 ### Why
+
 The conscrypt module declares `patch_module: "java.base"` and
 `system_modules: "art-module-intra-core-api-stubs-system-modules"`.
 The checked-in `external/conscrypt/api/intra/last-api.txt` baseline
@@ -125,6 +133,7 @@ Fix it by replacing `last-api.txt` with the stubs metalava
 generates from the current source.
 
 ### How to apply
+
 The fix script [`fix-aosp-15-issues.sh`](fix-aosp-15-issues.sh)
 runs a one-shot metalava generation:
 
@@ -141,8 +150,10 @@ After this, the baseline matches the source, and the preflight
 passes.
 
 ### Why two phases
+
 On the first attempt, the generated stubs from a partial build were
 missing the `java.base` references — they looked like:
+
 ```java
 public class OpenSSLMessageDigestJDK { }
 ctor public OpenSSLMessageDigestJDK.MD5();   // no throws

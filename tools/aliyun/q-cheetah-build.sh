@@ -32,7 +32,6 @@ MAX_RUNTIME_MINUTES="${MAX_RUNTIME_MINUTES:-360}"  # 6h; download + 3 builds + u
 # at /root/aosp_new/. We then symlink /root/aosp -> /root/aosp_new so the
 # rest of the script can use the standard /root/aosp path.
 AOSP_SRC=/root/aosp
-AOSP_TREE=/root/aosp_new
 OSS_OPTS="--endpoint $HK_OSS_ENDPOINT --part-size=104857600 --parallel=8 --bigfile-threshold=104857600"
 LOG=/var/log/q-cheetah-build.log
 STATE_DIR=/tmp/q_state

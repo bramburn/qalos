@@ -37,9 +37,12 @@ For each failing patch:
 
 2. **Compare** the patch's anchor (the string the regex matches)
    against the current file content. The mismatch is usually:
+
    - The anchor class or method renamed (e.g.
      `traceBeginAndSlog` → `t.traceBegin` in AOSP 15).
+
    - Whitespace differences (tabs vs spaces, indent depth).
+
    - A few lines added or removed around the anchor.
 
 3. **Apply the change manually** by editing the patch script
@@ -106,7 +109,7 @@ independent. The chain:
 `<permission>` added to the platform manifest is new public API surface;
 metalava rejects it in `api-stubs-docs-non-updatable` with:
 
-```
+```text
 error: New API must be flagged with @FlaggedApi:
   field android.Manifest.permission.REMOTE_CONTROL [UnflaggedApi]
 ```

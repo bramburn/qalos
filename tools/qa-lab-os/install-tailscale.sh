@@ -58,8 +58,6 @@
 
 set -euo pipefail
 
-readonly SCRIPT_NAME="$(basename "$0")"
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly CACHE_DIR="${TMPDIR:-/tmp}/qalos-tailscale"
 readonly MANIFEST_URL="https://pkgs.tailscale.com/stable/?mode=json"
 

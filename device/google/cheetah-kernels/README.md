@@ -12,6 +12,7 @@ The build selects it via `TARGET_LINUX_KERNEL_VERSION := 5.10` and the
 ## Build verification
 
 After syncing:
+
 ```bash
 lunch qalos_cheetah-userdebug
 m -j4 kernel

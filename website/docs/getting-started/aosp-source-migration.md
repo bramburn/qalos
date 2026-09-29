@@ -23,6 +23,7 @@ The naïve plan — `tar -cf - ~/aosp | ssh root@<ECS> tar -xf -` —
    At that rate, 35 GB takes 281 days. Parallel streams don't help
    — the throttle is per-flow. See
    [`AGENTS.md` §5.4.4](https://github.com/bramburn/qalos/blob/main/AGENTS.md).
+
 2. **The cn-guangzhou public OSS endpoint is blocked at the account
    level** on this account. Symptom: `PublicEndpointForbidden`
    (HTTP 400, code `0048-00000401`). Bucket management (`mb`,
@@ -35,7 +36,7 @@ downloads are unmetered and 5–10× faster than public.
 
 ## Topology
 
-```
+```text
 macmini2024 (UK, 192.168.0.46)
        │  ossutil cp via oss-cn-hongkong.aliyuncs.com (port 443)
        │  9.4 MiB/s avg, 60 min for 35.5 GB
@@ -66,13 +67,16 @@ macmini2024 (UK, 192.168.0.46)
   host**). This is where `repo sync` runs to populate `~/aosp/`.
   Must have open internet (UK residential IPs are fine for
   `android.googlesource.com`).
+
 - The Aliyun CLI installed and configured (see [Aliyun build](./aliyun-build.md)).
+
 - The HK infra already bootstrapped: VPC, VSwitch, SG, KeyPair,
   OSS bucket. The `aliyun-smoke-test.{ps1,sh}` script creates
   all of these in cn-hongkong-d. The state file is at
   `D:\qalos\.pi\aliyun-state.json` (Windows) or
   `~/.pi/aliyun-state.json` (macOS/Linux). See
   [`tools/aliyun/AGENTS.md`](https://github.com/bramburn/qalos/blob/main/tools/aliyun/AGENTS.md).
+
 - The AOSP source compressed and split into ≤100 MB volumes at
   `~/aosp_volumes/aosp.zst.000` … `aosp.zst.NNN`. Recipe below.
 
@@ -362,7 +366,7 @@ rm -rf ~/aosp_volumes
 rm /tmp/aosp.tar.zst
 ```
 
-## What if Step 2 fails mid-upload?
+## What if Step 2 fails mid-upload
 
 The OSS multipart upload is resumable per file. Just re-run the
 same `ossutil cp -r --update ...` command. `--update` skips files
@@ -376,9 +380,11 @@ on the next `--update` attempt. No manual cleanup needed.
 ## What's next
 
 - Ready to build? → [Aliyun build](./aliyun-build.md) § "Per-build"
+
 - Hit a gotcha? → [Gotchas](../reference/gotchas.md) — especially §
   "ECS sizing for extraction" and § "Aliyun OSS internal endpoint
   is 5–10× faster than public"
+
 - Need the recipe in script form? →
   [`tools/aliyun/AGENTS.md`](https://github.com/bramburn/qalos/blob/main/tools/aliyun/AGENTS.md)
   is the LLM-driven runbook; the smoke-test and setup-base scripts

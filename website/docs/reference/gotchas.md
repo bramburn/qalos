@@ -73,7 +73,7 @@ The smoke test can pick `ecs.e-c2m1.small` (1 vCPU / 0.5 GB) as the "smallest in
 
 This Aliyun account has OSS data operations **blocked on the public endpoint** in `cn-guangzhou`. Bucket management (`mb`, `stat`, `get-acl`) works fine. `ossutil cp` and `ossutil ls` against any prefix fail with:
 
-```
+```text
 Error: operation error PutObject: Error returned by Service.
 Http Status Code: 400.
 Error Code: PublicEndpointForbidden.
@@ -99,7 +99,9 @@ Sustained high-volume SSH data transfer from a UK residential IP (e.g. `192.168.
 When downloading large data **into** an Aliyun ECS, always use the `-internal` endpoint (`oss-cn-<region>-internal.aliyuncs.com`) instead of the public one. The internal endpoint is on Aliyun's private backbone:
 
 - No internet egress charge for the download.
+
 - 5–10× higher throughput because it doesn't traverse the public internet.
+
 - No DPI throttling — port 443 between Aliyun ECS and OSS internal is unmetered.
 
 Measured 2026-09-11 on cn-hongkong, downloading 35.5 GB across 339 files from the same OSS bucket:
@@ -118,7 +120,9 @@ For extracting a zstd-compressed tarball of ~35 GB into a ~127 GB directory tree
 **What to use instead:**
 
 - **For just downloading the source** (no extraction): `ecs.u1-c1m2.large` is fine — the bottleneck is network, not CPU/RAM.
+
 - **For extracting and snapshotting the source**: at least `ecs.u1-c1m4.large` (4 vCPU / 8 GB RAM) — or 4 vCPU / 16 GB to be safe. The cat + zstd + tar phases are all single-process and memory-hungry, and 2 GB triggers constant swap.
+
 - **For the actual build** (running `m -jN`): at least 64 GB RAM. 2 vCPU / 2 GB will not start soong bootstrap without OOMing.
 
 ### Three-phase extraction: `cat | zstd | tar`, not one pipe (2026-09-11)
@@ -128,8 +132,11 @@ When extracting a multi-volume zstd-compressed tarball like `aosp.zst.000` … `
 **Why:**
 
 1. **Command-line length**: 339 filenames × ~12 chars = ~4 KB on the command line. Most shells handle this fine, but `tar -cf -` invoked via subprocess from another shell sometimes truncates at the first SIGPIPE. Explicit `cat aosp.zst.* > aosp.tar` is unambiguous.
+
 2. **Debuggability**: each phase has a measurable output file. If phase 2 fails at 80%, you can resume from phase 2 without re-doing phase 1. With a single pipe, you restart from zero.
+
 3. **Resource isolation**: phase 1 (cat) is I/O-bound, phase 2 (zstd) is CPU-bound (single-threaded, no `-T0`), phase 3 (tar) is I/O+metadata bound. A single pipe mixes all three so you can't tell which one is slow.
+
 4. **Failure visibility**: if zstd errors with "invalid frame", you'll see it in phase 2's output. In a single pipe, the error appears at the tail of a 127 GB tar failure and is much harder to diagnose.
 
 **Disk budget for the extraction:** 35 GB compressed + 35 GB intermediate tar + 127 GB decompressed + 127 GB extracted = 324 GB peak. A 300 GB disk will run out. Plan for ≥500 GB, or delete the compressed volumes after Phase 1.
@@ -177,6 +184,7 @@ DO snapshots live in the region they were created in. If you create the snapshot
 **The hardcoded Plink path:** `C:\Program Files (x86)\Google\Cloud SDK\google-cloud-sdk\lib\googlecloudsdk\command_lib\util\ssh\ssh.py:206-210`. As of SDK 583.0.0 (core 2026.08.31) it's still PuTTY-on-Windows, hardcoded. Two symptoms, both reproducible:
 
 1. **IAP tunneling fails**: `gcloud compute ssh --tunnel-through-iap ...` → Plink's TLS handshake to `tunnel.googleapis.com:443` is rejected with **"Remote side unexpectedly closed network connection"**. Affects Windows hosts behind corporate firewalls, TLS-inspection proxies, or where Plink's TLS version mismatch doesn't match the IAP proxy.
+
 2. **Direct SSH fails against Debian 12 / OpenSSH 8.8+**: **"Server refused public-key signature despite accepting key! (server sent: publickey)"**. Plink 0.83's SHA-1 RSA signature isn't in the server's `PubkeyAcceptedAlgorithms`. Affects every modern Linux distro: Debian 12, Ubuntu 22.04+, RHEL 9, etc.
 
 **Why the `gcp-*.ps1` scripts don't use `gcloud compute ssh`:** both errors above manifest in any gcloud-based SSH call. The orchestrator scripts (`gcp-smoke-test.ps1`, `gcp-setup-base.ps1`, `gcp-build.ps1`) instead call Windows OpenSSH directly:
@@ -250,4 +258,5 @@ GH Actions free tier is 2000 min/month. A full AOSP build on `c-8` is 2-4 hours,
 ## What's next
 
 - Want the design rules these gotchas are exceptions to? → [Architecture overview](../architecture/overview.md)
+
 - Want to add a new gotcha you just hit? → open a PR with a one-paragraph entry and the workaround. Update this page and AGENTS.md.

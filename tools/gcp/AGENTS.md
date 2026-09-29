@@ -21,18 +21,23 @@ opposite was tried and cost real time or money.
 1. **Never trust `m` exit code 0.** On 2026-09-11 a build exited 0 and
    produced images byte-identical to stock Pixel_8 Android 35, because
    `apply-qalos.sh` had never landed. Verify *inside* the image (§5).
+
 2. **Never stage a compressed tree to the build host.** Let the build
    host `repo sync` itself. Measured 32 min direct vs 95+ min to
    compress 33 GB on a spinning disk. See [`LESSONS.md`](LESSONS.md) §1.
+
 3. **Never destroy the instance on a build failure.** It holds the
    179 GB sync. A re-sync costs ~32 min and ~$0.30; re-doing a
    one-line source fix costs seconds. Teardown happens only after the
    images are delivered **and** byte-verified (§6).
+
 4. **Never use `gcloud compute ssh`.** The gcloud SDK hardcodes PuTTY
    /Plink, which fails against modern Linux OpenSSH. Use
    `C:\Windows\System32\OpenSSH\ssh.exe` directly.
+
 5. **Never use `tools/gcp-build.ps1` for a long build.** It has a 4-hour
    SSH-shutdown bug that deletes a healthy build. See `../AGENTS.md`.
+
 6. **Read the tree, not your memory, before fixing AOSP.** Five
    separate fixes on this project were guessed from memory and all five
    had to be walked back. See [`LESSONS.md`](LESSONS.md) §2.
@@ -110,12 +115,18 @@ Order of operations inside the script:
 1. `cd .repo/manifests && git clean -fdx` then check out
    `feat/qa-lab-os-v1` and `chmod +x tools/`. Without the `git clean`,
    leftover files from `apply-qalos.sh` block the branch switch.
+
 2. `apply-qalos.sh` — copies the qalos overlay in, runs patches 0002-0010.
+
 3. `fix-aosp-15-issues.sh` — the two upstream AOSP 15 metalava fixes
    (see [`../aosp-15-fixes.md`](../aosp-15-fixes.md)).
+
 4. **Kernel stand-in** (see §3.2).
+
 5. `lunch qalos_cheetah-trunk_staging-userdebug`.
+
 6. Soong bootstrap, then `m -j$(nproc)`.
+
 7. Artifact listing.
 
 ### 3.2 The kernel stand-in — remove once real 6.1 prebuilts exist
@@ -207,7 +218,7 @@ strings -a "$P/system.img" | grep -c 'REMOTE_CONTROL'                  # > 0
 Check 4 is the one that would have caught the v11 stock-image build.
 Confirming the fingerprint is a good secondary signal:
 
-```
+```text
 ro.system.build.fingerprint=qalos/qalos_cheetah/qalos_cheetah:VanillaIceCream/AP3A.240905.015.A2/...:userdebug/test-keys
 ```
 
@@ -263,7 +274,9 @@ usually the one worth keeping.
 **Checklist before `gcloud compute instances delete`:**
 
 - [ ] images MD5-verified on every destination
+
 - [ ] `*.log` and `*.sh` pulled off the instance
+
 - [ ] GCS copy confirmed (`gcloud storage ls`)
 
 If the instance is already gone, the logs are unrecoverable — the next

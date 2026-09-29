@@ -37,6 +37,7 @@ them, but a device image without blobs has no camera/audio/radio HALs.
 Populate `vendor/google_devices/` (NOT this directory) with **one** of:
 
 ### Option A — Google's driver zips (partially available)
+
 Download the "Pixel 7 Pro binaries for Android 15.0.0" package matching
 your AOSP release from
 <https://developers.google.com/android/drivers> and run the extracted
@@ -55,6 +56,7 @@ remains undefined and the release config is still missing. See
 `.pi/AOSP-BUILD-STATUS.md` §3.8.
 
 ### Option A2 — the GS101 platform blobs (required, NOT public)
+
 `vendor/google_devices/gs101/prebuilts/` carries `RELEASE_KERNEL_CHEETAH_DIR`,
 `RELEASE_GOOGLE_CHEETAH_RADIO_DIR` and the matching 6.1 kernel. It is
 distributable only through the Android **Device Preview Program**
@@ -63,6 +65,7 @@ partner release. There is no public download. Without it, `qalos_cheetah`
 cannot be lunched.
 
 ### Option B — LineageOS extraction tooling (from a device or factory image)
+
 ```bash
 cd /home/bramburn/aosp
 git clone -b lineage-22.1 https://github.com/LineageOS/android_device_google_pantah \
@@ -91,8 +94,10 @@ The qalos products use `TARGET_DEVICE=qalos_cheetah` /
 - `device/qalos/qalos_cheetah/BoardConfig.mk` is what gets loaded; it
   `-include`s `device/google/pantah/cheetah/BoardConfig.mk` for the real
   board config.
+
 - Build output lands in `out/target/product/qalos_cheetah/` (not
   `.../cheetah/`).
+
 - Build fingerprints are computed by AOSP as
   `qalos/qalos_cheetah/qalos_cheetah:<version>/<id>/<num>:<variant>/<tags>`.
 
