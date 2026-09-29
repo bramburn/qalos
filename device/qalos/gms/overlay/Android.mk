@@ -1,0 +1,6 @@
+include $(CLEAR_VARS)
+LOCAL_MODULE := GmsCoreOverlay
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_PATH := $(TARGET_OUT)/etc/sysconf
+include $(BUILD_PREBUILT)

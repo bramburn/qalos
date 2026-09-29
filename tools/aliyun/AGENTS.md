@@ -335,6 +335,33 @@ image is created by the §5.4.5 flow in the root AGENTS.md; the
 recipe above covers the generic deps image. Full build series:
 `website/docs/qa-lab-os/aosp-15-build-journal.md`.
 
+**2026-09-25 update:** §5.4.7 (OSS Transfer Acceleration) is now the
+**primary** upload path for UK → cn-guangzhou once verified (5 MB test
+recipe is in §5.4.7). §5.4.5 (HK relay) stays as the documented fallback
+— do NOT skip the HK bucket / image provisioning just because §5.4.7
+exists, until §5.4.7 is verified end-to-end. If §5.4.7 is unverified,
+follow §5.4.5 verbatim.
+
+**2026-09-25 verified finding (see root AGENTS.md §5.4.8):**
+OSS Transfer Acceleration on the UK → cn-hongkong path delivers a
+**1.58× speedup over public** (16.073 MiB/s vs 10.158 MiB/s, verified
+with a 100 MB apples-to-apples test from `macmini2024`). Use
+`oss-accelerate.aliyuncs.com` for the Mac-Mini→HK-OSS upload leg in
+the §5.4.5 recipe to save ~21 min per build.
+
+**2026-09-25 platform-policy finding (see root AGENTS.md §5.4.2 / §5.4.8):**
+the `PublicEndpointForbidden` block on Chinese-mainland OSS buckets
+is an **Aliyun platform-wide policy** for accounts activated after
+2025-03-20, not a RAM-user or account configuration issue. It covers
+**both public and accelerate endpoints, all clients (console, ossutil,
+SDKs)**. The only exemption is `cn-hongkong` (treated as outside the
+mainland for OSS policy purposes) and other non-mainland regions.
+The only documented workaround is **CNAME + ICP filing**, impractical
+for non-Chinese entities. The §5.4.7 "skip HK relay entirely" vision
+is **permanently dead for this account** — every mainland bucket is
+blocked. §5.4.5 stays as the primary path; §5.4.7 (HK accelerate) is
+an optimization to §5.4.5's first leg.
+
 ## Phase 4 — Per-build (the actual LLM-driven flow)
 
 This is the main event. The LLM:

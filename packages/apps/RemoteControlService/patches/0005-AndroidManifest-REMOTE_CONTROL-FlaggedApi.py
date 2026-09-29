@@ -51,7 +51,6 @@ already present. Honors `QALOS_PATCH_CHECK=1` for dry-run pre-flight.
 from __future__ import annotations
 
 import os
-import re
 import sys
 from pathlib import Path
 
@@ -82,18 +81,24 @@ def main(work_tree: Path) -> int:
         print(f"[0005] target not found: {target}", file=sys.stderr)
         return 1
     text = target.read_text(encoding="utf-8")
-    # Idempotency: @SystemApi @hide markers already present?
-    if "@SystemApi @hide" in text and "REMOTE_CONTROL" in text:
-        # Verify the REMOTE_CONTROL block specifically has the markers.
-        m = re.search(
-            r"<!-- @SystemApi @hide[\s\S]*?REMOTE_CONTROL[\s\S]*?/>", text
-        )
-        if m:
-            if check_only:
-                print("[0005] OK (already applied; check mode)")
-            else:
-                print("[0005] already applied (idempotent skip)")
-            return 0
+    # Idempotency: is the REMOTE_CONTROL block already annotated?
+    #
+    # DO NOT use a loose regex like r"<!-- @SystemApi @hide[\s\S]*?REMOTE_CONTROL".
+    # `[\s\S]*?` is unbounded, so it happily spans the whole 9,000-line AOSP
+    # manifest: an unrelated `@hide` comment hundreds of lines earlier satisfies
+    # the left half of the pattern and the REMOTE_CONTROL permission satisfies
+    # the right half, so the patch reports "already applied" against a tree it
+    # never edited. That false positive is what let this patch silently do
+    # nothing on 2026-09-28 while the build failed with:
+    #     error: New API must be flagged with @FlaggedApi:
+    #            field android.Manifest.permission.REMOTE_CONTROL [UnflaggedApi]
+    # An exact block comparison has no spanning behaviour and cannot lie.
+    if NEW_BLOCK in text:
+        if check_only:
+            print("[0005] OK (already applied; check mode)")
+        else:
+            print("[0005] already applied (idempotent skip)")
+        return 0
     if OLD_BLOCK not in text:
         print(
             "[0005] anchor not found: the REMOTE_CONTROL permission block "

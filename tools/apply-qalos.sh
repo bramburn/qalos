@@ -127,6 +127,22 @@ copy_path "$QALOS_REPO/packages/apps/QaLab"           packages/apps/QaLab
 # device/ instead of vendor/.
 copy_path "$QALOS_REPO/device/qalos/qalos_emulator/sepolicy" vendor/qalos/qalos_emulator/sepolicy
 
+# --- Pixel 7 Pro (cheetah) products ---
+# The qalos repo is checked out at .repo/manifests/, so device/ and vendor/
+# content under it does NOT exist in the AOSP working tree until it is copied.
+# Without these three lines `lunch qalos_cheetah-userdebug` /
+# `aqa_cheetah_full-userdebug` fail with "unknown product" and none of the
+# cheetah or AQA layers are ever seen by the build.
+#
+# AOSP discovers products and board configs by globbing exactly two levels:
+#   device/*/*/AndroidProducts.mk   vendor/*/*/AndroidProducts.mk
+#   device/*/$(TARGET_DEVICE)/BoardConfig.mk
+#   vendor/*/$(TARGET_DEVICE)/BoardConfig.mk
+# so the destinations below must keep their two-level shape.
+copy_path "$QALOS_REPO/device/qalos/qalos_cheetah"      device/qalos/qalos_cheetah
+copy_path "$QALOS_REPO/device/qalos/qalos_cheetah_slim" device/qalos/qalos_cheetah_slim
+copy_path "$QALOS_REPO/vendor/aqa"                      vendor/aqa
+
 # --- New in v0: qalos RemoteControlService ---
 # Copy the Java/AIDL source into the framework services tree.
 copy_path \
