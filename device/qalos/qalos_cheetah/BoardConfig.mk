@@ -33,9 +33,16 @@
 # blob-less QA build can proceed. The wildcard keeps this working if the
 # kernel tag is bumped; firstword keeps it single-valued.
 #
-# REMOVE this override once the driver zips are in place: the blobs provide a
-# correctly matched kernel (with matching ramdisk, dtb and modules) and
-# should win over this guess.
+# REMOVE this override once the GS101 platform blobs are in place: they provide a
+# correctly matched kernel (with matching ramdisk, dtb and modules) and should
+# win over this guess.
+#
+# NOTE (2026-08-28): the *device* driver zip for this build HAS been obtained
+# and unpacked (google_devices-cheetah-ap3a.241005.015.a2). It supplies
+# vendor/google_devices/cheetah/proprietary/ but contains NO gs101/ directory,
+# so RELEASE_KERNEL_CHEETAH_DIR is still undefined and this override is STILL
+# REQUIRED. The GS101/Tensor-G2 platform blobs are not publicly downloadable.
+# See .pi/AOSP-BUILD-STATUS.md §3.8.
 _qalos_510 := $(firstword $(wildcard $(TOP)/device/google/pantah-kernels/5.10/*))
 ifneq ($(_qalos_510),)
 TARGET_KERNEL_DIR := $(_qalos_510)

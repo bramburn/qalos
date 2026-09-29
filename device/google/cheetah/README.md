@@ -36,14 +36,31 @@ them, but a device image without blobs has no camera/audio/radio HALs.
 
 Populate `vendor/google_devices/` (NOT this directory) with **one** of:
 
-### Option A — Google's driver zips (recommended)
+### Option A — Google's driver zips (partially available)
 Download the "Pixel 7 Pro binaries for Android 15.0.0" package matching
 your AOSP release from
 <https://developers.google.com/android/drivers> and run the extracted
-self-extracting scripts at the top of the AOSP tree. They populate
-`vendor/google_devices/pantah/` and `vendor/google_devices/gs201/` —
-exactly the paths `device-cheetah.mk` and `cheetah/BoardConfig.mk`
-reference.
+self-extracting script at the top of the AOSP tree.
+
+⚠️ **Corrected 2026-08-28 — this is only half the story.** For build
+`AP3A.241005.015.A2` (= tag `android-15.0.0_r1`) the package was downloaded,
+checksum-verified and unpacked. It populates
+`vendor/google_devices/cheetah/` **only** — 21 files, 914 MB. It does **not**
+populate `vendor/google_devices/gs101/`, and Google publishes no
+`google_devices-gs101-*.tgz`. The per-device package model means the shared
+GS101/Tensor-G2 platform blobs are a separate, non-public artefact.
+
+So the cheetah `-include` path resolves, but `RELEASE_KERNEL_CHEETAH_DIR`
+remains undefined and the release config is still missing. See
+`.pi/AOSP-BUILD-STATUS.md` §3.8.
+
+### Option A2 — the GS101 platform blobs (required, NOT public)
+`vendor/google_devices/gs101/prebuilts/` carries `RELEASE_KERNEL_CHEETAH_DIR`,
+`RELEASE_GOOGLE_CHEETAH_RADIO_DIR` and the matching 6.1 kernel. It is
+distributable only through the Android **Device Preview Program**
+(<https://developers.google.com/android/blobs-preview>, sign-in required) or a
+partner release. There is no public download. Without it, `qalos_cheetah`
+cannot be lunched.
 
 ### Option B — LineageOS extraction tooling (from a device or factory image)
 ```bash
