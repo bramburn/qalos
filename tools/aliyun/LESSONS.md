@@ -28,6 +28,7 @@ attempts start from here.
    all in `cn-hangzhou-j`. Egress policy can vary per zone
    within the same region. **Bottom line: do not assume
    "different zone" = "different policy" = "will work."**
+
 2. **Aliyun's "android.googlesource.com" namespace is a fake
    mirror.** `https://mirrors.aliyun.com/android.googlesource.com/`
    returns an HTML marketing page to HEAD requests but
@@ -39,23 +40,33 @@ attempts start from here.
    same restrictions mean github.com TLS-fails (`GnuTLS recv -110`)
    from cn-hangzhou. Pre-staged source (HK OSS relay custom image)
    is the only working path into cn-*.
+
 3. **Two working AOSP mirrors from Aliyun cn-hangzhou (via IPv6):**
+
    - **USTC**: `https://mirrors.ustc.edu.cn/aosp/`
+
      - `platform/manifest` → 200, `git-repo` → 200
+
    - **TUNA** (NEW canonical URL): `https://aosp.tuna.tsinghua.edu.cn/`
+
      - `platform/manifest` → 200, `git-repo` → 200
+
    - **TUNA** (old URL, still works): `https://mirrors.tuna.tsinghua.edu.cn/git/AOSP/`
+
      - `platform/manifest` → 200, but `/git-repo` 404 (use the new URL for repo tool)
+
 4. **Probe at the smart-HTTP git level, NOT the HTTP HEAD
    level.** Use
    `curl -sIo /dev/null -w "%{http_code}" https://<mirror>/platform/manifest/info/refs?service=git-upload-pack`.
    HTTP 200 + content-type `application/x-git-upload-pack-advertisement`
    = real git server. HTTP HEAD can return 200 for marketing
    pages that have no git data.
+
 5. **Use `g7a.16xlarge` (256 GB RAM) for the build, NOT
    `g7a.2xlarge` (32 GB).** AOSP 15 `m` will OOM in
    `lunch qalos_emulator-userdebug` on 32 GB during the
    preflight (api-stubs-docs-non-updatable).
+
 6. **The `do-build.sh` Aliyun mirror redirects are still
    committed at `/aosp/git-repo/`** but should be
    **REPLACED with the USTC URL**:
@@ -180,12 +191,15 @@ verify the resulting tar.
 correct endpoints. The previous probes failed because:
 
 1. They probed at HTTP HEAD level, not smart-HTTP git level.
+
 2. They used the OLD TUNA path
    (`mirrors.tuna.tsinghua.edu.cn/AOSP/`) which now 302-redirects
    to a new domain `aosp.tuna.tsinghua.edu.cn`.
+
 3. They used the OLD TUNA git-repo path
    (`mirrors.tuna.tsinghua.edu.cn/git-repo/`) which is 404;
    the new path is `aosp.tuna.tsinghua.edu.cn/git-repo/`.
+
 4. They gave up after TUNA/USTC/Aliyun HEAD returned unexpected
    codes, without testing the smart-HTTP git endpoint.
 
@@ -212,7 +226,7 @@ throttled to <1000 bytes/sec — useless for syncing 100+ GB of
 AOSP source.** Verified by direct `git clone --depth=1` from
 both mirrors on 2026-09-10:
 
-```
+```text
 $ git clone --depth=1 -v https://mirrors.ustc.edu.cn/aosp/platform/manifest /tmp/m
 POST git-upload-pack (175 bytes)
 POST git-upload-pack (244 bytes)
@@ -242,7 +256,7 @@ the source via scp/rsync at 2-3 MB/s.**
 
 ## What to try next (decision tree)
 
-```
+```text
 START: need AOSP source on an Aliyun ECS in cn-hangzhou
   │
   ├── 1. Test 11 untested Chinese AOSP mirrors from the
@@ -313,6 +327,7 @@ situation:
    masked the real error. The new order: `log()` is defined
    near the top of the file, before any code that might
    trigger an error path that uses it.
+
 2. **`REPO_SYNC_JOBS` bumped from 4 to 8.** On a host with
    open internet, 8 parallel git fetches finish the AOSP
    sync in roughly the same wall time as 16 (downloads are
@@ -320,6 +335,7 @@ situation:
    unnecessarily slow. Above 8, `android.googlesource.com`
    returns `RESOURCE_EXHAUSTED` / HTTP 429 on a few of the
    ~1500 repos.
+
 3. **Aliyun mirror git-repo URL changed to `/aosp/git-repo/`.**
    The `git-repo` bootstrap was redirected to
    `https://mirrors.aliyun.com/aosp/git-repo/`. **This
@@ -334,8 +350,10 @@ situation:
 
 - **Aliyun UserData limit:** 16,384 characters base64-encoded.
   Inline heredocs blow this on long scripts. Use a `git clone`
-  + `bash` chain (~3,196 chars b64) instead of inlining the
+
+  - `bash` chain (~3,196 chars b64) instead of inlining the
   whole setup script.
+
 - **`$HOME` not set in systemd context.** The systemd unit
   needs `Environment=HOME=/root` explicitly, or `ccache` and
   other tools that read `~/.ccache` will fail silently. In
@@ -343,6 +361,7 @@ situation:
   profile silently dies with HOME unset — ccache falls back to
   its tiny default cache and the build just gets slower, with no
   error. Verified during the 2026-09-13 attempt-11 series.
+
 - **UserData is ephemeral.** Every new instance launch loses
   UserData. The setup script must be re-run (e.g., via a
   systemd unit that clones the qalos repo and runs
@@ -354,18 +373,22 @@ situation:
   `SDK.ServerError`.** Always `StopInstance` first, wait for
   `Stopped`, then `DeleteInstance`. The mavis cron template
   in the runbook handles this.
+
 - **The `aliyun` CLI suppresses error details.** Bare stderr
   says `ERROR: SDK.ServerError` and nothing else. Parse
   stdout (JSON), never trust the bare stderr. The `aliyon()`
   helper handles this for the PS1/sh scripts.
+
 - **Spot stock is volatile.** `g7a.2xlarge` Spot was
   unavailable in cn-hangzhou-j and -k for the 5th attempt.
   Fall back to PostPaid, or try `-h` / `-i` / other zones,
   or use a different instance type.
+
 - **New accounts have a 1-2/min `RunInstances` rate limit on
   day one.** If `SDK.ServerError` follows a few rapid
   retries, wait 60-90s. The `aliyon()` helper retries 4
   times with backoff.
+
 - **New accounts default to 8 GB RAM (risk control).** The
   smoke test will fail with `Forbidden.RiskControl` on any
   16+ GB instance type until the quota is approved at
@@ -381,13 +404,16 @@ situation:
   instance ID via `aliyun ecs DescribeInstances` before
   SSHing. If the instance ID doesn't match the state file,
   the IP has been reassigned and the instance is gone.
+
 - **The Windows SSH key (`id_ed25519_qalos`,
   `bramburn@windows`) is installed on the Linux box
   authorized_keys.** Windows → Linux passwordless works.
+
 - **The Linux box SSH key (`id_ed25519`, `qalos@linux`) is
   installed on the Aliyun ECS root authorized_keys (during
   the 6th-attempt setup).** Linux → Aliyun passwordless
   works (verified 2026-09-10).
+
 - **Paramiko over OpenSSH for password-based SSH.**
   `C:\Windows\System32\OpenSSH\ssh.exe` doesn't handle
   non-interactive password prompts. Use paramiko
@@ -401,6 +427,7 @@ situation:
   at `-j8`. The full `m` can hit 48-56 GB during Java
   compilation. `g7a.2xlarge` (32 GB) is too small;
   OOM-kill during the preflight is the expected failure.
+
 - **Use `g7a.16xlarge` (256 GB) for the build.** The 1.5h
   Spot price is ~¥9.
 
@@ -410,12 +437,14 @@ situation:
   by the smoke test and setup-base. Read by the LLM runbook
   on every build. Schema: see §"State file" in
   `tools/aliyun/AGENTS.md`.
+
 - **`D:\qalos\.pi\aliyun-build-state.json`** — per-build
   state, written by the LLM-driven Phase 4. Schema
   `qalos://aliyun-build-state/v1`. The mavis cron and the
   next agent read it. Don't delete it until the instance
   is `torn_down`; archive with a timestamp if you want to
   keep the build history.
+
 - **Don't confuse "build 5" and "build 6" state.** The state
   file's `buildId` and `instance.id` are the source of
   truth. If the IP doesn't match `aliyun ecs DescribeInstances`,
@@ -444,11 +473,14 @@ agent should:
    mirror exists) AND a fresh Aliyun ECS (will tell you
    if the mirror is reachable from cn-hangzhou). The
    intersection is the answer.
+
 2. If any mirror works, use it directly. Document the
    working mirror URL in this file and update
    `do-build.sh` to use it.
+
 3. If no mirror works, fall back to the small-VM
    holding-pen approach (option 3 in the decision tree).
+
 4. **DO is the fallback if Aliyun itself is unworkable.**
    A $6/mo DO droplet can sync AOSP in 1 hour, then
    transfer to Aliyun at possibly better speeds than
@@ -459,14 +491,20 @@ agent should:
 
 - `tools/AGENTS.md` — the index (one page) for the `tools/`
   folder.
+
 - `tools/aliyun/AGENTS.md` — the LLM-driven Aliyun runbook.
+
 - `tools/aliyun/aliyun-cli-reference.md` — per-command JSON
   parse shape and error code table.
+
 - `tools/aliyun/build-cost.md` — per-build + standing cost
   table.
+
 - `tools/aliyun/qalos-serve-artifacts.py` — token-gated HTTP
   artifact server.
+
 - `tools/aliyun/run-build.sh` — the on-instance build runner.
+
 - `D:\qalos\.pi\aliyun-build-state.json` — the canonical
   per-build state record.
 
@@ -485,7 +523,7 @@ sharp edges that bit during it.
 The HK relay pattern works. 35.5 GB compressed → 127 GB extracted
 AOSP source in cn-guangzhou in **~2.5–3.5 hours**:
 
-```
+```text
 Mac Mini (UK)
   → HK OSS bucket (public endpoint, ~9 MiB/s, 60 min)
   → HK ECS (download via INTERNAL endpoint, ~110 MiB/s, 5 min)
@@ -502,9 +540,11 @@ Mac Mini (UK)
    level** for this Aliyun account. Symptom: `PublicEndpointForbidden`
    (HTTP 400, code `0048-00000401`). HK's public endpoint is
    not blocked. Use HK OSS as the staging layer.
+
 2. **UK → cn-guangzhou SSH is DPI-throttled to ~1 KB/s.** Don't
    try to rsync 35 GB over SSH; it'll take 281 days. Use the
    HK OSS → HK ECS relay path instead.
+
 3. **OSS internal endpoint is 5–10× faster than public.** When
    downloading from inside Aliyun, always use
    `oss-cn-<region>-internal.aliyuncs.com` instead of the public
@@ -553,8 +593,10 @@ the extraction**. On `ecs.u1-c1m2.large` (2 vCPU / 2 GB RAM):
 
 - The OS swaps aggressively during the 127 GB write phase
   (`kswapd0` was at 100% for 90+ min during the verified run).
+
 - SSH periodically times out during heavy I/O — every `du -sh`
   or `ls -la` against `/aosp` returns nothing for 10–30 sec.
+
 - The cat phase runs at only ~50 MB/s (3.6% CPU, I/O bound),
   which is fine — the I/O is the bottleneck, not CPU.
 
@@ -576,10 +618,13 @@ four problems:
 
 1. **Command-line length:** 339 × ~12 chars = ~4 KB. Some shells
    truncate at the first SIGPIPE during subprocess invocation.
+
 2. **Debuggability:** if it fails at 80%, you restart from zero.
+
 3. **Resource isolation:** cat is I/O-bound, zstd is CPU-bound,
    tar is I/O+metadata-bound. A single pipe mixes them and you
    can't tell which one is slow.
+
 4. **Failure visibility:** if zstd errors with "invalid frame",
    you only see it at the tail of a 127 GB tar failure.
 
@@ -634,7 +679,9 @@ Phase 4 build runbook (see `tools/aliyun/AGENTS.md`) takes over:
 
 1. `systemd-run --unit=qalos-resumeN` launches `do-build.sh`
    detached on the build VM.
+
 2. The `mavis cron` monitor owns teardown.
+
 3. Artifacts land in `out/aliyun-build/` after you `curl` them
    from the token-gated URL in `/tmp/qalos-artifacts-url.txt`.
 

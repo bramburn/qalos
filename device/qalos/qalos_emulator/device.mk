@@ -195,6 +195,31 @@ PRODUCT_PROPERTY_OVERRIDES += \
 PRODUCT_MANIFEST_FILES += \
     device/qalos/qalos_emulator/vintf/product_manifest.xml
 
+# ---------------------------------------------------------------------------
+# GMS mimic (microG-based, Phase 1 — APKs from repo.microg.org)
+#
+# Prebuilt APK modules defined in device/qalos/gms/{GmsCore,FakeStore,GsfProxy}/
+# Android.mk using BUILD_PREBUILT (LOCAL_PRIVILEGED_MODULE := true).
+#
+# Packages (F-Droid microG repo — https://repo.microg.org/fdroid/repo):
+#   GmsCore   — com.google.android.gms  v0.3.16.252432  (~103 MB, x86_64 ✓)
+#   FakeStore — com.android.vending     v0.3.16.40226  (~4 MB)
+#   GsfProxy  — com.google.android.gsf  v0.1.0         (~22 KB, C2DM proxy)
+#
+# The resource overlay at device/qalos/gms/overlay/ overrides framework
+# location bools (config_enableNetworkLocationOverlay,
+# config_enableFusedLocationOverlay) so the Location Services API
+# returns usable stubs instead of null.
+#
+# Note: $(call add-prebuilt-system-app,...) is NOT a standard AOSP macro.
+# Using PRODUCT_PACKAGES += GmsCore FakeStore GsfProxy — the canonical AOSP
+# method. LOCAL_PRIVILEGED_MODULE := true in each Android.mk places the APKs
+# in /system/priv-app/<name>/<name>.apk (privileged system app).
+# ---------------------------------------------------------------------------
+PRODUCT_PACKAGE_OVERLAYS += device/qalos/gms/overlay
+
+PRODUCT_PACKAGES += GmsCore FakeStore GsfProxy
+
 # Note: the qalos SELinux policy overlay is wired via BoardConfig.mk
 # (not here). AOSP's sepolicy build reads BOARD_VENDOR_SEPOLICY_DIRS from
 # BoardConfig.mk; setting it in device.mk is silently ignored on

@@ -1,0 +1,42 @@
+// vendor/aqa/server/Android.bp
+//
+// Soong build configuration for the aqa_server daemon.
+//
+// No `vendor: true`, so the binary lands in /system/bin/aqa_server — matching
+// the service path in aqa_server.rc. `init_rc:` installs that .rc fragment to
+// /system/etc/init/.
+
+cc_binary {
+    name: "aqa_server",
+
+    // Install into the product partition. A cc_binary with no partition hint
+    // lands in /system/bin, which Pixel products reject the same way they
+    // reject system/app: build/make/core/artifact_path_requirements.mk fails
+    // the build unless the path is declared in
+    // build/make/target/product/generic_system.mks. product_specific: true puts
+    // the binary in product/bin and init_rc: in product/etc/init, both of which
+    // are valid init search paths in AOSP 15.
+    product_specific: true,
+
+    srcs: [
+        "src/main.cpp",
+        "src/uinput_injector.cpp",
+        "src/http_server.cpp",
+    ],
+    cflags: [
+        "-Wall",
+        "-std=c++17",
+        "-O2",
+    ],
+    // Deliberately NOT -Werror. AOSP's default warning set changes between
+    // releases and this daemon is built only inside a QA image; a new
+    // upstream warning should not turn a working testbed into a build
+    // failure. Warnings are still printed and should be triaged.
+    shared_libs: [
+        "liblog",
+        "libcutils",
+        "libutils",
+        "libbase",
+    ],
+    init_rc: ["aqa_server.rc"],
+}

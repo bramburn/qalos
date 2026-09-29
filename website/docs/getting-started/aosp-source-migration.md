@@ -23,6 +23,7 @@ The naïve plan — `tar -cf - ~/aosp | ssh root@<ECS> tar -xf -` —
    At that rate, 35 GB takes 281 days. Parallel streams don't help
    — the throttle is per-flow. See
    [`AGENTS.md` §5.4.4](https://github.com/bramburn/qalos/blob/main/AGENTS.md).
+
 2. **The cn-guangzhou public OSS endpoint is blocked at the account
    level** on this account. Symptom: `PublicEndpointForbidden`
    (HTTP 400, code `0048-00000401`). Bucket management (`mb`,
@@ -35,7 +36,7 @@ downloads are unmetered and 5–10× faster than public.
 
 ## Topology
 
-```
+```text
 macmini2024 (UK, 192.168.0.46)
        │  ossutil cp via oss-cn-hongkong.aliyuncs.com (port 443)
        │  9.4 MiB/s avg, 60 min for 35.5 GB
@@ -66,13 +67,16 @@ macmini2024 (UK, 192.168.0.46)
   host**). This is where `repo sync` runs to populate `~/aosp/`.
   Must have open internet (UK residential IPs are fine for
   `android.googlesource.com`).
+
 - The Aliyun CLI installed and configured (see [Aliyun build](./aliyun-build.md)).
+
 - The HK infra already bootstrapped: VPC, VSwitch, SG, KeyPair,
   OSS bucket. The `aliyun-smoke-test.{ps1,sh}` script creates
   all of these in cn-hongkong-d. The state file is at
   `D:\qalos\.pi\aliyun-state.json` (Windows) or
   `~/.pi/aliyun-state.json` (macOS/Linux). See
   [`tools/aliyun/AGENTS.md`](https://github.com/bramburn/qalos/blob/main/tools/aliyun/AGENTS.md).
+
 - The AOSP source compressed and split into ≤100 MB volumes at
   `~/aosp_volumes/aosp.zst.000` … `aosp.zst.NNN`. Recipe below.
 
@@ -362,7 +366,7 @@ rm -rf ~/aosp_volumes
 rm /tmp/aosp.tar.zst
 ```
 
-## What if Step 2 fails mid-upload?
+## What if Step 2 fails mid-upload
 
 The OSS multipart upload is resumable per file. Just re-run the
 same `ossutil cp -r --update ...` command. `--update` skips files
@@ -376,10 +380,69 @@ on the next `--update` attempt. No manual cleanup needed.
 ## What's next
 
 - Ready to build? → [Aliyun build](./aliyun-build.md) § "Per-build"
+
 - Hit a gotcha? → [Gotchas](../reference/gotchas.md) — especially §
   "ECS sizing for extraction" and § "Aliyun OSS internal endpoint
   is 5–10× faster than public"
+
 - Need the recipe in script form? →
   [`tools/aliyun/AGENTS.md`](https://github.com/bramburn/qalos/blob/main/tools/aliyun/AGENTS.md)
   is the LLM-driven runbook; the smoke-test and setup-base scripts
   are kept on disk for users who prefer scripts.
+
+## Faster alternative: OSS Transfer Acceleration (2026-09-25)
+
+> **⚠️ This page documents the HK relay (§5.4.5) as the *fallback* path.
+> The *primary* upload path is OSS Transfer Acceleration — a single-hop
+> direct upload from Mac Mini to a `cn-guangzhou` bucket over Alibaba
+> Cloud's global access points. See [`AGENTS.md` §5.4.7](https://github.com/bramburn/qalos/blob/main/AGENTS.md)
+> for the recipe, the 5 MB verification test, and the decision rule
+> for when to fall back to this HK relay.**
+
+If transfer acceleration is enabled on a `cn-guangzhou` bucket AND has
+been verified to (a) bypass the §5.4.2 public-endpoint block and (b) be
+≥2× faster than the 9.4 MiB/s Mac-Mini→HK baseline, the whole HK relay
+collapses to a single `ossutil cp` call against `--endpoint
+oss-accelerate.aliyuncs.com`. The HK ECS, CreateImage, and CopyImage
+steps all go away, taking ~1 hour off the wall-clock before the build
+even starts.
+
+This HK relay stays on disk because (per user decision 2026-09-25) it
+is cheap insurance (~¥10–20/month for HK OSS + custom image) against the
+day accelerate is blocked / propagating / 502/504 looping. Don't tear it
+down.
+
+### Verified speedup (2026-09-25, §5.4.8)
+
+On 2026-09-25 the accelerate path was measured end-to-end on the
+cn-hongkong edge with a 100 MB apples-to-apples test:
+
+| Path | Throughput | 35 GB wall time |
+| --- | --- | --- |
+| HK public (`oss-cn-hongkong.aliyuncs.com`) | 10.158 MiB/s | ~58 min |
+| **HK accelerate (`oss-accelerate.aliyuncs.com`)** | **16.073 MiB/s** | **~37 min** |
+| Saving | **1.58× speedup** | **−21 min** |
+
+Apply by changing the first-leg endpoint in the HK relay recipe
+above from `oss-cn-hongkong.aliyuncs.com` to
+`oss-accelerate.aliyuncs.com`. Everything else stays the same.
+
+### Why this can't skip the HK relay entirely (2026-09-25, §5.4.2 / §5.4.8)
+
+Aliyun's OSS platform has a **policy that blocks data operations on
+Chinese-mainland buckets (cn-guangzhou, cn-chengdu, cn-hangzhou, etc.)
+for accounts activated after 2025-03-20**. The block covers both the
+public endpoint and the accelerate endpoint, for all clients (console,
+ossutil, SDKs). `cn-hongkong` is exempt because HK is treated as
+outside the mainland for OSS policy purposes — that's why this HK
+relay recipe works at all. The only documented workaround is **CNAME
+custom domain + ICP filing** (impractical for non-Chinese entities).
+
+So this page's HK relay pattern isn't a workaround for an outage —
+**it's the only viable path to a `cn-guangzhou` build VM on this
+account**. Don't tear down the HK bucket / ECS / image.
+
+See [`AGENTS.md` §5.4.2](https://github.com/bramburn/qalos/blob/main/AGENTS.md)
+for the platform-policy root cause and
+[`AGENTS.md` §5.4.8](https://github.com/bramburn/qalos/blob/main/AGENTS.md)
+for the verified HK accelerate speedup numbers.

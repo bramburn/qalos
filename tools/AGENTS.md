@@ -62,8 +62,16 @@
 | Aliyun cost | [`tools/aliyun/build-cost.md`](aliyun/build-cost.md) | The cost table — per-build + standing + scaling. |
 | Aliyun artifact server | [`tools/aliyun/qalos-serve-artifacts.py`](aliyun/qalos-serve-artifacts.py) | The token-gated Python HTTP server that serves the build artifacts over a one-shot URL. |
 | **Aliyun lessons (READ FIRST)** | **[`tools/aliyun/LESSONS.md`](aliyun/LESSONS.md)** | **Read this BEFORE any Aliyun build attempt.** Post-mortem of the 2026-09-10 build series (5 attempts, ~¥20 burned, all failed due to network restrictions). Captures: Aliyun cn-hangzhou closed network, the fake `mirrors.aliyun.com` AOSP endpoint, the 2-3 MB/s transfer rate reality, AOSP 15 RAM requirements (64+ GB), and the decision tree for what to try next. |
-| GCP | (no runbook yet; see `qalos-launch.ps1` at the repo root for the working example, and `website/docs/qa-lab-os/agent-build-shell.md` for primitives) | The `gcp-*.ps1` scripts are usable for short jobs; the LLM pattern (`systemd-run` + mavis cron) is the right long-build path. |
+| GCP | **[`tools/gcp/AGENTS.md`](gcp/AGENTS.md)** | **The LLM-driven GCP runbook.** Proven end to end on 2026-09-28: 179 GB sync + full `m` + verified image delivery for $4.36. Covers instance shape, the `systemd-run` unit pattern, the `-j8` sync rule, the integrity gate, the mandatory in-image overlay verification, delivery, and teardown. |
+| **GCP lessons (READ FIRST)** | **[`tools/gcp/LESSONS.md`](gcp/LESSONS.md)** | **Read this BEFORE any GCP build attempt.** The traps that actually cost time and money: never stage a compressed tree (95+ min vs 32 min direct), never trust `m` exit 0 (the 2026-09-11 stock-image failure), never destroy the host on a build failure, the three verification gates that lie, the patch-0005 false-positive incident, and the **open `vendor.img`/`super.img` blocker for flashing to real hardware**. |
 | DigitalOcean | (covered by the existing `doctl-*.ps1` scripts) | Battle-tested; the LLM pattern can layer on top but is not yet a runbook. |
+
+## Reference (read before patching AOSP)
+
+| Doc | What it is |
+|---|---|
+| [`aosp-15-fixes.md`](aosp-15-fixes.md) | The two **upstream** AOSP 15.0.0_r1 metalava issues (Collator `HiddenAbstractMethod`, conscrypt `last-api.txt`) that fail the preflight. Applied automatically by `fix-aosp-15-issues.sh`. |
+| [`aosp-15-api-notes.md`](aosp-15-api-notes.md) | **Verified** AOSP 15 build + `frameworks/base` API facts: `lunch` takes one arg, `RELEASE_*` is read-only, the `RELEASE_KERNEL_CHEETAH_DIR` 6.1-vs-5.10 mismatch, `product_specific: true`, the metalava `@hide` permission gate, `LocalServices.getService`, `ScreenCapture.ScreenshotHardwareBuffer` / `userScreenshot`. **Read the tree, not your memory** — five fixes guessed from memory on this project all had to be walked back. |
 
 ## Four safety nets (every cloud build must implement all four)
 

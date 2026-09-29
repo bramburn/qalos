@@ -146,12 +146,24 @@ jobs:
           # - the qalos GitHub web UI URLs lychee cannot follow
           # - the new-issue form (requires auth)
           # - the deployed docs site (until first successful deploy)
+          # - android.googlesource.com gitiles: returns intermittent HTTP 503
+          #   from CI runners. Verified 2026-09-29 that the git smart-HTTP
+          #   endpoint on the same host answers 200, so a 503 here is the
+          #   gitiles backend, not a dead link.
+          # - third-party GitHub blob refs: GitHub answers 404 to anonymous
+          #   CI traffic under rate limiting even when the file exists.
+          #   Verified 2026-09-29 via the API that the LineageOS
+          #   ComputerEngine.java ref named in our docs does exist.
           args: >
             --no-progress
             --exclude-loopback
+            --max-retries 3
+            --retry-wait-time 20
             --exclude 'https://github.com/bramburn/qalos/(edit|blob)/'
             --exclude 'https://github.com/bramburn/qalos/issues/new'
             --exclude 'https://bramburn.github.io/qalos'
+            --exclude 'https://android.googlesource.com'
+            --exclude 'https://github.com/LineageOS/'
             '**/*.md'
           fail: true
         env:

@@ -58,10 +58,13 @@ from the public internet because:
 
 - `android.googlesource.com` is **TCP-blocked** from `cn-hangzhou` /
   `cn-guangzhou` (connect timeout).
+
 - `mirrors.aliyun.com/aosp/` is **404** (the page is a marketing
   landing — no git data).
+
 - The `cn-guangzhou` public OSS endpoint is **account-disabled**
   (`PublicEndpointForbidden`).
+
 - Direct SSH from a UK home IP to `cn-guangzhou` is
   **DPI-throttled to ~1 KB/s** (verified: a 64-minute rsync
   transferred 5.3 MB of 100 MB at 1.4 KB/s avg).
@@ -70,11 +73,16 @@ The only viable path is the **HK OSS relay**:
 
 1. Mac Mini → HK OSS via `oss-cn-hongkong.aliyuncs.com` (public endpoint
    works, 9.4 MiB/s, 60 min for 35.5 GB compressed).
+
 2. HK ECS → HK OSS via `oss-cn-hongkong-internal.aliyuncs.com` (internal
    endpoint — 5-10× faster, unmetered, 110 MiB/s, 5 min).
+
 3. HK ECS: extract `cat | zstd -d | tar -xf` (3 phases, ~75 min total).
+
 4. HK ECS: `CreateImage` → HK custom image.
+
 5. HK custom image → `CopyImage` to cn-guangzhou.
+
 6. RunInstances from cn-guangzhou custom image.
 
 This took ~3.5 hours wall time vs. the 281-day estimate for the
@@ -115,11 +123,15 @@ Steps (all completed):
 
 1. `CreateSnapshot` of the 500 GB system disk — preserves the 96%
    `/out/` cache.
+
 2. `CreateImage` from snapshot → `m-7xv3dz5cjk1uwunvfaj7` (~10 min for
    500 GB image creation).
+
 3. `DeleteInstance` of the old VM (frees the disk).
+
 4. `RunInstances` from the new image with `ecs.u1-c1m8.4xlarge`
    (16 vCPU / 128 GB RAM) on Spot (`SpotStrategy=SpotAsPriceGo`).
+
 5. SSH in, `repo sync` to pull the VINTF fix, re-apply the overlay
    (`apply-qalos.sh` is idempotent), resume `m -j16` from the
    existing `/out/` cache.
@@ -156,14 +168,17 @@ rejected, predates `ded2a57` — see the comment at
   There is **no automated snapshot-before-teardown** anywhere in
   the build flow — an attempt that dies after artifacts land (or
   before) loses the cache unless an agent snapshots it first.
+
 - **Attempt 11 ran NoSpot** while the defaults are `SpotAsPriceGo`.
   The state file records it; keep the deviation visible in the
   build-state file (`spot: false`) so cost accounting stays honest.
+
 - **HK source image id:** the warm image this series launched from
   is `m-j6c46j484tdz37urlgtn` (cn-hongkong AOSP-15 source tree,
   copied to cn-guangzhou). It previously appeared in **no repo
   doc**; it is recorded here and in `tools/aliyun/AGENTS.md`
   (Phase 3 — Warm image).
+
 - **`build-cost.md` drift:** the planning cost doc still models one
   cn-hangzhou warm image and a `g7a.16xlarge`; the real stack is
   `ecs.u1-c1m8.4xlarge` with **two** standing images (HK base +
@@ -207,10 +222,15 @@ AOSP 15's `Display.Mode` (the inner class on `Display.getMode()`)
 exposes:
 
 - `getModeId(): int`
+
 - `getPhysicalWidth(): int`
+
 - `getPhysicalHeight(): int`
+
 - `getRefreshRate(): float`
+
 - `getVsyncRate(): float` (hidden)
+
 - `isSynthetic(): boolean` (hidden)
 
 There is **no `getWidth()` or `getHeight()` on `Display.Mode`** —
@@ -247,6 +267,7 @@ The choice is between:
 
 - **(a)** Move the qalos flag's `.aconfig` to a package in
   `framework-res`' dep graph (intrusive, fights AOSP's split).
+
 - **(b)** Drop `@FlaggedApi` entirely, mark the permission as
   `@SystemApi @hide`, gate runtime behaviour via the existing
   signature check. (What qalos did — minimal blast radius.)
@@ -408,9 +429,13 @@ that captures command output, prefer file redirect over `tee`.
 instances. The correct workflow is:
 
 1. `StopInstance` (preserves the disk, stops billing).
+
 2. `CreateSnapshot` of the system disk (preserve state).
+
 3. `CreateImage` from the snapshot (~10 min for 500 GB).
+
 4. `DeleteInstance` (frees the disk).
+
 5. `RunInstances` from the new image with the desired larger type.
 
 This preserves the `/out/` build cache (~50 GB after a 96% build)
@@ -452,7 +477,9 @@ build was 96% done at 5h 38min and would have been killed by the
 watchdog in the last 22 min. The fix:
 
 1. Killed the 6h watchdog (`kill 2410496`).
+
 2. Spawned a new watchdog: `nohup bash -c "sleep 14400 && /sbin/shutdown -h now" &`.
+
 3. Bumped `MAX_RUNTIME_MINUTES` default in `/tmp/do-build.sh` from
    `240` → `1440` (24h).
 
@@ -470,7 +497,9 @@ that survives rebase. This means:
 
 - `bash apply-qalos.sh` can be re-run after a `git pull` in the
   qalos manifest repo to refresh everything to the latest.
+
 - `bash apply-qalos.sh --force` skips the pre-flight check.
+
 - The copy + patch steps are all no-ops when there's nothing to
   change.
 
@@ -513,17 +542,23 @@ failed for this reason.
 
 - [`lessons-learned.md`](./lessons-learned.md) — the v0 patch-design
   lessons (anchor mismatches, removed APIs, AIDL wiring).
+
 - [`getting-started/aosp-source-migration.md`](../getting-started/aosp-source-migration.md)
   — the HK relay pipeline in detail.
+
 - [`getting-started/aliyun-build.md`](../getting-started/aliyun-build.md)
   — the per-build orchestration recipe.
+
 - [`getting-started/do-build.md`](../getting-started/do-build.md) —
   the on-host build script and its watchdog.
+
 - [`architecture/warm-image-pattern.md`](../architecture/warm-image-pattern.md)
   — why the source lives in a custom Aliyun image, not a fresh
   `repo sync` every build.
+
 - [`architecture/safety-nets.md`](../architecture/safety-nets.md)
   — the four-safety-net rule and why the cron watchdog exists.
+
 - Agent memory entries (one-shot lessons captured in
   `MEMORY.md`) — the qalos-specific `apply-qalos.sh`, `BUILD_ID`,
   do-build.sh, and HK-relay entries are searchable by those keys.
@@ -571,19 +606,23 @@ re-run.
   booted to completion on this exact host / emulator / WHPX stack:
   `C:\Users\bramburn\AppData\Local\Temp\2\emulator.log:149` =
   `INFO         | Boot completed in 63090 ms`.
+
 - **Cmdline parity: RULED OUT as the stall cause.** v7/v8 already
   carried the full canonical set (incl. `console=ttyS0,38400
   earlyprintk androidboot.hardware=ranchu` — emu7_out.log:104).
+
 - **Initrd / layout / board: RULED OUT.** No initrd work was ever
   reached; and the correct ranchu ELF kernel decompresses +
   relocates fine (emu8_out.log:88-102: `Parsing ELF... Performing
   relocations... done.` / `Booting the kernel.`).
+
 - **Most plausible cause:** emu5_out.log:991 `Booting
   paravirtualized kernel on bare hardware` + emu5_out.log:952
   `tsc: Fast TSC calibration failed` — no hypervisor signature is
   exposed (Hyper-V enlightenments missing from the WHPX exposure),
   so the guest relies on the emulated TSC/PIT/LAPIC and dies in
   the LAPIC-timer / IPI window right after init_IRQ.
+
 - **Secondary suspect:** kernel version. Our `kernel-ranchu` is
   5.4.78 (17,213,216 B, SHA256-verified AOSP 15 prebuilt
   `5.4/kernel-qemu2`); AOSP 15 leans GKI 6.x and the emulator
@@ -598,11 +637,13 @@ for future agents: [emulator-boot-diagnosis](./emulator-boot-diagnosis.md).
 1. **Fresh stock API-35 control AVD boot (~15 min)** — decisively
    separates "emulator + WHPX + API-35 kernel generically" from
    "qalos artifacts".
+
 2. **Artifact bisect from the known-good Pixel_8 AVD (~30 min)** —
    point `image.sysdir.1` at the qalos dir, remove
    `kernel.parameters` + flag overrides, then swap
    kernel → ramdisk → system.img one at a time against the
    stock files.
+
 3. **Re-run the android-31 control with `-show-kernel`**, capturing
    via `-qemu -serial file:...` (NOT pipe redirect — the
    truncation on kill is what faked the original "hang").
@@ -614,11 +655,15 @@ the boot expectation on this host.
 
 - **Building goldfish 5.4 "for AOSP 15"** — the last goldfish
   branch is `android-goldfish-5.4-dev`, two majors behind GKI.
+
 - **Rebuilding system.img** — never reached; the guest never got
   near rootfs.
+
 - **Chasing the Total-pages number** — it is exactly 4 GiB and
   normal.
+
 - **Switching to AEHD** — sunsets Dec 2026.
+
 - **`-no-accel` as a fix** — debug only, and v9 showed the flag
   is refused by this emulator build anyway.
 
@@ -627,10 +672,13 @@ the boot expectation on this host.
 - **`emulator.exe` doesn't accept `-append`.** Use AVD
   `kernel.parameters=<space-separated-k=v>` instead. The qemu
   `-append` becomes `<built-in-defaults> <kernel.parameters> <built-in-trailer>`.
+
 - **`kernel.commandline=` in AVD config is silently ignored.**
   Only `kernel.parameters` works.
+
 - **PowerShell `ssh ... cat > $file` corrupts binary files.**
   Use `scp -i $key user@host:/path $dst`. SSH cat is fine for text.
+
 - **The qalos AOSP 15 build doesn't produce a real initrd by default.**
   `out/.../qalos_emulator/ramdisk.img` is a 638-byte gzipped
   `debug_ramdisk` placeholder (just empty directory skeletons + dev
@@ -718,8 +766,11 @@ The `INITRAMFS_IMAGE := initrd` patch was applied on the build VM and the build 
 **Cloud spend:** ~¥22-25 for ~3 hours of build VM time + image storage (the VM is Stopped; Aliyun API returned `SDK.ServerError` on the delete call, leaving the Stopped instance on disk storage — manual cleanup via the Aliyun console may be needed).
 
 **Next attempt should:**
+
 1. Sync the qalos fork with AOSP first (`repo sync`), so the API baseline files are regenerated cleanly
+
 2. Or apply `BUILD_BROKEN_API_TEXT_CHECK := true` to `BoardConfig.mk` to disable the API check
+
 3. Or remove the offending qalos patches that break the framework's API stubs
 
 The attempt 13 build cache (~93 GB at `/out/`) was preserved in the custom image `m-7xv5vtreznnwb509t3y0` (now deleted along with the VM). The source snapshot `s-7xv3kduiljyc6i2ffgny` in cn-guangzhou is still available and can be used to relaunch with the patches from attempt 13 applied.
