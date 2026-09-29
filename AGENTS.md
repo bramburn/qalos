@@ -77,6 +77,11 @@ qalos/
 │   │   ├── aliyun-cli-reference.md← per-command JSON parse + error code table
 │   │   ├── build-cost.md          ← per-build + standing cost table
 │   │   └── qalos-serve-artifacts.py ← token-gated HTTP server for build artifacts
+│   ├── gcp/                       ← LLM-driven GCP build runbook (PROVEN 2026-09-28)
+│   │   ├── AGENTS.md              ← the runbook (next agent reads this)
+│   │   └── LESSONS.md             ← the traps; READ BEFORE SPENDING MONEY
+│   ├── aosp-15-fixes.md           ← the two UPSTREAM AOSP 15 metalava fixes
+│   ├── aosp-15-api-notes.md       ← verified AOSP 15 build + frameworks/base API facts
 │   ├── doctl-*.ps1                ← DO path (Windows)
 │   ├── aliyun-install.ps1         ← Aliyun CLI install (one-time)
 │   ├── aliyun-smoke-test.ps1      ← Aliyun smoke test (Phase 2 of the LLM runbook; the LLM does not invoke this)
@@ -281,6 +286,57 @@ end state. Collapsing to a single plane is deferred because removing either
 service changes the audit-log story in `legal/AGENTS.md` §2.9, which is a
 legal-framework change and needs a release note (§2.9.5). Until then: do not
 add a third API, and do not weaken the auth on either one.
+
+### 2.12 The Pixel 7 Pro (cheetah) build workflow is settled — follow it, don't re-derive it
+
+The cheetah build on GCP was taken from 0 images to a verified,
+delivered image set for **$4.36** on 2026-09-28. Every step is written
+down. A future agent **reads the runbook and executes it**; it does not
+re-derive the approach, and it does not fix AOSP from memory.
+
+| Doc | Read it when |
+| --- | --- |
+| [`tools/gcp/AGENTS.md`](tools/gcp/AGENTS.md) | Running a cheetah build on GCP. The workflow: instance shape, the `systemd-run` unit pattern, `repo sync -j8` + the 1423-project integrity gate, the kernel stand-in, the four mandatory in-image verification checks, delivery, teardown. |
+| [`tools/gcp/LESSONS.md`](tools/gcp/LESSONS.md) | **Before spending any money.** The traps that actually cost time and money, with symptom → root cause → fix. |
+| [`tools/aosp-15-api-notes.md`](tools/aosp-15-api-notes.md) | Before writing any AOSP/framework patch. Verified AOSP 15 facts. |
+| [`tools/aosp-15-fixes.md`](tools/aosp-15-fixes.md) | The two *upstream* AOSP 15 metalava issues that fail the preflight. Applied automatically by `fix-aosp-15-issues.sh`. |
+| [`packages/apps/RemoteControlService/REBASE.md`](packages/apps/RemoteControlService/REBASE.md) | Rebasing the patch set. Includes the 0002/0005/0007/0008/0010 permission-gate chain. |
+
+**The five rules that matter, condensed. Each one is there because the
+opposite was done and it cost real time or money:**
+
+1. **Never trust `m` exit 0.** On 2026-09-11 a build exited 0 and shipped
+   images byte-identical to stock Pixel_8 Android 35, because
+   `apply-qalos.sh` never landed. Verify the overlay *inside*
+   `system.img` (`strings -a system.img | grep -c 'com/qalos/remotectl'`
+   must be > 0) before calling any build good.
+2. **Never stage a compressed tree to a build host.** Let the host
+   `repo sync` itself: 179 GB in ~32 min direct, versus 95+ min to
+   compress 33 GB of the same tree on a spinning disk, because 84 GB of
+   it is `.repo/project-objects` and already zlib-compressed at 1.011:1.
+3. **Never destroy the build host on a build failure.** It holds the
+   179 GB sync (32 min, ~$0.30). A failure is diagnose → patch →
+   relaunch; an incremental ninja run over a warm tree is ~37 min versus
+   98 min cold. Teardown happens only after the images are delivered
+   **and** byte-verified on every destination.
+4. **Read the tree before fixing AOSP.** Five fixes written from memory
+   (`c3-highmem-32`, `release_config_map.textproto`, a read-only
+   `TARGET_RELEASE` pin, a 3-argument `lunch`, `LocalServices.get`) all
+   had to be walked back. Quote the file and line you based it on.
+5. **A patch's "already applied" is a claim, not a fact.** Patch 0005
+   reported success on every run while its idempotency regex
+   (`[\s\S]*?` spanning a 9,000-line manifest) matched an unrelated
+   `@hide` comment — and the build died at 98% on the exact gate that
+   patch exists to satisfy. When a build fails on something a patch
+   claims to handle, grep the tree for the real marker.
+
+**Open blocker for real hardware.** The build produces no `vendor.img`
+and no `super.img` (blob-less, 6.4 MB vendor staging, 47 generic AOSP
+files, no Google blobs). A stock Pixel 7 Pro uses virtual-A/B dynamic
+partitions, so these standalone images are **not** flashable to it as
+they stand. Resolve the partition-layout question before attempting a
+flash — see [`tools/gcp/LESSONS.md`](tools/gcp/LESSONS.md) §8, and use
+`qalos_emulator-userdebug` as the fast path in the meantime.
 
 ## 3. CI: what runs on every PR
 
