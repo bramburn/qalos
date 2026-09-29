@@ -73,6 +73,7 @@ git clone -b lineage-22.1 https://github.com/LineageOS/android_device_google_pan
 # then follow its README / extract-files.py to pull blobs from a stock
 # Pixel 7 Pro or a factory image.
 ```
+
 This is only needed if you can't use the Google driver zips (e.g.
 license constraints). Note the LineageOS flow also expects its own gs201
 fork (`lineage.dependencies`) and writes lineage-flavoured vendor

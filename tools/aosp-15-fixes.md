@@ -158,6 +158,7 @@ missing the `java.base` references — they looked like:
 public class OpenSSLMessageDigestJDK { }
 ctor public OpenSSLMessageDigestJDK.MD5();   // no throws
 ```
+
 If you copy that over the baseline, you re-introduce the same
 mismatch in the other direction. The fix has to wait until metalava
 has fully generated the stubs from the current source (with the

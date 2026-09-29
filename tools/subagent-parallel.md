@@ -3,6 +3,7 @@
 ## When to use this skill
 
 Trigger when the user asks to:
+
 - "Run two subagents at the same time"
 - "Compare X vs Y" (two agents, one with each option)
 - "One with thinking, one without" (A/B on reasoning mode)

@@ -63,7 +63,7 @@ On a fresh Windows install, `C:\Windows\System32\OpenSSH\` (where the
 Windows OpenSSH client `ssh.exe` lives) is **not** in the user's
 `PATH`. Symptom in cmd / PowerShell:
 
-```
+```text
 'ssh' is not recognized as an internal or external command,
 operable program or batch file.
 ```

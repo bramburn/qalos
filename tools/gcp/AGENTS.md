@@ -223,6 +223,7 @@ ro.system.build.fingerprint=qalos/qalos_cheetah/qalos_cheetah:VanillaIceCream/AP
 ```
 
 > **Gates that lie — avoid these.**
+>
 > - `grep -c qalos frameworks/base/core/api/current.txt` returns 0 on a
 >   **good** build. The permission is `@hide` so it is not public API.
 >   Treating 0 as a failure is wrong.

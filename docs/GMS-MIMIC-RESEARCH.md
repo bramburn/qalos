@@ -278,6 +278,7 @@ Patch source: `https://github.com/microg/GmsCore/wiki/Signature-Spoofing` — pi
    cd frameworks/base
    patch -p1 -i /path/to/0002-Add-support-for-app-signature-spoofing.patch
    ```
+
    Use the patch labelled for **Android 15 / API 35 / letter V** from `https://github.com/microg/GmsCore/wiki/Signature-Spoofing`.
 
 2. Add the location overlay bools to `device/qalos/gms/overlay/frameworks/base/core/res/values/config.xml`:
